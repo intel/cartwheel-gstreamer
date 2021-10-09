@@ -1,0 +1,221 @@
+From 6515f92a4a20b5fb1d0536399aefb33a793b6485 Mon Sep 17 00:00:00 2001
+From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
+Date: Mon, 9 Aug 2021 17:57:43 +0800
+Subject: [PATCH 5/6] msdkav1enc: modify av1e with change of oneVPL
+
+---
+ sys/msdk/av1_temp.h      | 120 ---------------------------------------
+ sys/msdk/gstmsdkav1enc.c |  38 ++++++-------
+ sys/msdk/gstmsdkav1enc.h |   8 +--
+ 3 files changed, 23 insertions(+), 143 deletions(-)
+ delete mode 100644 sys/msdk/av1_temp.h
+
+diff --git a/sys/msdk/av1_temp.h b/sys/msdk/av1_temp.h
+deleted file mode 100644
+index 2f3d99fe38..0000000000
+--- a/sys/msdk/av1_temp.h
++++ /dev/null
+@@ -1,120 +0,0 @@
+-/*############################################################################
+-  # Copyright (C) 2018-2021 Intel Corporation
+-  #
+-  # SPDX-License-Identifier: MIT
+-  ############################################################################*/
+-
+-#ifndef __AV1_TEMP_H__
+-#define __AV1_TEMP_H__
+-#include <mfxcommon.h>
+-
+-#if !defined (__GNUC__)
+-#pragma warning(disable: 4201)
+-#endif
+-
+-#ifdef __cplusplus
+-extern "C" {
+-#endif
+-
+-#ifndef MFX_VERSION_NEXT
+-
+-enum {
+-    MFX_EXTBUFF_AV1_PARAM                       = MFX_MAKEFOURCC('1', 'P', 'A', 'R'),
+-    MFX_EXTBUFF_AV1_AUXDATA                     = MFX_MAKEFOURCC('1', 'A', 'U', 'X')
+-};
+-
+-MFX_PACK_BEGIN_USUAL_STRUCT()
+-typedef struct {
+-    mfxExtBuffer Header;
+-
+-    mfxU16  FrameWidth;
+-    mfxU16  FrameHeight;
+-
+-    mfxU8   WriteIVFHeaders;          /* tri-state option */
+-    mfxU8   UseAnnexB;                /* tri-state option */
+-    mfxU8   PackOBUFrame;             /* tri-state option */
+-    mfxU8   InsertTemporalDelimiter;  /* tri-state option */
+-
+-    mfxU8   UniformTileSpacing;       /* tri-state option */
+-    mfxU8   ContextUpdateTileIdPlus1; /* Minus 1 specifies context_update_tile_id */
+-    mfxU16  NumTileRows;
+-    mfxU16  NumTileColumns;
+-    mfxU16  NumTileGroups;
+-    mfxU16  NumTilesPerTileGroup[256];
+-    mfxU16  TileWidthInSB[128];
+-    mfxU16  TileHeightInSB[128];
+-
+-    mfxU8   EnableCdef;               /* tri-state option */
+-    mfxU8   EnableRestoration;        /* tri-state option */
+-    mfxU8   LoopFilterSharpness;      /* 0..8, 0 = default, map to bitstream: [1..8] => [0..7] */
+-
+-    mfxU8   InterpFilter;             /* see enum AV1InterpolationMode */
+-
+-    mfxU8   SegmentationMode;         /* see enum AV1SegmentMode*/
+-
+-    mfxU8   DisableCdfUpdate;         /* tri-state option */
+-    mfxU8   DisableFrameEndUpdateCdf; /* tri-state option */
+-
+-    mfxU8   EnableSuperres;           /* tri-state option */
+-    mfxU8   SuperresScaleDenominator; /* 9..16, 0 = default */
+-
+-    mfxU8   StillPictureMode;         /* tri-state option */
+-    mfxU16  SwitchInterval;           /* interval, 0 - disabled */
+-
+-    mfxU8   EnableLoopFilter;         /* tri-state option */
+-
+-    mfxU8   reserved[63];
+-} mfxExtAV1Param;
+-MFX_PACK_END()
+-
+-MFX_PACK_BEGIN_USUAL_STRUCT()
+-typedef struct {
+-    mfxExtBuffer Header;
+-
+-    struct {
+-        mfxU8  CdefDampingMinus3;   /* 0..3 */
+-        mfxU8  CdefBits;            /* 0..3 */
+-        mfxU8  CdefYStrengths[8];   /* 0..63 */
+-        mfxU8  CdefUVStrengths[8];  /* 0..63 */
+-        mfxU8  reserved[14];
+-    } Cdef;
+-
+-    struct {
+-        mfxU8  LFLevelYVert;        /* 0..63 */
+-        mfxU8  LFLevelYHorz;        /* 0..63 */
+-        mfxU8  LFLevelU;            /* 0..63 */
+-        mfxU8  LFLevelV;            /* 0..63 */
+-        mfxU8  ModeRefDeltaEnabled; /* 0, 1 */
+-        mfxU8  ModeRefDeltaUpdate;  /* 0, 1 */
+-        mfxI8  RefDeltas[8];        /* -63..63 */
+-        mfxI8  ModeDeltas[2];       /* -63..63 */
+-        mfxU8  reserved[16];
+-    } LoopFilter;
+-
+-    struct {
+-        mfxI8  YDcDeltaQ;           /* -63..63 */
+-        mfxI8  UDcDeltaQ;           /* -63..63 */
+-        mfxI8  VDcDeltaQ;           /* -63..63 */
+-        mfxI8  UAcDeltaQ;           /* -63..63 */
+-        mfxI8  VAcDeltaQ;           /* -63..63 */
+-        mfxU8  MinBaseQIndex;
+-        mfxU8  MaxBaseQIndex;
+-        mfxU8  reserved[25];
+-    } QP;
+-
+-    mfxU8  ErrorResilientMode;          /* tri-state option */
+-    mfxU8  EnableOrderHint;             /* tri-state option */
+-    mfxU8  OrderHintBits;               /* 0..8, 0 = default */
+-    mfxU8  DisplayFormatSwizzle;        /* 0, 1 */
+-
+-    mfxU8  reserved[60];
+-} mfxExtAV1AuxData;
+-MFX_PACK_END()
+-
+-#endif
+-
+-#ifdef __cplusplus
+-} // extern "C"
+-#endif
+-
+-#endif
+diff --git a/sys/msdk/gstmsdkav1enc.c b/sys/msdk/gstmsdkav1enc.c
+index 534e57c97b..0dce64c8c4 100644
+--- a/sys/msdk/gstmsdkav1enc.c
++++ b/sys/msdk/gstmsdkav1enc.c
+@@ -152,25 +152,25 @@ gst_msdkav1enc_configure (GstMsdkEnc * encoder)
+   encoder->enable_extopt3 = TRUE;
+   gst_msdkenc_ensure_extended_coding_options (encoder);
+ 
+-  memset (&av1enc->ext_av1, 0, sizeof (av1enc->ext_av1));
+-  av1enc->ext_av1.Header.BufferId = MFX_EXTBUFF_AV1_PARAM;
+-  av1enc->ext_av1.Header.BufferSz = sizeof (av1enc->ext_av1);
+-  av1enc->ext_av1.FrameWidth = encoder->param.mfx.FrameInfo.CropW;
+-  av1enc->ext_av1.FrameHeight = encoder->param.mfx.FrameInfo.CropH;
+-  av1enc->ext_av1.NumTileRows = av1enc->num_tile_rows;
+-  av1enc->ext_av1.NumTileColumns = av1enc->num_tile_cols;
+-  av1enc->ext_av1.PackOBUFrame = MFX_CODINGOPTION_OFF;
+-  av1enc->ext_av1.DisableFrameEndUpdateCdf = MFX_CODINGOPTION_OFF;
+-  av1enc->ext_av1.EnableCdef = MFX_CODINGOPTION_OFF;
+-  gst_msdkenc_add_extra_param (encoder, (mfxExtBuffer *) & av1enc->ext_av1);
+-
+-  memset (&av1enc->ext_av1_auxdata, 0, sizeof (av1enc->ext_av1_auxdata));
+-  av1enc->ext_av1_auxdata.Header.BufferId = MFX_EXTBUFF_AV1_AUXDATA;
+-  av1enc->ext_av1_auxdata.Header.BufferSz = sizeof (av1enc->ext_av1_auxdata);
+-  av1enc->ext_av1_auxdata.EnableOrderHint = MFX_CODINGOPTION_ON;
+-  av1enc->ext_av1_auxdata.OrderHintBits = 8;
+-  gst_msdkenc_add_extra_param (encoder,
+-      (mfxExtBuffer *) & av1enc->ext_av1_auxdata);
++  memset (&av1enc->ext_av1_bs_param, 0, sizeof (av1enc->ext_av1_bs_param));
++  av1enc->ext_av1_bs_param.Header.BufferId = MFX_EXTBUFF_AV1_BITSTREAM_PARAM;
++  av1enc->ext_av1_bs_param.Header.BufferSz = sizeof (av1enc->ext_av1_bs_param);
++  av1enc->ext_av1_bs_param.WriteIVFHeaders = MFX_CODINGOPTION_OFF;
++  gst_msdkenc_add_extra_param (encoder, (mfxExtBuffer *) & av1enc->ext_av1_bs_param);
++
++  memset (&av1enc->ext_av1_res_param, 0, sizeof (av1enc->ext_av1_res_param));
++  av1enc->ext_av1_res_param.Header.BufferId = MFX_EXTBUFF_AV1_RESOLUTION_PARAM;
++  av1enc->ext_av1_res_param.Header.BufferSz = sizeof (av1enc->ext_av1_res_param);
++  av1enc->ext_av1_res_param.FrameWidth = encoder->param.mfx.FrameInfo.CropW;
++  av1enc->ext_av1_res_param.FrameHeight = encoder->param.mfx.FrameInfo.CropH;
++  gst_msdkenc_add_extra_param (encoder, (mfxExtBuffer *) & av1enc->ext_av1_res_param);
++
++  memset (&av1enc->ext_av1_tile_param, 0, sizeof (av1enc->ext_av1_tile_param));
++  av1enc->ext_av1_tile_param.Header.BufferId = MFX_EXTBUFF_AV1_TILE_PARAM;
++  av1enc->ext_av1_tile_param.Header.BufferSz = sizeof (av1enc->ext_av1_tile_param);
++  av1enc->ext_av1_tile_param.NumTileRows = av1enc->num_tile_rows;
++  av1enc->ext_av1_tile_param.NumTileColumns = av1enc->num_tile_cols;
++  gst_msdkenc_add_extra_param (encoder, (mfxExtBuffer *) & av1enc->ext_av1_tile_param);
+ 
+   return TRUE;
+ }
+diff --git a/sys/msdk/gstmsdkav1enc.h b/sys/msdk/gstmsdkav1enc.h
+index 72beefb811..3fb3a93725 100644
+--- a/sys/msdk/gstmsdkav1enc.h
++++ b/sys/msdk/gstmsdkav1enc.h
+@@ -33,7 +33,6 @@
+ #define __GST_MSDKAV1ENC_H__
+ 
+ #include "gstmsdkenc.h"
+-#include "av1_temp.h"
+ 
+ G_BEGIN_DECLS
+ 
+@@ -59,8 +58,9 @@ struct _GstMsdkAV1Enc
+   gushort num_tile_rows;
+   gushort num_tile_cols;
+ 
+-  mfxExtAV1Param ext_av1;
+-  mfxExtAV1AuxData ext_av1_auxdata;
++  mfxExtAV1BitstreamParam ext_av1_bs_param;
++  mfxExtAV1ResolutionParam ext_av1_res_param;
++  mfxExtAV1TileParam ext_av1_tile_param;
+ };
+ 
+ struct _GstMsdkAV1EncClass
+@@ -72,4 +72,4 @@ GType gst_msdkav1enc_get_type (void);
+ 
+ G_END_DECLS
+ 
+-#endif /* __GST_MSDKAV1ENC_H__ */
++#endif /* __GST_MSDKAV1ENC_H__ */
+\ No newline at end of file
+-- 
+2.17.1
+
