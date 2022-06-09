@@ -1,0 +1,265 @@
+From 58c7e3897436086d9b6962026efe89766a6b8fa7 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Wed, 4 May 2022 10:42:59 +0800
+Subject: [PATCH 8/8] va: Add H265 SCC profile support.
+
+---
+ .../gst-plugins-bad/sys/va/gstvah265enc.c     | 122 ++++++++++++++++--
+ 1 file changed, 111 insertions(+), 11 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
+index d0925e7141..9b87fc6a05 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
+@@ -475,6 +475,20 @@ _is_tile_enabled (GstVaH265Enc * self)
+   return self->partition.num_tile_cols * self->partition.num_tile_rows > 1;
+ }
+ 
++static inline gboolean
++_is_scc_enabled (GstVaH265Enc * self)
++{
++  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
++
++  if (base->profile == VAProfileHEVCSccMain ||
++      base->profile == VAProfileHEVCSccMain10 ||
++      base->profile == VAProfileHEVCSccMain444 ||
++      base->profile == VAProfileHEVCSccMain444_10)
++    return TRUE;
++
++  return FALSE;
++}
++
+ static GstH265NalUnitType
+ _h265_nal_unit_type (GstVaH265EncFrame * frame)
+ {
+@@ -796,6 +810,25 @@ _h265_fill_sps (GstVaH265Enc * self,
+       .log2_max_mv_length_vertical =
+           seq_param->vui_fields.bits.log2_max_mv_length_vertical,
+     },
++    .sps_extension_flag = _is_scc_enabled (self),
++    /* if sps_extension_present_flag */
++    .sps_range_extension_flag = 0,
++    .sps_multilayer_extension_flag = 0,
++    .sps_3d_extension_flag = 0,
++    .sps_scc_extension_flag = _is_scc_enabled (self),
++    /* if sps_scc_extension_flag */
++    .sps_scc_extension_params = {
++      .sps_curr_pic_ref_enabled_flag = 1,
++      .palette_mode_enabled_flag =
++          seq_param->scc_fields.bits.palette_mode_enabled_flag,
++      .palette_max_size = 64,
++      .delta_palette_max_predictor_size = 32,
++      .sps_palette_predictor_initializers_present_flag = 0,
++      .sps_num_palette_predictor_initializer_minus1 = 0,
++      .sps_palette_predictor_initializer = { },
++      .motion_vector_resolution_control_idc = 0,
++      .intra_boundary_filtering_disabled_flag = 0,
++    },
+   };
+   /* *INDENT-ON* */
+ 
+@@ -806,7 +839,8 @@ _h265_fill_sps (GstVaH265Enc * self,
+ }
+ 
+ static void
+-_h265_fill_pps (VAEncPictureParameterBufferHEVC * pic_param,
++_h265_fill_pps (GstVaH265Enc * self,
++    VAEncPictureParameterBufferHEVC * pic_param,
+     GstH265SPS * sps, GstH265PPS * pps)
+ {
+   /* *INDENT-OFF* */
+@@ -865,8 +899,19 @@ _h265_fill_pps (VAEncPictureParameterBufferHEVC * pic_param,
+     .log2_parallel_merge_level_minus2 =
+         pic_param->log2_parallel_merge_level_minus2,
+     .slice_segment_header_extension_present_flag = 0,
+-    /* TODO: set for SCC */
+-    .pps_extension_flag = 0,
++    .pps_extension_flag = _is_scc_enabled (self),
++    /* if pps_extension_flag*/
++    .pps_range_extension_flag = 0,
++    .pps_multilayer_extension_flag = 0,
++    .pps_3d_extension_flag = 0,
++    .pps_scc_extension_flag = _is_scc_enabled (self),
++    /* if pps_scc_extension_flag*/
++    .pps_scc_extension_params = {
++      .pps_curr_pic_ref_enabled_flag =
++          pic_param->scc_fields.bits.pps_curr_pic_ref_enabled_flag,
++      .residual_adaptive_colour_transform_enabled_flag = 0,
++      .pps_palette_predictor_initializers_present_flag = 0,
++    },
+   };
+   /* *INDENT-ON* */
+ }
+@@ -991,11 +1036,31 @@ _h265_fill_slice_header (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+     }
+   }
+ 
+-  slice_hdr->num_ref_idx_active_override_flag =
+-      slice_param->slice_fields.bits.num_ref_idx_active_override_flag;
++  /* For scc, add the current frame into ref */
++  if (_is_scc_enabled (self)) {
++    slice_hdr->num_ref_idx_active_override_flag = 1;
++  } else {
++    slice_hdr->num_ref_idx_active_override_flag =
++        slice_param->slice_fields.bits.num_ref_idx_active_override_flag;
++  }
++
+   if (slice_hdr->num_ref_idx_active_override_flag) {
+-    slice_hdr->num_ref_idx_l0_active_minus1 =
+-        slice_param->num_ref_idx_l0_active_minus1;
++    if (_is_scc_enabled (self)) {
++      /* For scc, need to add 1 for current picture itself when calculating
++         NumRpsCurrTempList0. But slice_param->num_ref_idx_l0_active_minus1
++         does not include the current frame, but the stream's
++         slice_hdr->num_ref_idx_l0_active_minus1 needs to include. */
++      if (frame->type == GST_H265_I_SLICE) {
++        g_assert (slice_param->num_ref_idx_l0_active_minus1 == 0);
++        slice_hdr->num_ref_idx_l0_active_minus1 = 0;
++      } else {
++        slice_hdr->num_ref_idx_l0_active_minus1 =
++            slice_param->num_ref_idx_l0_active_minus1 + 1;
++      }
++    } else {
++      slice_hdr->num_ref_idx_l0_active_minus1 =
++          slice_param->num_ref_idx_l0_active_minus1;
++    }
+ 
+     if (slice_param->slice_type == GST_H265_B_SLICE)
+       slice_hdr->num_ref_idx_l1_active_minus1 =
+@@ -1191,13 +1256,14 @@ _h265_fill_sequence_parameter (GstVaH265Enc * self,
+ {
+   GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
+   guint profile_idc = 0;
++  gboolean palette_mode_enabled_flag = 0;
+ 
+   switch (base->profile) {
+     case VAProfileHEVCMain:
+-      profile_idc = 1;
++      profile_idc = GST_H265_PROFILE_IDC_MAIN;
+       break;
+     case VAProfileHEVCMain10:
+-      profile_idc = 2;
++      profile_idc = GST_H265_PROFILE_IDC_MAIN;
+       break;
+     case VAProfileHEVCMain12:
+     case VAProfileHEVCMain422_10:
+@@ -1205,13 +1271,22 @@ _h265_fill_sequence_parameter (GstVaH265Enc * self,
+     case VAProfileHEVCMain444:
+     case VAProfileHEVCMain444_10:
+     case VAProfileHEVCMain444_12:
+-      profile_idc = 4;
++      profile_idc = GST_H265_PROFILE_IDC_FORMAT_RANGE_EXTENSION;
++      break;
++    case VAProfileHEVCSccMain:
++    case VAProfileHEVCSccMain10:
++    case VAProfileHEVCSccMain444:
++    case VAProfileHEVCSccMain444_10:
++      profile_idc = GST_H265_PROFILE_IDC_SCREEN_CONTENT_CODING;
+       break;
+     default:
+       GST_ERROR_OBJECT (self, "unsupported profile %d", base->profile);
+       return FALSE;
+   }
+ 
++  if (_is_scc_enabled (self))
++    palette_mode_enabled_flag = TRUE;
++
+   /* *INDENT-OFF* */
+   *sequence = (VAEncSequenceParameterBufferHEVC) {
+     .general_profile_idc = profile_idc,
+@@ -1278,6 +1353,7 @@ _h265_fill_sequence_parameter (GstVaH265Enc * self,
+     /* if (vui_fields.bits.vui_timing_info_present_flag) */
+     .vui_num_units_in_tick = GST_VIDEO_INFO_FPS_D (&base->input_state->info),
+     .vui_time_scale = GST_VIDEO_INFO_FPS_N (&base->input_state->info),
++    .scc_fields.bits.palette_mode_enabled_flag = palette_mode_enabled_flag,
+   };
+   /* *INDENT-ON* */
+ 
+@@ -1321,6 +1397,7 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+   guint8 num_ref_idx_l0_default_active_minus1 = 0;
+   guint8 num_ref_idx_l1_default_active_minus1 = 0;
+   guint hierarchical_level_plus1 = 0;
++  gboolean pps_curr_pic_ref_enabled_flag = FALSE;
+   guint i;
+ 
+   /* *INDENT-OFF* */
+@@ -1343,6 +1420,9 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+         (self->gop.backward_ref_num > 0 ? self->gop.backward_ref_num - 1 : 0);
+   }
+ 
++  if (_is_scc_enabled (self))
++    pps_curr_pic_ref_enabled_flag = TRUE;
++
+   *pic_param = (VAEncPictureParameterBufferHEVC) {
+     .decoded_curr_pic.picture_id =
+         gst_va_encode_picture_get_reconstruct_surface (frame->picture),
+@@ -1397,6 +1477,8 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+     },
+     /* We use coding_type here, set this to 0. */
+     .hierarchical_level_plus1 = hierarchical_level_plus1,
++    .scc_fields.bits.pps_curr_pic_ref_enabled_flag =
++        pps_curr_pic_ref_enabled_flag,
+   };
+   /* *INDENT-ON* */
+ 
+@@ -1507,6 +1589,16 @@ _h265_fill_slice_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+       list1[i] = list0[i];
+   }
+ 
++  /* In scc mode, the I frame can ref to itself and so the L0 reference
++     list is enabled. Then we need to change I frame to P frame because
++     it uses L0 list. We just leave all reference unchanged and so all
++     ref_pic_list0's picture is invalid, the only ref is itself enabled
++     by pic_param->scc_fields.bits.pps_curr_pic_ref_enabled_flag. */
++  if (_is_scc_enabled (self) && frame->type == GST_H265_I_SLICE) {
++    frame_type = GST_H265_P_SLICE;
++    g_assert (list0_num == 0);
++  }
++
+   *slice = (VAEncSliceParameterBufferHEVC) {
+     .slice_segment_address = start_address,
+     .num_ctu_in_slice = ctu_num,
+@@ -1850,7 +1942,7 @@ _h265_encode_one_frame (GstVaH265Enc * self, GstVideoCodecFrame * gst_frame)
+   if (!_h265_add_picture_parameter (self, frame, &pic_param))
+     return FALSE;
+ 
+-  _h265_fill_pps (&pic_param, &self->sps_hdr, &pps);
++  _h265_fill_pps (self, &pic_param, &self->sps_hdr, &pps);
+ 
+   if ((self->packed_headers & VA_ENC_PACKED_HEADER_PICTURE)
+       && frame->type == GST_H265_I_SLICE
+@@ -2518,11 +2610,15 @@ _h265_decide_profile (GstVaH265Enc * self)
+     if (depth == 8) {
+       profile = VAProfileHEVCMain444;
+       g_array_append_val (chroma_candidates, profile);
++      profile = VAProfileHEVCSccMain444;
++      g_array_append_val (chroma_candidates, profile);
+     }
+ 
+     if (depth <= 10) {
+       profile = VAProfileHEVCMain444_10;
+       g_array_append_val (chroma_candidates, profile);
++      profile = VAProfileHEVCSccMain444_10;
++      g_array_append_val (chroma_candidates, profile);
+     }
+ 
+     if (depth <= 12) {
+@@ -2545,11 +2641,15 @@ _h265_decide_profile (GstVaH265Enc * self)
+     if (depth == 8) {
+       profile = VAProfileHEVCMain;
+       g_array_append_val (chroma_candidates, profile);
++      profile = VAProfileHEVCSccMain;
++      g_array_append_val (chroma_candidates, profile);
+     }
+ 
+     if (depth <= 10) {
+       profile = VAProfileHEVCMain10;
+       g_array_append_val (chroma_candidates, profile);
++      profile = VAProfileHEVCSccMain10;
++      g_array_append_val (chroma_candidates, profile);
+     }
+ 
+     if (depth <= 12) {
+-- 
+2.25.1
+
