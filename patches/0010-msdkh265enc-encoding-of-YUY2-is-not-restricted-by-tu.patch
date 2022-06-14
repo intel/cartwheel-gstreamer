@@ -1,0 +1,27 @@
+From e43bdd26bd9572a4788b8d406a7538073bc4c5ec Mon Sep 17 00:00:00 2001
+From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
+Date: Thu, 2 Jun 2022 14:39:07 +0800
+Subject: [PATCH 10/10] msdkh265enc: encoding of YUY2 is not restricted by tune
+ mode
+
+---
+ subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265enc.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265enc.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265enc.c
+index e4b97d3b65..ce0ed0edc2 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265enc.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265enc.c
+@@ -889,8 +889,7 @@ gst_msdkh265enc_need_conversion (GstMsdkEnc * encoder, GstVideoInfo * info,
+ 
+     case GST_VIDEO_FORMAT_YUY2:
+ #if (MFX_VERSION >= 1027)
+-      if (encoder->codename >= MFX_PLATFORM_ICELAKE &&
+-          h265enc->tune_mode == MFX_CODINGOPTION_OFF)
++      if (encoder->codename >= MFX_PLATFORM_ICELAKE)
+         return FALSE;
+ #endif
+     default:
+-- 
+2.25.1
+
