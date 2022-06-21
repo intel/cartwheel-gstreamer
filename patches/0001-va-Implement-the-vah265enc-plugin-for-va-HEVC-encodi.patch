@@ -1,22 +1,22 @@
-From 5a5db8fd46be5caaa8c659e5a4e73f51b6318813 Mon Sep 17 00:00:00 2001
+From 524b4517291ca82ecb80a07f12c6403643b8f58d Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 25 Mar 2022 21:54:30 +0800
 Subject: [PATCH 1/8] va: Implement the vah265enc plugin for va HEVC encoding.
 
 ---
- .../gst-plugins-bad/sys/va/gstvah265enc.c     | 4458 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvah265enc.c     | 4461 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvah265enc.h     |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    1 +
- 3 files changed, 4493 insertions(+)
+ 3 files changed, 4496 insertions(+)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvah265enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 new file mode 100644
-index 0000000000..e7346d4308
+index 0000000000..e642b17a40
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -0,0 +1,4458 @@
+@@ -0,0 +1,4461 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -2144,8 +2144,8 @@ index 0000000000..e7346d4308
 +  b_frame = NULL;
 +  b_vaframe = NULL;
 +  for (i = 0; i < g_queue_get_length (&base->ref_list); i++) {
-+    GstVaH265EncFrame *vaf;
 +    GstVideoCodecFrame *f;
++    GstVaH265EncFrame *vaf;
 +
 +    f = g_queue_peek_nth (&base->ref_list, i);
 +    vaf = _enc_frame (f);
@@ -2153,16 +2153,17 @@ index 0000000000..e7346d4308
 +      continue;
 +
 +    if (!b_frame) {
++      g_assert (b_vaframe == NULL);
 +      b_frame = f;
-+      b_vaframe = _enc_frame (b_frame);
++      b_vaframe = vaf;
 +      continue;
 +    }
 +
-+    b_vaframe = _enc_frame (b_frame);
++    g_assert (b_vaframe);
 +    g_assert (vaf->poc != b_vaframe->poc);
 +    if (vaf->poc < b_vaframe->poc) {
 +      b_frame = f;
-+      b_vaframe = _enc_frame (b_frame);
++      b_vaframe = vaf;
 +    }
 +  }
 +
@@ -3717,6 +3718,8 @@ index 0000000000..e7346d4308
 +
 +  self->ctu_width = (self->luma_width + self->ctu_size - 1) / self->ctu_size;
 +  self->ctu_height = (self->luma_height + self->ctu_size - 1) / self->ctu_size;
++  if (self->ctu_width == 0 || self->ctu_height == 0)
++    return FALSE;
 +
 +  self->bits_depth_luma_minus8 =
 +      GST_VIDEO_FORMAT_INFO_DEPTH (base->input_state->info.finfo, 0);
