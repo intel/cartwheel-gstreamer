@@ -1,4 +1,4 @@
-From 92a1e81d6346f055de8f1a70d564f7e62cbf254b Mon Sep 17 00:00:00 2001
+From 7625429eb8f2db700a0d4b2462ce3d8cf2442117 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 25 Mar 2022 21:55:28 +0800
 Subject: [PATCH 2/8] va: Register and enable and the vah265enc plugin.

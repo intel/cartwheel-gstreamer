@@ -1,4 +1,4 @@
-From 3c60dce11b9bef9f4759c7e3f1b644ca9d2cf9a1 Mon Sep 17 00:00:00 2001
+From 40a5b08d5376a45bc8982d21785799ca26c5457e Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 25 Apr 2022 15:49:31 +0800
 Subject: [PATCH 6/8] va: enable multi tile support for H265 encoder.
@@ -110,7 +110,7 @@ index cd173987d3..436f9a08ed 100644
                                                             VAProfile profile,
                                                             VAEntrypoint entrypoint);
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index 16c7de0e14..b8c21b8fc6 100644
+index f2e9bd818f..b3d437b701 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -89,6 +89,8 @@ enum
@@ -312,7 +312,7 @@ index 16c7de0e14..b8c21b8fc6 100644
        return FALSE;
  
      _h265_fill_sequence_parameter (self, &sequence);
-@@ -2271,10 +2295,18 @@ gst_va_h265_enc_reset_state (GstVaBaseEnc * base)
+@@ -2272,10 +2296,18 @@ gst_va_h265_enc_reset_state (GstVaBaseEnc * base)
    self->bits_depth_luma_minus8 = 0;
    self->bits_depth_chroma_minus8 = 0;
  
@@ -333,7 +333,7 @@ index 16c7de0e14..b8c21b8fc6 100644
    self->features.log2_min_luma_coding_block_size_minus3 = 0;
    self->features.log2_diff_max_min_luma_coding_block_size = 0;
    self->features.log2_diff_max_min_luma_coding_block_size = 0;
-@@ -2475,41 +2507,369 @@ out:
+@@ -2476,41 +2508,369 @@ out:
  }
  
  static void
@@ -722,7 +722,7 @@ index 16c7de0e14..b8c21b8fc6 100644
  }
  
  /* Normalizes bitrate (and CPB size) for HRD conformance */
-@@ -3011,7 +3371,7 @@ _h265_calculate_coded_size (GstVaH265Enc * self)
+@@ -3012,7 +3372,7 @@ _h265_calculate_coded_size (GstVaH265Enc * self)
    codedbuf_size += 4 + GST_ROUND_UP_8 (MAX_PPS_HDR_SIZE) / 8;
  
    /* Account for slice header */
@@ -731,7 +731,7 @@ index 16c7de0e14..b8c21b8fc6 100644
        GST_ROUND_UP_8 (MAX_SLICE_HDR_SIZE + MAX_SHORT_TERM_REFPICSET_SIZE) / 8);
  
    /* TODO: Only YUV 4:2:0 formats are supported for now.
-@@ -3489,7 +3849,7 @@ _h265_setup_encoding_features (GstVaH265Enc * self)
+@@ -3490,7 +3850,7 @@ _h265_setup_encoding_features (GstVaH265Enc * self)
  
    self->features.transquant_bypass_enabled_flag =
        (features.bits.transquant_bypass != 0);
@@ -740,7 +740,7 @@ index 16c7de0e14..b8c21b8fc6 100644
  #endif
  
  default_options:
-@@ -3522,7 +3882,7 @@ default_options:
+@@ -3523,7 +3883,7 @@ default_options:
    self->features.weighted_bipred_flag = FALSE;
    self->features.transquant_bypass_enabled_flag = FALSE;
  
@@ -749,7 +749,7 @@ index 16c7de0e14..b8c21b8fc6 100644
    GST_DEBUG_OBJECT (self, "Set features to: "
        "separate_colour_plane_flag = %d, "
        "colour_plane_id = %d, "
-@@ -3578,6 +3938,19 @@ out:
+@@ -3579,6 +3939,19 @@ out:
        self->features.weighted_pred_flag,
        self->features.weighted_bipred_flag,
        self->features.transquant_bypass_enabled_flag);
@@ -769,7 +769,7 @@ index 16c7de0e14..b8c21b8fc6 100644
  }
  
  /* We need to decide the profile and entrypoint before call this.
-@@ -3791,8 +4164,6 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+@@ -3794,8 +4167,6 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
        base->width, base->height, self->ctu_width, self->ctu_height,
        GST_TIME_ARGS (base->frame_duration));
  
@@ -778,7 +778,7 @@ index 16c7de0e14..b8c21b8fc6 100644
    _h265_ensure_rate_control (self);
  
    if (!_h265_calculate_tier_level (self))
-@@ -3805,6 +4176,9 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+@@ -3808,6 +4179,9 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
  
    _h265_calculate_coded_size (self);
  
@@ -788,7 +788,7 @@ index 16c7de0e14..b8c21b8fc6 100644
    if (!_h265_init_packed_headers (self))
      return FALSE;
  
-@@ -4021,6 +4395,12 @@ gst_va_h265_enc_set_property (GObject * object, guint prop_id,
+@@ -4024,6 +4398,12 @@ gst_va_h265_enc_set_property (GObject * object, guint prop_id,
      case PROP_TARGET_USAGE:
        self->prop.target_usage = g_value_get_uint (value);
        break;
@@ -801,7 +801,7 @@ index 16c7de0e14..b8c21b8fc6 100644
      case PROP_RATE_CONTROL:
        self->prop.rc_ctrl = g_value_get_enum (value);
        break;
-@@ -4094,6 +4474,12 @@ gst_va_h265_enc_get_property (GObject * object, guint prop_id,
+@@ -4097,6 +4477,12 @@ gst_va_h265_enc_get_property (GObject * object, guint prop_id,
      case PROP_TARGET_USAGE:
        g_value_set_uint (value, self->prop.target_usage);
        break;
@@ -814,7 +814,7 @@ index 16c7de0e14..b8c21b8fc6 100644
      case PROP_RATE_CONTROL:
        g_value_set_enum (value, self->prop.rc_ctrl);
        break;
-@@ -4407,6 +4793,26 @@ gst_va_h265_enc_class_init (gpointer g_klass, gpointer class_data)
+@@ -4410,6 +4796,26 @@ gst_va_h265_enc_class_init (gpointer g_klass, gpointer class_data)
        "The desired max CPB size in Kb (0: auto-calculate)", 0, 2000 * 1024, 0,
        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
  
