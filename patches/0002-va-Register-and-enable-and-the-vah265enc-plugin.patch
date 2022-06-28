@@ -1,14 +1,14 @@
-From 7625429eb8f2db700a0d4b2462ce3d8cf2442117 Mon Sep 17 00:00:00 2001
+From b7f87586db7829934e61e2dbfe9634db7cb91ce9 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 25 Mar 2022 21:55:28 +0800
-Subject: [PATCH 2/8] va: Register and enable and the vah265enc plugin.
+Subject: [PATCH 02/10] va: Register and enable and the vah265enc plugin.
 
 ---
  subprojects/gst-plugins-bad/sys/va/plugin.c | 8 ++++++++
  1 file changed, 8 insertions(+)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index 1ca31446e2..96dbfc1cb5 100644
+index 2c1d9ce6d20a..f91923e4da6c 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -36,6 +36,7 @@
@@ -16,10 +16,10 @@ index 1ca31446e2..96dbfc1cb5 100644
  #include "gstvah264enc.h"
  #include "gstvah265dec.h"
 +#include "gstvah265enc.h"
+ #include "gstvajpegdec.h"
  #include "gstvampeg2dec.h"
  #include "gstvaprofile.h"
- #include "gstvavp8dec.h"
-@@ -187,6 +188,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -195,6 +196,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
                device->render_device_path);
          }
          break;
@@ -34,5 +34,5 @@ index 1ca31446e2..96dbfc1cb5 100644
          GST_DEBUG ("No encoder implementation for %" GST_FOURCC_FORMAT,
              GST_FOURCC_ARGS (codec));
 -- 
-2.25.1
+2.34.1
 
