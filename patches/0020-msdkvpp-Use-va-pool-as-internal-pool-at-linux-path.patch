@@ -1,0 +1,206 @@
+From f609b426909f3e4a25a25e8a1d6fa9b489b55e7e Mon Sep 17 00:00:00 2001
+From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
+Date: Wed, 8 Jun 2022 12:31:56 +0800
+Subject: [PATCH 20/21] msdkvpp : Use va pool as internal pool at linux path
+
+---
+ .../gst-plugins-bad/sys/msdk/gstmsdkvpp.c     | 112 +++++++++---------
+ 1 file changed, 57 insertions(+), 55 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
+index c14ba42461..5f19210cbd 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
+@@ -64,6 +64,7 @@
+ 
+ #ifndef _WIN32
+ #include "gstmsdkallocator_libva.h"
++#include <gst/va/gstvaallocator.h>
+ #if VA_CHECK_VERSION(1, 4, 1)
+ #undef EXT_FORMATS
+ #define EXT_FORMATS     ", BGR10A2_LE"
+@@ -407,59 +408,84 @@ gst_msdkvpp_prepare_output_buffer (GstBaseTransform * trans,
+   return *outbuf_ptr ? GST_FLOW_OK : GST_FLOW_ERROR;
+ }
+ 
++#ifndef _WIN32
++static GstBufferPool *
++gst_msdk_create_va_pool (GstVideoInfo * info, GstMsdkContext * msdk_context,
++    gboolean use_dmabuf, guint min_buffers)
++{
++  GstBufferPool *pool = NULL;
++  GstAllocator *allocator;
++  GArray *formats = NULL;
++  GstAllocationParams alloc_params = { 0, 31, 0, 0 };
++  GstVaDisplay *display = NULL;
++  GstCaps *aligned_caps = NULL;
++
++  display = (GstVaDisplay *) gst_msdk_context_get_display (msdk_context);
++
++  if (use_dmabuf)
++    allocator = gst_va_dmabuf_allocator_new (display);
++  else {
++    formats = g_array_new (FALSE, FALSE, sizeof (GstVideoFormat));
++    g_array_append_val (formats, GST_VIDEO_INFO_FORMAT (info));
++    allocator = gst_va_allocator_new (display, formats);
++  }
++  if (!allocator) {
++    GST_ERROR ("Failed to create allocator");
++    if (formats)
++      g_array_unref (formats);
++    return NULL;
++  }
++  aligned_caps = gst_video_info_to_caps (info);
++  pool =
++      gst_va_pool_new_with_config (aligned_caps,
++      GST_VIDEO_INFO_SIZE (info), min_buffers, 0,
++      VA_SURFACE_ATTRIB_USAGE_HINT_GENERIC, GST_VA_FEATURE_AUTO,
++      allocator, &alloc_params);
++
++  gst_object_unref (allocator);
++  gst_caps_unref (aligned_caps);
++
++  return pool;
++}
++#endif
++
+ static GstBufferPool *
+ gst_msdkvpp_create_buffer_pool (GstMsdkVPP * thiz, GstPadDirection direction,
+     GstCaps * caps, guint min_num_buffers)
+ {
+   GstBufferPool *pool = NULL;
+   GstStructure *config;
+-  GstAllocator *allocator = NULL;
+   GstVideoInfo info;
+   GstVideoInfo *pool_info = NULL;
+   GstVideoAlignment align;
+-  GstAllocationParams params = { 0, 31, 0, 0, };
+-  mfxFrameAllocResponse *alloc_resp = NULL;
+   gboolean use_dmabuf = FALSE;
+ 
+   if (direction == GST_PAD_SINK) {
+-    alloc_resp = &thiz->in_alloc_resp;
+     pool_info = &thiz->sinkpad_buffer_pool_info;
+     use_dmabuf = thiz->use_sinkpad_dmabuf;
+   } else if (direction == GST_PAD_SRC) {
+-    alloc_resp = &thiz->out_alloc_resp;
+     pool_info = &thiz->srcpad_buffer_pool_info;
+     use_dmabuf = thiz->use_srcpad_dmabuf;
+   }
+ 
+-  pool = gst_msdk_buffer_pool_new (thiz->context, alloc_resp);
+-  if (!pool)
+-    goto error_no_pool;
+-
+-  if (!gst_video_info_from_caps (&info, caps))
++  if (!gst_video_info_from_caps (&info, caps)) {
+     goto error_no_video_info;
++  }
+ 
+   gst_msdk_set_video_alignment (&info, 0, 0, &align);
+   gst_video_info_align (&info, &align);
+ 
+-  if (use_dmabuf)
+-    allocator =
+-        gst_msdk_dmabuf_allocator_new (thiz->context, &info, alloc_resp);
+-  else if (thiz->use_video_memory)
+-    allocator = gst_msdk_video_allocator_new (thiz->context, &info, alloc_resp);
+-  else
+-    allocator = gst_msdk_system_allocator_new (&info);
++#ifndef _WIN32
++  pool = gst_msdk_create_va_pool (&info, thiz->context, use_dmabuf,
++      min_num_buffers);
++#else
++  GST_ERROR ("D3D11 pool not implemented yet");
++#endif
+ 
+-  if (!allocator)
+-    goto error_no_allocator;
++  if (!pool)
++    goto error_no_pool;
+ 
+   config = gst_buffer_pool_get_config (GST_BUFFER_POOL_CAST (pool));
+-  /* we do not support dynamic buffer count change */
+-  gst_buffer_pool_config_set_params (config, caps, info.size, min_num_buffers,
+-      min_num_buffers);
+-
+-  gst_buffer_pool_config_add_option (config, GST_BUFFER_POOL_OPTION_VIDEO_META);
+-  gst_buffer_pool_config_add_option (config,
+-      GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
+   if (thiz->use_video_memory) {
+     gst_buffer_pool_config_add_option (config,
+         GST_BUFFER_POOL_OPTION_MSDK_USE_VIDEO_MEMORY);
+@@ -468,14 +494,10 @@ gst_msdkvpp_create_buffer_pool (GstMsdkVPP * thiz, GstPadDirection direction,
+           GST_BUFFER_POOL_OPTION_MSDK_USE_DMABUF);
+   }
+ 
+-  gst_buffer_pool_config_set_video_alignment (config, &align);
+-  gst_buffer_pool_config_set_allocator (config, allocator, &params);
+-  gst_object_unref (allocator);
+-
+   if (!gst_buffer_pool_set_config (pool, config))
+     goto error_pool_config;
+ 
+-  /* Updating pool_info with aligned info of allocator */
++  /* Updating pool_info with info which used to config pool */
+   *pool_info = info;
+ 
+   return pool;
+@@ -491,17 +513,10 @@ error_no_video_info:
+     gst_object_unref (pool);
+     return NULL;
+   }
+-error_no_allocator:
+-  {
+-    GST_INFO_OBJECT (thiz, "Failed to create allocator");
+-    gst_object_unref (pool);
+-    return NULL;
+-  }
+ error_pool_config:
+   {
+     GST_INFO_OBJECT (thiz, "Failed to set config");
+     gst_object_unref (pool);
+-    gst_object_unref (allocator);
+     return NULL;
+   }
+ }
+@@ -700,7 +715,6 @@ get_surface_from_pool (GstMsdkVPP * thiz, GstBufferPool * pool,
+     GstBufferPoolAcquireParams * params)
+ {
+   GstBuffer *new_buffer;
+-  mfxFrameSurface1 *new_surface;
+   GstMsdkSurface *msdk_surface = NULL;
+ 
+   if (!gst_buffer_pool_is_active (pool) &&
+@@ -713,24 +727,12 @@ get_surface_from_pool (GstMsdkVPP * thiz, GstBufferPool * pool,
+     GST_ERROR_OBJECT (pool, "failed to acquire a buffer from pool");
+     return NULL;
+   }
+-
+-  if (gst_msdk_is_msdk_buffer (new_buffer)) {
+-    new_surface = gst_msdk_get_surface_from_buffer (new_buffer);
+-    msdk_surface = g_slice_new0 (GstMsdkSurface);
+-    msdk_surface->surface = new_surface;
+-    msdk_surface->buf = new_buffer;
+-  } else {
+ #ifndef _WIN32
+-    msdk_surface = gst_msdk_import_to_msdk_surface (new_buffer, thiz->context,
+-        &thiz->sinkpad_info);
+-    if (msdk_surface)
+-      msdk_surface->buf = new_buffer;
+-    else {
+-      GST_ERROR_OBJECT (pool, "Failed to get msdk surface");
+-      return NULL;
+-    }
++  msdk_surface = gst_msdk_import_to_msdk_surface (new_buffer, thiz->context,
++      &thiz->sinkpad_info);
++  if (msdk_surface)
++    msdk_surface->buf = new_buffer;
+ #endif
+-  }
+ 
+   return msdk_surface;
+ }
+-- 
+2.25.1
+
