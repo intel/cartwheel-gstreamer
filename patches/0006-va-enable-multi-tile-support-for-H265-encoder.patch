@@ -1,19 +1,19 @@
-From 40a5b08d5376a45bc8982d21785799ca26c5457e Mon Sep 17 00:00:00 2001
+From dd03b7fbd296a24ffe35e62cfb55df4e85aea53b Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 25 Apr 2022 15:49:31 +0800
 Subject: [PATCH 6/8] va: enable multi tile support for H265 encoder.
 
 ---
- .../gst-plugins-bad/sys/va/gstvaencoder.c     |  58 ++
+ .../gst-plugins-bad/sys/va/gstvaencoder.c     |  64 ++
  .../gst-plugins-bad/sys/va/gstvaencoder.h     |   6 +
- .../gst-plugins-bad/sys/va/gstvah265enc.c     | 534 +++++++++++++++---
- 3 files changed, 534 insertions(+), 64 deletions(-)
+ .../gst-plugins-bad/sys/va/gstvah265enc.c     | 546 ++++++++++++++++--
+ 3 files changed, 552 insertions(+), 64 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index 2313783481..4cfaaad95e 100644
+index 2313783481..0132aa6e13 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-@@ -603,6 +603,35 @@ gst_va_encoder_get_max_slice_num (GstVaEncoder * self,
+@@ -603,6 +603,41 @@ gst_va_encoder_get_max_slice_num (GstVaEncoder * self,
    return attrib.value;
  }
  
@@ -43,13 +43,19 @@ index 2313783481..4cfaaad95e 100644
 +    return 0;
 +  }
 +
++  /* FIXME: Case for Intel driver, need driver to fix. */
++  if (entrypoint == VAEntrypointEncSliceLP &&
++      gst_va_display_is_implementation (self->display,
++          GST_VA_IMPLEMENTATION_INTEL_IHD))
++    attrib.value = VA_ENC_SLICE_STRUCTURE_ARBITRARY_ROWS;
++
 +  return attrib.value;
 +}
 +
  gboolean
  gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
      VAProfile profile, VAEntrypoint entrypoint,
-@@ -767,6 +796,35 @@ gst_va_encoder_has_trellis (GstVaEncoder * self,
+@@ -767,6 +802,35 @@ gst_va_encoder_has_trellis (GstVaEncoder * self,
    return attrib.value & VA_ENC_QUANTIZATION_TRELLIS_SUPPORTED;
  }
  
@@ -110,7 +116,7 @@ index cd173987d3..436f9a08ed 100644
                                                             VAProfile profile,
                                                             VAEntrypoint entrypoint);
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index f2e9bd818f..b3d437b701 100644
+index f2e9bd818f..c3104d9ee1 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -89,6 +89,8 @@ enum
@@ -333,7 +339,7 @@ index f2e9bd818f..b3d437b701 100644
    self->features.log2_min_luma_coding_block_size_minus3 = 0;
    self->features.log2_diff_max_min_luma_coding_block_size = 0;
    self->features.log2_diff_max_min_luma_coding_block_size = 0;
-@@ -2476,41 +2508,369 @@ out:
+@@ -2476,41 +2508,381 @@ out:
  }
  
  static void
@@ -547,7 +553,8 @@ index f2e9bd818f..b3d437b701 100644
 +  guint i_slice;
 +
 +  /* TODO: consider other slice structure modes */
-+  if (!(slice_structure & VA_ENC_SLICE_STRUCTURE_ARBITRARY_MACROBLOCKS)) {
++  if (!(slice_structure & VA_ENC_SLICE_STRUCTURE_ARBITRARY_MACROBLOCKS) &&
++      !(slice_structure & VA_ENC_SLICE_STRUCTURE_ARBITRARY_ROWS)) {
 +    GST_INFO_OBJECT (self, "Driver slice structure is %x, does not support"
 +        " ARBITRARY_MACROBLOCKS mode, fallback to no slice partition",
 +        slice_structure);
@@ -574,6 +581,17 @@ index f2e9bd818f..b3d437b701 100644
 +    if (ctus_mod_slice) {
 +      ++cur_slice_ctus;
 +      --ctus_mod_slice;
++    }
++
++    /* Align start address to the row begin */
++    if (slice_structure & VA_ENC_SLICE_STRUCTURE_ARBITRARY_ROWS) {
++      guint ctu_width_round_factor;
++
++      ctu_width_round_factor =
++          self->ctu_width - (cur_slice_ctus % self->ctu_width);
++      cur_slice_ctus += ctu_width_round_factor;
++      if ((last_ctu_index + cur_slice_ctus) > ctu_size)
++        cur_slice_ctus = ctu_size - last_ctu_index;
 +    }
 +
 +    self->partition.slice_segment_address[i_slice] = last_ctu_index;
@@ -712,17 +730,17 @@ index f2e9bd818f..b3d437b701 100644
 +  if (self->prop.num_tile_cols != self->partition.num_tile_cols) {
 +    self->prop.num_tile_cols = self->partition.num_tile_cols;
 +    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NUM_TILE_COLS]);
-   }
++  }
 +  if (self->prop.num_tile_rows != self->partition.num_tile_rows) {
 +    self->prop.num_tile_rows = self->partition.num_tile_rows;
 +    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NUM_TILE_ROWS]);
-+  }
+   }
 +
 +  return TRUE;
  }
  
  /* Normalizes bitrate (and CPB size) for HRD conformance */
-@@ -3012,7 +3372,7 @@ _h265_calculate_coded_size (GstVaH265Enc * self)
+@@ -3012,7 +3384,7 @@ _h265_calculate_coded_size (GstVaH265Enc * self)
    codedbuf_size += 4 + GST_ROUND_UP_8 (MAX_PPS_HDR_SIZE) / 8;
  
    /* Account for slice header */
@@ -731,7 +749,7 @@ index f2e9bd818f..b3d437b701 100644
        GST_ROUND_UP_8 (MAX_SLICE_HDR_SIZE + MAX_SHORT_TERM_REFPICSET_SIZE) / 8);
  
    /* TODO: Only YUV 4:2:0 formats are supported for now.
-@@ -3490,7 +3850,7 @@ _h265_setup_encoding_features (GstVaH265Enc * self)
+@@ -3490,7 +3862,7 @@ _h265_setup_encoding_features (GstVaH265Enc * self)
  
    self->features.transquant_bypass_enabled_flag =
        (features.bits.transquant_bypass != 0);
@@ -740,7 +758,7 @@ index f2e9bd818f..b3d437b701 100644
  #endif
  
  default_options:
-@@ -3523,7 +3883,7 @@ default_options:
+@@ -3523,7 +3895,7 @@ default_options:
    self->features.weighted_bipred_flag = FALSE;
    self->features.transquant_bypass_enabled_flag = FALSE;
  
@@ -749,7 +767,7 @@ index f2e9bd818f..b3d437b701 100644
    GST_DEBUG_OBJECT (self, "Set features to: "
        "separate_colour_plane_flag = %d, "
        "colour_plane_id = %d, "
-@@ -3579,6 +3939,19 @@ out:
+@@ -3579,6 +3951,19 @@ out:
        self->features.weighted_pred_flag,
        self->features.weighted_bipred_flag,
        self->features.transquant_bypass_enabled_flag);
@@ -769,7 +787,7 @@ index f2e9bd818f..b3d437b701 100644
  }
  
  /* We need to decide the profile and entrypoint before call this.
-@@ -3794,8 +4167,6 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+@@ -3794,8 +4179,6 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
        base->width, base->height, self->ctu_width, self->ctu_height,
        GST_TIME_ARGS (base->frame_duration));
  
@@ -778,7 +796,7 @@ index f2e9bd818f..b3d437b701 100644
    _h265_ensure_rate_control (self);
  
    if (!_h265_calculate_tier_level (self))
-@@ -3808,6 +4179,9 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+@@ -3808,6 +4191,9 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
  
    _h265_calculate_coded_size (self);
  
@@ -788,7 +806,7 @@ index f2e9bd818f..b3d437b701 100644
    if (!_h265_init_packed_headers (self))
      return FALSE;
  
-@@ -4024,6 +4398,12 @@ gst_va_h265_enc_set_property (GObject * object, guint prop_id,
+@@ -4024,6 +4410,12 @@ gst_va_h265_enc_set_property (GObject * object, guint prop_id,
      case PROP_TARGET_USAGE:
        self->prop.target_usage = g_value_get_uint (value);
        break;
@@ -801,7 +819,7 @@ index f2e9bd818f..b3d437b701 100644
      case PROP_RATE_CONTROL:
        self->prop.rc_ctrl = g_value_get_enum (value);
        break;
-@@ -4097,6 +4477,12 @@ gst_va_h265_enc_get_property (GObject * object, guint prop_id,
+@@ -4097,6 +4489,12 @@ gst_va_h265_enc_get_property (GObject * object, guint prop_id,
      case PROP_TARGET_USAGE:
        g_value_set_uint (value, self->prop.target_usage);
        break;
@@ -814,7 +832,7 @@ index f2e9bd818f..b3d437b701 100644
      case PROP_RATE_CONTROL:
        g_value_set_enum (value, self->prop.rc_ctrl);
        break;
-@@ -4410,6 +4796,26 @@ gst_va_h265_enc_class_init (gpointer g_klass, gpointer class_data)
+@@ -4410,6 +4808,26 @@ gst_va_h265_enc_class_init (gpointer g_klass, gpointer class_data)
        "The desired max CPB size in Kb (0: auto-calculate)", 0, 2000 * 1024, 0,
        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
  
