@@ -1,4 +1,4 @@
-From 9b7472dce8bf3d6f1ca5afc5e7872d300ea2a1d9 Mon Sep 17 00:00:00 2001
+From fcd4966886fa60cc8f761d8fc4a19f57ff25ead3 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 9 May 2022 18:19:01 +0800
 Subject: [PATCH 18/21] msdkvpp: Add va caps at sink and src pad
