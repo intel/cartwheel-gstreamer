@@ -1,4 +1,4 @@
-From de2bf1cc279649141c4c583a247a1e1989281908 Mon Sep 17 00:00:00 2001
+From 3f9d3a2b0ad226475ecf852bd8793268ab752830 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 9 May 2022 18:34:38 +0800
 Subject: [PATCH 19/21] msdkvpp: Import buffer to msdk_surface
@@ -14,8 +14,8 @@ updated one.
 ---
  .../sys/msdk/gstmsdkallocator.h               |   1 +
  .../sys/msdk/gstmsdkallocator_libva.c         |   1 +
- .../gst-plugins-bad/sys/msdk/gstmsdkvpp.c     | 190 +++++++-----------
- 3 files changed, 72 insertions(+), 120 deletions(-)
+ .../gst-plugins-bad/sys/msdk/gstmsdkvpp.c     | 191 +++++++-----------
+ 3 files changed, 73 insertions(+), 120 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
 index 0a42299b33..1f1145ea1c 100644
@@ -30,7 +30,7 @@ index 0a42299b33..1f1145ea1c 100644
  
  mfxStatus gst_msdk_frame_alloc(mfxHDL pthis, mfxFrameAllocRequest *req, mfxFrameAllocResponse *resp);
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index eda5463643..c6041e9dbc 100644
+index febc88f4d2..6ed8a58721 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 @@ -783,6 +783,7 @@ gst_msdk_import_to_msdk_surface (GstBuffer * buf, GstMsdkContext * msdk_context,
@@ -42,7 +42,7 @@ index eda5463643..c6041e9dbc 100644
    }
  
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
-index 17b1f980b5..c14ba42461 100644
+index 17b1f980b5..118450278c 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
 @@ -202,23 +202,18 @@ enum
@@ -312,12 +312,12 @@ index 17b1f980b5..c14ba42461 100644
 +  } else if (!in_surface->from_qdata) {
 +    /* We only fill crop info when it is a new surface.
 +     * If the surface is a cached one, it already has crop info,
-+     * and we should avoid updating again. 
++     * and we should avoid updating again.
 +     */
      in_info->CropX = thiz->crop_left;
      in_info->CropY = thiz->crop_top;
      in_info->CropW -= thiz->crop_left + thiz->crop_right;
-@@ -979,12 +918,23 @@ gst_msdkvpp_transform (GstBaseTransform * trans, GstBuffer * inbuf,
+@@ -979,12 +918,24 @@ gst_msdkvpp_transform (GstBaseTransform * trans, GstBuffer * inbuf,
  
        if (gst_msdk_is_msdk_buffer (outbuf_new)) {
          release_out_surface (thiz, out_surface);
@@ -339,7 +339,8 @@ index 17b1f980b5..c14ba42461 100644
 +#endif
 +        if (!out_surface) {
 +          GST_ERROR_OBJECT (thiz, "Failed to get msdk outsurface!");
-+          goto vpp_error;
++          release_in_surface (thiz, in_surface, locked_by_others);
++          return GST_FLOW_ERROR;
 +        }
        }
      } else {

@@ -1,4 +1,4 @@
-From fdf6a86a261e7bdf22d2f09c16af1eda0b8049c3 Mon Sep 17 00:00:00 2001
+From 4245f8a14f1a96032d1328fac247728bef51fe10 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Fri, 27 May 2022 17:56:33 +0800
 Subject: [PATCH 16/21] msdk: Add help functions to get mfxFrameSurface1 from
@@ -37,7 +37,7 @@ index e0d5616205..0a42299b33 100644
  mfxStatus gst_msdk_frame_free(mfxHDL pthis, mfxFrameAllocResponse *resp);
  mfxStatus gst_msdk_frame_lock(mfxHDL pthis, mfxMemId mid, mfxFrameData *ptr);
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index 9f711b008f..eda5463643 100644
+index 9f711b008f..febc88f4d2 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 @@ -37,6 +37,21 @@
@@ -78,7 +78,7 @@ index 9f711b008f..eda5463643 100644
 +    /* Update offset/stride/size if there is VideoMeta attached to
 +     * the dma buffer, which is then used to get vasurface */
 +    GstMemory *mem;
-+    guint i, fd;
++    gint i, fd;
 +    GstVideoMeta *vmeta;
 +
 +    vmeta = gst_buffer_get_video_meta (buf);

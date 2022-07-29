@@ -1,4 +1,4 @@
-From f609b426909f3e4a25a25e8a1d6fa9b489b55e7e Mon Sep 17 00:00:00 2001
+From 9516d3b47764936a35d77e3a7381d0cd1e03aae4 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Wed, 8 Jun 2022 12:31:56 +0800
 Subject: [PATCH 20/21] msdkvpp : Use va pool as internal pool at linux path
@@ -8,7 +8,7 @@ Subject: [PATCH 20/21] msdkvpp : Use va pool as internal pool at linux path
  1 file changed, 57 insertions(+), 55 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
-index c14ba42461..5f19210cbd 100644
+index 118450278c..88022ba32a 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
 @@ -64,6 +64,7 @@

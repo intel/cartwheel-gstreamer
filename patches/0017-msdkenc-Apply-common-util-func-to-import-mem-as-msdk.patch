@@ -1,4 +1,4 @@
-From 7eafb564d4666e663455c51a9e4684cd803c4e5a Mon Sep 17 00:00:00 2001
+From cde6cde4a4ae1638d9badb3f47d3366af12f1fdd Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 30 May 2022 09:52:44 +0800
 Subject: [PATCH 17/21] msdkenc: Apply common util func to import mem as
