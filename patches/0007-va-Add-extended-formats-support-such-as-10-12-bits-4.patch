@@ -1,17 +1,28 @@
-From 1b4074163591e3dfe4a8259bf95ac7595923105d Mon Sep 17 00:00:00 2001
+From bebd5dd5bee60f04f856d9e4f0ed1001d272bc34 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 2 May 2022 23:14:32 +0800
 Subject: [PATCH 7/8] va: Add extended formats support such as 10/12 bits,
  4:2:2 and 4:4:4.
 
 ---
- .../gst-plugins-bad/sys/va/gstvah265enc.c     | 177 ++++++++++++++----
- 1 file changed, 144 insertions(+), 33 deletions(-)
+ .../gst-plugins-bad/sys/va/gstvah265enc.c     | 181 ++++++++++++++----
+ 1 file changed, 146 insertions(+), 35 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index b3d437b701..9efad02b0b 100644
+index d3e0e6eb59..8a6c56baab 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
+@@ -563,8 +563,8 @@ _h265_fill_ptl (GstVaH265Enc * self,
+   /* additional indications specified for general_profile_idc from 4~10 */
+   if (sequence->general_profile_idc == 4) {
+     /* In A.3.5, Format range extensions profiles.
+-       Just support main444, main444-10 and main422-10 profile now, may add
+-       more profiles when needed. */
++       Just support main444, main444-10 main422-10 and main-12 profile now,
++       may add more profiles when needed. */
+     switch (base->profile) {
+       case VAProfileHEVCMain444:
+         ptl->max_12bit_constraint_flag = 1;
 @@ -2385,17 +2385,55 @@ gst_va_h265_enc_reset_state (GstVaBaseEnc * base)
  }
  
@@ -234,7 +245,7 @@ index b3d437b701..9efad02b0b 100644
    g_clear_pointer (&allowed_caps, gst_caps_unref);
  
    if (ret) {
-@@ -3045,16 +3137,35 @@ _h265_ensure_rate_control (GstVaH265Enc * self)
+@@ -3057,16 +3149,35 @@ _h265_ensure_rate_control (GstVaH265Enc * self)
    if ((self->rc.rc_ctrl_mode == VA_RC_CBR || self->rc.rc_ctrl_mode == VA_RC_VBR
            || self->rc.rc_ctrl_mode == VA_RC_VCM) && bitrate == 0) {
      /* FIXME: Provide better estimation. */
