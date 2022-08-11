@@ -1,0 +1,28 @@
+From 3d60df5973c21cd35fbb2a8d9797760161418ccb Mon Sep 17 00:00:00 2001
+From: "Ma, Mingyang" <mingyang.ma@intel.com>
+Date: Thu, 11 Aug 2022 10:36:22 +0800
+Subject: [PATCH] msdkenc: Align 16bit for progressive mode
+
+---
+ subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
+index 80b5c59a3d..e4b620b8e6 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
+@@ -683,7 +683,10 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
+   thiz->param.mfx.EncodedOrder = 0;     /* Take input frames in display order */
+ 
+   thiz->param.mfx.FrameInfo.Width = GST_ROUND_UP_16 (info->width);
+-  thiz->param.mfx.FrameInfo.Height = GST_ROUND_UP_32 (info->height);
++  if (info->interlace_mode != GST_VIDEO_INTERLACE_MODE_PROGRESSIVE)
++    thiz->param.mfx.FrameInfo.Height = GST_ROUND_UP_32 (info->height);
++  else
++    thiz->param.mfx.FrameInfo.Height = GST_ROUND_UP_16 (info->height);
+   thiz->param.mfx.FrameInfo.CropW = info->width;
+   thiz->param.mfx.FrameInfo.CropH = info->height;
+   thiz->param.mfx.FrameInfo.FrameRateExtN = info->fps_n;
+-- 
+2.25.1
+
