@@ -1,4 +1,4 @@
-From bebd5dd5bee60f04f856d9e4f0ed1001d272bc34 Mon Sep 17 00:00:00 2001
+From d892e7283f8bb4dd39d3d1633650111999f318c4 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 2 May 2022 23:14:32 +0800
 Subject: [PATCH 7/8] va: Add extended formats support such as 10/12 bits,
@@ -9,10 +9,10 @@ Subject: [PATCH 7/8] va: Add extended formats support such as 10/12 bits,
  1 file changed, 146 insertions(+), 35 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index d3e0e6eb59..8a6c56baab 100644
+index fe6a50524e..38af9b70ea 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -563,8 +563,8 @@ _h265_fill_ptl (GstVaH265Enc * self,
+@@ -565,8 +565,8 @@ _h265_fill_ptl (GstVaH265Enc * self,
    /* additional indications specified for general_profile_idc from 4~10 */
    if (sequence->general_profile_idc == 4) {
      /* In A.3.5, Format range extensions profiles.
@@ -23,7 +23,7 @@ index d3e0e6eb59..8a6c56baab 100644
      switch (base->profile) {
        case VAProfileHEVCMain444:
          ptl->max_12bit_constraint_flag = 1;
-@@ -2385,17 +2385,55 @@ gst_va_h265_enc_reset_state (GstVaBaseEnc * base)
+@@ -2391,17 +2391,55 @@ gst_va_h265_enc_reset_state (GstVaBaseEnc * base)
  }
  
  static guint
@@ -85,7 +85,7 @@ index d3e0e6eb59..8a6c56baab 100644
    }
  
    return chroma;
-@@ -2410,13 +2448,15 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2416,13 +2454,15 @@ _h265_decide_profile (GstVaH265Enc * self)
    VAProfile profile;
    guint rt_format;
    GstCaps *allowed_caps = NULL;
@@ -105,7 +105,7 @@ index d3e0e6eb59..8a6c56baab 100644
  
    /* First, check whether the downstream requires a specified profile. */
    allowed_caps = gst_pad_get_allowed_caps (GST_VIDEO_ENCODER_SRC_PAD (base));
-@@ -2432,8 +2472,12 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2438,8 +2478,12 @@ _h265_decide_profile (GstVaH265Enc * self)
          continue;
  
        if (G_VALUE_HOLDS_STRING (v_profile)) {
@@ -120,7 +120,7 @@ index d3e0e6eb59..8a6c56baab 100644
        } else if (GST_VALUE_HOLDS_LIST (v_profile)) {
          guint j;
  
-@@ -2442,21 +2486,23 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2448,21 +2492,23 @@ _h265_decide_profile (GstVaH265Enc * self)
            if (!p)
              continue;
  
@@ -148,7 +148,7 @@ index d3e0e6eb59..8a6c56baab 100644
    if (!rt_format) {
      GST_ERROR_OBJECT (self, "unsupported video format %s",
          gst_video_format_to_string (in_format));
-@@ -2464,18 +2510,58 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2470,18 +2516,58 @@ _h265_decide_profile (GstVaH265Enc * self)
      goto out;
    }
  
@@ -217,7 +217,7 @@ index d3e0e6eb59..8a6c56baab 100644
      if (!gst_va_encoder_has_profile_and_entrypoint (base->encoder,
              profile, base->entrypoint))
        continue;
-@@ -2484,17 +2570,23 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2490,17 +2576,23 @@ _h265_decide_profile (GstVaH265Enc * self)
                  profile, base->entrypoint)) == 0)
        continue;
  
@@ -245,7 +245,7 @@ index d3e0e6eb59..8a6c56baab 100644
    g_clear_pointer (&allowed_caps, gst_caps_unref);
  
    if (ret) {
-@@ -3057,16 +3149,35 @@ _h265_ensure_rate_control (GstVaH265Enc * self)
+@@ -3068,16 +3160,35 @@ _h265_ensure_rate_control (GstVaH265Enc * self)
    if ((self->rc.rc_ctrl_mode == VA_RC_CBR || self->rc.rc_ctrl_mode == VA_RC_VBR
            || self->rc.rc_ctrl_mode == VA_RC_VCM) && bitrate == 0) {
      /* FIXME: Provide better estimation. */

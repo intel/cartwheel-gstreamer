@@ -1,16 +1,16 @@
-From dd03b7fbd296a24ffe35e62cfb55df4e85aea53b Mon Sep 17 00:00:00 2001
+From ce7801b7423595692bbd29ac0f3b5924e284b67b Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 25 Apr 2022 15:49:31 +0800
 Subject: [PATCH 6/8] va: enable multi tile support for H265 encoder.
 
 ---
- .../gst-plugins-bad/sys/va/gstvaencoder.c     |  64 ++
+ .../gst-plugins-bad/sys/va/gstvaencoder.c     |  64 +++
  .../gst-plugins-bad/sys/va/gstvaencoder.h     |   6 +
- .../gst-plugins-bad/sys/va/gstvah265enc.c     | 546 ++++++++++++++++--
- 3 files changed, 552 insertions(+), 64 deletions(-)
+ .../gst-plugins-bad/sys/va/gstvah265enc.c     | 530 ++++++++++++++++--
+ 3 files changed, 543 insertions(+), 57 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index 2313783481..0132aa6e13 100644
+index f82a556738..cfdc1bcef9 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 @@ -603,6 +603,41 @@ gst_va_encoder_get_max_slice_num (GstVaEncoder * self,
@@ -92,7 +92,7 @@ index 2313783481..0132aa6e13 100644
  gst_va_encoder_get_rtformat (GstVaEncoder * self,
      VAProfile profile, VAEntrypoint entrypoint)
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
-index cd173987d3..436f9a08ed 100644
+index 4250a39335..dbb7a509a7 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
 @@ -63,6 +63,9 @@ gboolean              gst_va_encoder_has_profile_and_entrypoint (GstVaEncoder *
@@ -116,7 +116,7 @@ index cd173987d3..436f9a08ed 100644
                                                             VAProfile profile,
                                                             VAEntrypoint entrypoint);
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index f2e9bd818f..c3104d9ee1 100644
+index 61abc8dd88..fe6a50524e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -89,6 +89,8 @@ enum
@@ -149,17 +149,15 @@ index f2e9bd818f..c3104d9ee1 100644
      guint32 cpb_size;
      guint32 target_percentage;
      guint32 target_usage;
-@@ -177,13 +186,29 @@ struct _GstVaH265Enc
-   gboolean tier_flag;
-   const gchar *level_str;
+@@ -179,9 +188,25 @@ struct _GstVaH265Enc
    guint min_cr;
--
--  gboolean use_trellis;
+ 
+   gboolean aud;
 -  guint32 num_slices;
    guint32 packed_headers;
  
-   struct
-   {
++  struct
++  {
 +    guint32 num_slices;
 +    /* start address in CTUs */
 +    guint32 *slice_segment_address;
@@ -175,14 +173,10 @@ index f2e9bd818f..c3104d9ee1 100644
 +    guint32 *tile_ctu_rows;
 +  } partition;
 +
-+  struct
-+  {
-+    gboolean use_trellis;
-+
+   struct
+   {
      guint8 log2_min_luma_coding_block_size_minus3;
-     guint8 log2_diff_max_min_luma_coding_block_size;
-     guint8 log2_min_transform_block_size_minus2;
-@@ -444,6 +469,12 @@ _enc_frame (GstVideoCodecFrame * frame)
+@@ -446,6 +471,12 @@ _enc_frame (GstVideoCodecFrame * frame)
    return enc_frame;
  }
  
@@ -195,7 +189,7 @@ index f2e9bd818f..c3104d9ee1 100644
  static GstH265NalUnitType
  _h265_nal_unit_type (GstVaH265EncFrame * frame)
  {
-@@ -1287,12 +1318,12 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+@@ -1289,12 +1320,12 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
      VAEncPictureParameterBufferHEVC * pic_param, gint collocated_poc)
  {
    GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
@@ -209,7 +203,7 @@ index f2e9bd818f..c3104d9ee1 100644
    if (self->gop.b_pyramid) {
      /* I/P is the base hierarchical level 0, L0 level B is 1, and so on. */
      hierarchical_level_plus1 = 1;
-@@ -1312,10 +1343,6 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+@@ -1314,10 +1345,6 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
          (self->gop.backward_ref_num > 0 ? self->gop.backward_ref_num - 1 : 0);
    }
  
@@ -220,7 +214,7 @@ index f2e9bd818f..c3104d9ee1 100644
    *pic_param = (VAEncPictureParameterBufferHEVC) {
      .decoded_curr_pic.picture_id =
          gst_va_encode_picture_get_reconstruct_surface (frame->picture),
-@@ -1354,10 +1381,10 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+@@ -1356,10 +1383,10 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
        .weighted_bipred_flag = self->features.weighted_bipred_flag,
        .transquant_bypass_enabled_flag =
            self->features.transquant_bypass_enabled_flag,
@@ -233,7 +227,7 @@ index f2e9bd818f..c3104d9ee1 100644
        .pps_loop_filter_across_slices_enabled_flag = 1,
        /* Should not change the scaling list, not used now */
        .scaling_list_data_present_flag =
-@@ -1423,6 +1450,24 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+@@ -1425,6 +1452,24 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
      pic_param->collocated_ref_pic_index = 0xFF;
    }
  
@@ -258,7 +252,7 @@ index f2e9bd818f..c3104d9ee1 100644
    return TRUE;
  }
  
-@@ -1610,33 +1655,16 @@ _h265_add_slices (GstVaH265Enc * self,
+@@ -1612,33 +1657,16 @@ _h265_add_slices (GstVaH265Enc * self,
      gint negative_pocs[16], guint num_negative_pics,
      gint positive_pocs[16], guint num_positive_pics)
  {
@@ -298,7 +292,7 @@ index f2e9bd818f..c3104d9ee1 100644
        return FALSE;
  
      if (!_h265_add_slice_parameter (self, frame, &slice))
-@@ -1651,10 +1679,6 @@ _h265_add_slices (GstVaH265Enc * self,
+@@ -1653,10 +1681,6 @@ _h265_add_slices (GstVaH265Enc * self,
        if (!_h265_add_slice_header (self, frame, &slice_hdr))
          return FALSE;
      }
@@ -309,38 +303,32 @@ index f2e9bd818f..c3104d9ee1 100644
    }
  
    return TRUE;
-@@ -1716,7 +1740,7 @@ _h265_encode_one_frame (GstVaH265Enc * self, GstVideoCodecFrame * gst_frame)
-       return FALSE;
- 
-     if (!gst_va_base_enc_add_trellis_parameter (base, frame->picture,
--            self->use_trellis))
-+            self->features.use_trellis))
-       return FALSE;
- 
-     _h265_fill_sequence_parameter (self, &sequence);
-@@ -2272,10 +2296,18 @@ gst_va_h265_enc_reset_state (GstVaBaseEnc * base)
-   self->bits_depth_luma_minus8 = 0;
-   self->bits_depth_chroma_minus8 = 0;
- 
--  self->use_trellis = self->prop.use_trellis;
+@@ -2258,7 +2282,9 @@ gst_va_h265_enc_reset_state (GstVaBaseEnc * base)
+   GST_OBJECT_LOCK (self);
+   self->features.use_trellis = self->prop.use_trellis;
+   self->aud = self->prop.aud;
 -  self->num_slices = self->prop.num_slices;
-   self->packed_headers = 0;
- 
 +  self->partition.num_slices = self->prop.num_slices;
-+  self->partition.slice_span_tiles = FALSE;
 +  self->partition.num_tile_cols = self->prop.num_tile_cols;
 +  self->partition.num_tile_rows = self->prop.num_tile_rows;
+   self->gop.idr_period = self->prop.key_int_max;
+   self->gop.num_bframes = self->prop.num_bframes;
+   self->gop.b_pyramid = self->prop.b_pyramid;
+@@ -2297,6 +2323,12 @@ gst_va_h265_enc_reset_state (GstVaBaseEnc * base)
+ 
+   self->packed_headers = 0;
+ 
++  self->partition.slice_span_tiles = FALSE;
 +  g_clear_pointer (&self->partition.slice_segment_address, g_free);
 +  g_clear_pointer (&self->partition.num_ctu_in_slice, g_free);
 +  g_clear_pointer (&self->partition.tile_ctu_cols, g_free);
 +  g_clear_pointer (&self->partition.tile_ctu_rows, g_free);
 +
-+  self->features.use_trellis = self->prop.use_trellis;
    self->features.log2_min_luma_coding_block_size_minus3 = 0;
    self->features.log2_diff_max_min_luma_coding_block_size = 0;
    self->features.log2_diff_max_min_luma_coding_block_size = 0;
-@@ -2476,41 +2508,381 @@ out:
- }
+@@ -2489,37 +2521,375 @@ out:
+   update_property (bool, obj, old_val, new_val, prop_id)
  
  static void
 -_h265_validate_parameters (GstVaH265Enc * self)
@@ -628,24 +616,22 @@ index f2e9bd818f..c3104d9ee1 100644
 +  if (self->partition.num_slices >
 +      ((self->ctu_width * self->ctu_height + 1) / 2))
 +    self->partition.num_slices = ((self->ctu_width * self->ctu_height + 1) / 2);
- 
--  if (self->prop.num_slices != self->num_slices) {
--    self->prop.num_slices = self->num_slices;
--    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NUM_SLICES]);
--  }
++
 +  slice_structure = gst_va_encoder_get_slice_structure (base->encoder,
 +      base->profile, base->entrypoint);
  
--  /* Ensure trellis. */
--  if (self->use_trellis &&
--      !gst_va_encoder_has_trellis (base->encoder, base->profile,
--          base->entrypoint)) {
--    GST_INFO_OBJECT (self, "The trellis is not supported");
--    self->use_trellis = FALSE;
+-  update_property_uint (base, &self->prop.num_slices, self->num_slices,
+-      PROP_NUM_SLICES);
 +  if (_is_tile_enabled (self)) {
 +    const GstVaH265LevelLimits *level_limits;
 +    guint i;
-+
+ 
+-  /* Ensure trellis. */
+-  if (self->features.use_trellis &&
+-      !gst_va_encoder_has_trellis (base->encoder, base->profile,
+-          base->entrypoint)) {
+-    GST_INFO_OBJECT (self, "The trellis is not supported");
+-    self->features.use_trellis = FALSE;
 +    if (!gst_va_encoder_has_tile (base->encoder,
 +            base->profile, base->entrypoint)) {
 +      self->partition.num_tile_cols = 1;
@@ -720,27 +706,20 @@ index f2e9bd818f..c3104d9ee1 100644
 +    _h265_calculate_slice_partition (self, slice_structure);
    }
  
--  if (self->prop.use_trellis != self->use_trellis) {
--    self->prop.use_trellis = self->use_trellis;
--    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TRELLIS]);
-+  if (self->prop.num_slices != self->partition.num_slices) {
-+    self->prop.num_slices = self->partition.num_slices;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NUM_SLICES]);
-+  }
-+  if (self->prop.num_tile_cols != self->partition.num_tile_cols) {
-+    self->prop.num_tile_cols = self->partition.num_tile_cols;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NUM_TILE_COLS]);
-+  }
-+  if (self->prop.num_tile_rows != self->partition.num_tile_rows) {
-+    self->prop.num_tile_rows = self->partition.num_tile_rows;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NUM_TILE_ROWS]);
-   }
+-  update_property_bool (base, &self->prop.use_trellis,
+-      self->features.use_trellis, PROP_TRELLIS);
++  update_property_uint (base, &self->prop.num_slices,
++      self->partition.num_slices, PROP_NUM_SLICES);
++  update_property_uint (base, &self->prop.num_tile_cols,
++      self->partition.num_tile_cols, PROP_NUM_TILE_COLS);
++  update_property_uint (base, &self->prop.num_tile_rows,
++      self->partition.num_tile_rows, PROP_NUM_TILE_ROWS);
 +
 +  return TRUE;
  }
  
  /* Normalizes bitrate (and CPB size) for HRD conformance */
-@@ -3012,7 +3384,7 @@ _h265_calculate_coded_size (GstVaH265Enc * self)
+@@ -3010,7 +3380,7 @@ _h265_calculate_coded_size (GstVaH265Enc * self)
    codedbuf_size += 4 + GST_ROUND_UP_8 (MAX_PPS_HDR_SIZE) / 8;
  
    /* Account for slice header */
@@ -749,7 +728,7 @@ index f2e9bd818f..c3104d9ee1 100644
        GST_ROUND_UP_8 (MAX_SLICE_HDR_SIZE + MAX_SHORT_TERM_REFPICSET_SIZE) / 8);
  
    /* TODO: Only YUV 4:2:0 formats are supported for now.
-@@ -3490,7 +3862,7 @@ _h265_setup_encoding_features (GstVaH265Enc * self)
+@@ -3472,7 +3842,7 @@ _h265_setup_encoding_features (GstVaH265Enc * self)
  
    self->features.transquant_bypass_enabled_flag =
        (features.bits.transquant_bypass != 0);
@@ -758,7 +737,7 @@ index f2e9bd818f..c3104d9ee1 100644
  #endif
  
  default_options:
-@@ -3523,7 +3895,7 @@ default_options:
+@@ -3505,7 +3875,7 @@ default_options:
    self->features.weighted_bipred_flag = FALSE;
    self->features.transquant_bypass_enabled_flag = FALSE;
  
@@ -767,7 +746,7 @@ index f2e9bd818f..c3104d9ee1 100644
    GST_DEBUG_OBJECT (self, "Set features to: "
        "separate_colour_plane_flag = %d, "
        "colour_plane_id = %d, "
-@@ -3579,6 +3951,19 @@ out:
+@@ -3561,6 +3931,19 @@ out:
        self->features.weighted_pred_flag,
        self->features.weighted_bipred_flag,
        self->features.transquant_bypass_enabled_flag);
@@ -787,7 +766,7 @@ index f2e9bd818f..c3104d9ee1 100644
  }
  
  /* We need to decide the profile and entrypoint before call this.
-@@ -3794,8 +4179,6 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+@@ -3776,8 +4159,6 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
        base->width, base->height, self->ctu_width, self->ctu_height,
        GST_TIME_ARGS (base->frame_duration));
  
@@ -796,7 +775,7 @@ index f2e9bd818f..c3104d9ee1 100644
    _h265_ensure_rate_control (self);
  
    if (!_h265_calculate_tier_level (self))
-@@ -3808,6 +4191,9 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+@@ -3790,6 +4171,9 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
  
    _h265_calculate_coded_size (self);
  
@@ -806,7 +785,7 @@ index f2e9bd818f..c3104d9ee1 100644
    if (!_h265_init_packed_headers (self))
      return FALSE;
  
-@@ -4024,6 +4410,12 @@ gst_va_h265_enc_set_property (GObject * object, guint prop_id,
+@@ -4006,6 +4390,12 @@ gst_va_h265_enc_set_property (GObject * object, guint prop_id,
      case PROP_TARGET_USAGE:
        self->prop.target_usage = g_value_get_uint (value);
        break;
@@ -819,7 +798,7 @@ index f2e9bd818f..c3104d9ee1 100644
      case PROP_RATE_CONTROL:
        self->prop.rc_ctrl = g_value_get_enum (value);
        break;
-@@ -4097,6 +4489,12 @@ gst_va_h265_enc_get_property (GObject * object, guint prop_id,
+@@ -4079,6 +4469,12 @@ gst_va_h265_enc_get_property (GObject * object, guint prop_id,
      case PROP_TARGET_USAGE:
        g_value_set_uint (value, self->prop.target_usage);
        break;
@@ -832,7 +811,7 @@ index f2e9bd818f..c3104d9ee1 100644
      case PROP_RATE_CONTROL:
        g_value_set_enum (value, self->prop.rc_ctrl);
        break;
-@@ -4410,6 +4808,26 @@ gst_va_h265_enc_class_init (gpointer g_klass, gpointer class_data)
+@@ -4392,6 +4788,26 @@ gst_va_h265_enc_class_init (gpointer g_klass, gpointer class_data)
        "The desired max CPB size in Kb (0: auto-calculate)", 0, 2000 * 1024, 0,
        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
  

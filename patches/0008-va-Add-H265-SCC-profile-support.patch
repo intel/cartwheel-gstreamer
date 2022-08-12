@@ -1,4 +1,4 @@
-From da3543c5178b8f62b1c200034e5342412aefe6ad Mon Sep 17 00:00:00 2001
+From 2766c9b9f1053a9b24c67730407457bf648495f6 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 4 May 2022 10:42:59 +0800
 Subject: [PATCH 8/8] va: Add H265 SCC profile support.
@@ -8,10 +8,10 @@ Subject: [PATCH 8/8] va: Add H265 SCC profile support.
  1 file changed, 167 insertions(+), 11 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index 2c6b3f2824..02805a156a 100644
+index 38af9b70ea..ab74b75a15 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -475,6 +475,20 @@ _is_tile_enabled (GstVaH265Enc * self)
+@@ -477,6 +477,20 @@ _is_tile_enabled (GstVaH265Enc * self)
    return self->partition.num_tile_cols * self->partition.num_tile_rows > 1;
  }
  
@@ -32,7 +32,7 @@ index 2c6b3f2824..02805a156a 100644
  static GstH265NalUnitType
  _h265_nal_unit_type (GstVaH265EncFrame * frame)
  {
-@@ -615,6 +629,62 @@ _h265_fill_ptl (GstVaH265Enc * self,
+@@ -617,6 +631,62 @@ _h265_fill_ptl (GstVaH265Enc * self,
              " range extensions.", gst_va_profile_name (base->profile));
          goto error;
      }
@@ -95,7 +95,7 @@ index 2c6b3f2824..02805a156a 100644
    }
  
    return TRUE;
-@@ -796,6 +866,25 @@ _h265_fill_sps (GstVaH265Enc * self,
+@@ -798,6 +868,25 @@ _h265_fill_sps (GstVaH265Enc * self,
        .log2_max_mv_length_vertical =
            seq_param->vui_fields.bits.log2_max_mv_length_vertical,
      },
@@ -121,7 +121,7 @@ index 2c6b3f2824..02805a156a 100644
    };
    /* *INDENT-ON* */
  
-@@ -806,7 +895,8 @@ _h265_fill_sps (GstVaH265Enc * self,
+@@ -808,7 +897,8 @@ _h265_fill_sps (GstVaH265Enc * self,
  }
  
  static void
@@ -131,7 +131,7 @@ index 2c6b3f2824..02805a156a 100644
      GstH265SPS * sps, GstH265PPS * pps)
  {
    /* *INDENT-OFF* */
-@@ -865,8 +955,19 @@ _h265_fill_pps (VAEncPictureParameterBufferHEVC * pic_param,
+@@ -867,8 +957,19 @@ _h265_fill_pps (VAEncPictureParameterBufferHEVC * pic_param,
      .log2_parallel_merge_level_minus2 =
          pic_param->log2_parallel_merge_level_minus2,
      .slice_segment_header_extension_present_flag = 0,
@@ -153,7 +153,7 @@ index 2c6b3f2824..02805a156a 100644
    };
    /* *INDENT-ON* */
  }
-@@ -991,11 +1092,31 @@ _h265_fill_slice_header (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+@@ -993,11 +1094,31 @@ _h265_fill_slice_header (GstVaH265Enc * self, GstVaH265EncFrame * frame,
      }
    }
  
@@ -189,7 +189,7 @@ index 2c6b3f2824..02805a156a 100644
  
      if (slice_param->slice_type == GST_H265_B_SLICE)
        slice_hdr->num_ref_idx_l1_active_minus1 =
-@@ -1191,13 +1312,14 @@ _h265_fill_sequence_parameter (GstVaH265Enc * self,
+@@ -1193,13 +1314,14 @@ _h265_fill_sequence_parameter (GstVaH265Enc * self,
  {
    GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
    guint profile_idc = 0;
@@ -206,7 +206,7 @@ index 2c6b3f2824..02805a156a 100644
        break;
      case VAProfileHEVCMain12:
      case VAProfileHEVCMain422_10:
-@@ -1205,13 +1327,22 @@ _h265_fill_sequence_parameter (GstVaH265Enc * self,
+@@ -1207,13 +1329,22 @@ _h265_fill_sequence_parameter (GstVaH265Enc * self,
      case VAProfileHEVCMain444:
      case VAProfileHEVCMain444_10:
      case VAProfileHEVCMain444_12:
@@ -230,7 +230,7 @@ index 2c6b3f2824..02805a156a 100644
    /* *INDENT-OFF* */
    *sequence = (VAEncSequenceParameterBufferHEVC) {
      .general_profile_idc = profile_idc,
-@@ -1278,6 +1409,7 @@ _h265_fill_sequence_parameter (GstVaH265Enc * self,
+@@ -1280,6 +1411,7 @@ _h265_fill_sequence_parameter (GstVaH265Enc * self,
      /* if (vui_fields.bits.vui_timing_info_present_flag) */
      .vui_num_units_in_tick = GST_VIDEO_INFO_FPS_D (&base->input_state->info),
      .vui_time_scale = GST_VIDEO_INFO_FPS_N (&base->input_state->info),
@@ -238,7 +238,7 @@ index 2c6b3f2824..02805a156a 100644
    };
    /* *INDENT-ON* */
  
-@@ -1321,6 +1453,7 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+@@ -1323,6 +1455,7 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
    guint8 num_ref_idx_l0_default_active_minus1 = 0;
    guint8 num_ref_idx_l1_default_active_minus1 = 0;
    guint hierarchical_level_plus1 = 0;
@@ -246,7 +246,7 @@ index 2c6b3f2824..02805a156a 100644
    guint i;
  
    /* *INDENT-OFF* */
-@@ -1343,6 +1476,9 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+@@ -1345,6 +1478,9 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
          (self->gop.backward_ref_num > 0 ? self->gop.backward_ref_num - 1 : 0);
    }
  
@@ -256,7 +256,7 @@ index 2c6b3f2824..02805a156a 100644
    *pic_param = (VAEncPictureParameterBufferHEVC) {
      .decoded_curr_pic.picture_id =
          gst_va_encode_picture_get_reconstruct_surface (frame->picture),
-@@ -1397,6 +1533,8 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+@@ -1399,6 +1535,8 @@ _h265_fill_picture_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
      },
      /* We use coding_type here, set this to 0. */
      .hierarchical_level_plus1 = hierarchical_level_plus1,
@@ -265,7 +265,7 @@ index 2c6b3f2824..02805a156a 100644
    };
    /* *INDENT-ON* */
  
-@@ -1507,6 +1645,16 @@ _h265_fill_slice_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
+@@ -1509,6 +1647,16 @@ _h265_fill_slice_parameter (GstVaH265Enc * self, GstVaH265EncFrame * frame,
        list1[i] = list0[i];
    }
  
@@ -282,7 +282,7 @@ index 2c6b3f2824..02805a156a 100644
    *slice = (VAEncSliceParameterBufferHEVC) {
      .slice_segment_address = start_address,
      .num_ctu_in_slice = ctu_num,
-@@ -1850,7 +1998,7 @@ _h265_encode_one_frame (GstVaH265Enc * self, GstVideoCodecFrame * gst_frame)
+@@ -1852,7 +2000,7 @@ _h265_encode_one_frame (GstVaH265Enc * self, GstVideoCodecFrame * gst_frame)
    if (!_h265_add_picture_parameter (self, frame, &pic_param))
      return FALSE;
  
@@ -291,7 +291,7 @@ index 2c6b3f2824..02805a156a 100644
  
    if ((self->packed_headers & VA_ENC_PACKED_HEADER_PICTURE)
        && frame->type == GST_H265_I_SLICE
-@@ -2519,11 +2667,15 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2525,11 +2673,15 @@ _h265_decide_profile (GstVaH265Enc * self)
      if (depth == 8) {
        profile = VAProfileHEVCMain444;
        g_array_append_val (chroma_candidates, profile);
@@ -307,7 +307,7 @@ index 2c6b3f2824..02805a156a 100644
      }
  
      if (depth <= 12) {
-@@ -2546,11 +2698,15 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2552,11 +2704,15 @@ _h265_decide_profile (GstVaH265Enc * self)
      if (depth == 8) {
        profile = VAProfileHEVCMain;
        g_array_append_val (chroma_candidates, profile);

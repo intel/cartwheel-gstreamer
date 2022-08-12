@@ -1,22 +1,22 @@
-From 2f4f48a12b7bf35d8ac7234b3e00d97bc2d32106 Mon Sep 17 00:00:00 2001
+From 57f1e913a5bb1f4c427b16dacc3d339a90392115 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 25 Mar 2022 21:54:30 +0800
-Subject: [PATCH] va: Implement the vah265enc plugin for va HEVC encoding.
+Subject: [PATCH 1/8] va: Implement the vah265enc plugin for va HEVC encoding.
 
 ---
- .../gst-plugins-bad/sys/va/gstvah265enc.c     | 4459 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvah265enc.c     | 4443 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvah265enc.h     |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    1 +
- 3 files changed, 4494 insertions(+)
+ 3 files changed, 4478 insertions(+)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvah265enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 new file mode 100644
-index 000000000000..3bb707986af2
+index 0000000000..93c65e61a0
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -0,0 +1,4459 @@
+@@ -0,0 +1,4443 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -153,7 +153,7 @@ index 000000000000..3bb707986af2
 +    /* kbps */
 +    guint bitrate;
 +    /* VA_RC_XXX */
-+    guint rc_ctrl;
++    guint32 rc_ctrl;
 +    guint key_int_max;
 +    guint32 num_ref_frames;
 +    gboolean b_pyramid;
@@ -197,7 +197,7 @@ index 000000000000..3bb707986af2
 +  const gchar *level_str;
 +  guint min_cr;
 +
-+  gboolean use_trellis;
++  gboolean aud;
 +  guint32 num_slices;
 +  guint32 packed_headers;
 +
@@ -250,6 +250,8 @@ index 000000000000..3bb707986af2
 +    gboolean weighted_bipred_flag;
 +
 +    gboolean transquant_bypass_enabled_flag;
++
++    gboolean use_trellis;
 +  } features;
 +
 +  struct
@@ -1690,7 +1692,7 @@ index 000000000000..3bb707986af2
 +
 +  frame = _enc_frame (gst_frame);
 +
-+  if (self->prop.aud) {
++  if (self->aud) {
 +    if ((self->packed_headers & VA_ENC_PACKED_HEADER_RAW_DATA)
 +        && !_h265_add_aud (self, frame))
 +      return FALSE;
@@ -1718,7 +1720,7 @@ index 000000000000..3bb707986af2
 +      return FALSE;
 +
 +    if (!gst_va_base_enc_add_trellis_parameter (base, frame->picture,
-+            self->use_trellis))
++            self->features.use_trellis))
 +      return FALSE;
 +
 +    _h265_fill_sequence_parameter (self, &sequence);
@@ -2249,6 +2251,27 @@ index 000000000000..3bb707986af2
 +
 +  GST_VA_BASE_ENC_CLASS (parent_class)->reset_state (base);
 +
++  GST_OBJECT_LOCK (self);
++  self->features.use_trellis = self->prop.use_trellis;
++  self->aud = self->prop.aud;
++  self->num_slices = self->prop.num_slices;
++  self->gop.idr_period = self->prop.key_int_max;
++  self->gop.num_bframes = self->prop.num_bframes;
++  self->gop.b_pyramid = self->prop.b_pyramid;
++  self->gop.num_iframes = self->prop.num_iframes;
++  self->gop.num_ref_frames = self->prop.num_ref_frames;
++  self->rc.rc_ctrl_mode = self->prop.rc_ctrl;
++  self->rc.min_qp = self->prop.min_qp;
++  self->rc.max_qp = self->prop.max_qp;
++  self->rc.qp_i = self->prop.qp_i;
++  self->rc.qp_p = self->prop.qp_p;
++  self->rc.qp_b = self->prop.qp_b;
++  self->rc.mbbrc = self->prop.mbbrc;
++  self->rc.target_percentage = self->prop.target_percentage;
++  self->rc.target_usage = self->prop.target_usage;
++  self->rc.cpb_size = self->prop.cpb_size;
++  GST_OBJECT_UNLOCK (self);
++
 +  self->level_idc = 0;
 +  self->level_str = NULL;
 +  self->min_cr = 0;
@@ -2268,8 +2291,6 @@ index 000000000000..3bb707986af2
 +  self->bits_depth_luma_minus8 = 0;
 +  self->bits_depth_chroma_minus8 = 0;
 +
-+  self->use_trellis = self->prop.use_trellis;
-+  self->num_slices = self->prop.num_slices;
 +  self->packed_headers = 0;
 +
 +  self->features.log2_min_luma_coding_block_size_minus3 = 0;
@@ -2306,20 +2327,15 @@ index 000000000000..3bb707986af2
 +  self->features.weighted_bipred_flag = FALSE;
 +  self->features.transquant_bypass_enabled_flag = FALSE;
 +
-+  self->gop.idr_period = self->prop.key_int_max;
 +  self->gop.i_period = 0;
 +  self->gop.total_idr_count = 0;
 +  self->gop.ip_period = 0;
-+  self->gop.num_bframes = self->prop.num_bframes;
-+  self->gop.b_pyramid = self->prop.b_pyramid;
 +  self->gop.highest_pyramid_level = 0;
-+  self->gop.num_iframes = self->prop.num_iframes;
 +  memset (self->gop.frame_types, 0, sizeof (self->gop.frame_types));
 +  self->gop.cur_frame_index = 0;
 +  self->gop.max_pic_order_cnt = 0;
 +  self->gop.log2_max_pic_order_cnt = 0;
 +  /* VAEncPictureParameterBufferHEVC.reference_frames limit 15 refs */
-+  self->gop.num_ref_frames = self->prop.num_ref_frames;
 +  self->gop.max_l0_num = 0;
 +  self->gop.max_l1_num = 0;
 +  self->gop.forward_ref_num = 0;
@@ -2327,20 +2343,10 @@ index 000000000000..3bb707986af2
 +  self->gop.num_reorder_frames = 0;
 +  self->gop.max_dpb_size = 0;
 +
-+  self->rc.rc_ctrl_mode = self->prop.rc_ctrl;
-+  self->rc.min_qp = self->prop.min_qp;
-+  self->rc.max_qp = self->prop.max_qp;
-+  self->rc.qp_i = self->prop.qp_i;
-+  self->rc.qp_p = self->prop.qp_p;
-+  self->rc.qp_b = self->prop.qp_b;
-+  self->rc.mbbrc = self->prop.mbbrc;
 +  self->rc.max_bitrate = 0;
 +  self->rc.target_bitrate = 0;
-+  self->rc.target_percentage = self->prop.target_percentage;
-+  self->rc.target_usage = self->prop.target_usage;
 +  self->rc.max_bitrate_bits = 0;
 +  self->rc.target_bitrate_bits = 0;
-+  self->rc.cpb_size = self->prop.cpb_size;
 +  self->rc.cpb_length_bits = 0;
 +
 +  memset (&self->vps_hdr, 0, sizeof (GstH265VPS));
@@ -2471,6 +2477,13 @@ index 000000000000..3bb707986af2
 +  return ret;
 +}
 +
++#define update_property(type, obj, old_val, new_val, prop_id)           \
++  gst_va_base_enc_update_property_##type (obj, old_val, new_val, properties[prop_id])
++#define update_property_uint(obj, old_val, new_val, prop_id)    \
++  update_property (uint, obj, old_val, new_val, prop_id)
++#define update_property_bool(obj, old_val, new_val, prop_id)    \
++  update_property (bool, obj, old_val, new_val, prop_id)
++
 +static void
 +_h265_validate_parameters (GstVaH265Enc * self)
 +{
@@ -2490,23 +2503,19 @@ index 000000000000..3bb707986af2
 +  if (self->num_slices > ((self->ctu_width * self->ctu_height + 1) / 2))
 +    self->num_slices = ((self->ctu_width * self->ctu_height + 1) / 2);
 +
-+  if (self->prop.num_slices != self->num_slices) {
-+    self->prop.num_slices = self->num_slices;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NUM_SLICES]);
-+  }
++  update_property_uint (base, &self->prop.num_slices, self->num_slices,
++      PROP_NUM_SLICES);
 +
 +  /* Ensure trellis. */
-+  if (self->use_trellis &&
++  if (self->features.use_trellis &&
 +      !gst_va_encoder_has_trellis (base->encoder, base->profile,
 +          base->entrypoint)) {
 +    GST_INFO_OBJECT (self, "The trellis is not supported");
-+    self->use_trellis = FALSE;
++    self->features.use_trellis = FALSE;
 +  }
 +
-+  if (self->prop.use_trellis != self->use_trellis) {
-+    self->prop.use_trellis = self->use_trellis;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TRELLIS]);
-+  }
++  update_property_bool (base, &self->prop.use_trellis,
++      self->features.use_trellis, PROP_TRELLIS);
 +}
 +
 +/* Normalizes bitrate (and CPB size) for HRD conformance */
@@ -2595,8 +2604,7 @@ index 000000000000..3bb707986af2
 +
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
 +  guint bitrate;
-+  guint32 rc_mode;
-+  guint32 quality_level;
++  guint32 rc_mode, quality_level, rc_ctrl;
 +
 +  quality_level = gst_va_encoder_get_quality_level (base->encoder,
 +      base->profile, base->entrypoint);
@@ -2604,24 +2612,26 @@ index 000000000000..3bb707986af2
 +    GST_INFO_OBJECT (self, "User setting target-usage: %d is not supported, "
 +        "fallback to %d", self->rc.target_usage, quality_level);
 +    self->rc.target_usage = quality_level;
-+
-+    self->prop.target_usage = self->rc.target_usage;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TARGET_USAGE]);
++    update_property_uint (base, &self->prop.target_usage,
++        self->rc.target_usage, PROP_TARGET_USAGE);
 +  }
 +
-+  if (self->prop.rc_ctrl != VA_RC_NONE) {
++  GST_OBJECT_LOCK (self);
++  rc_ctrl = self->prop.rc_ctrl;
++  GST_OBJECT_UNLOCK (self);
++
++  if (rc_ctrl != VA_RC_NONE) {
 +    rc_mode = gst_va_encoder_get_rate_control_mode (base->encoder,
 +        base->profile, base->entrypoint);
-+    if (!(rc_mode & self->prop.rc_ctrl)) {
++    if (!(rc_mode & rc_ctrl)) {
 +      guint32 defval =
 +          G_PARAM_SPEC_ENUM (properties[PROP_RATE_CONTROL])->default_value;
 +      GST_INFO_OBJECT (self, "The rate control mode %s is not supported, "
-+          "fallback to %s mode",
-+          _rate_control_get_name (self->prop.rc_ctrl),
++          "fallback to %s mode", _rate_control_get_name (rc_ctrl),
 +          _rate_control_get_name (defval));
 +      self->rc.rc_ctrl_mode = defval;
-+      self->prop.rc_ctrl = self->rc.rc_ctrl_mode;
-+      g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_RATE_CONTROL]);
++      update_property_uint (base, &self->prop.rc_ctrl,
++          self->rc.rc_ctrl_mode, PROP_RATE_CONTROL);
 +    }
 +  } else {
 +    self->rc.rc_ctrl_mode = VA_RC_NONE;
@@ -2632,8 +2642,8 @@ index 000000000000..3bb707986af2
 +        "set it to the max_qp", self->rc.min_qp, self->rc.max_qp);
 +    self->rc.min_qp = self->rc.max_qp;
 +
-+    self->prop.min_qp = self->rc.min_qp;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_MIN_QP]);
++    update_property_uint (base, &self->prop.min_qp, self->rc.min_qp,
++        PROP_MIN_QP);
 +  }
 +
 +  /* Make all the qp in the valid range */
@@ -2676,7 +2686,10 @@ index 000000000000..3bb707986af2
 +    self->rc.qp_b = self->rc.max_qp;
 +  }
 +
++  GST_OBJECT_LOCK (self);
 +  bitrate = self->prop.bitrate;
++  GST_OBJECT_UNLOCK (self);
++
 +  /* Calculate a bitrate is not set. */
 +  if ((self->rc.rc_ctrl_mode == VA_RC_CBR || self->rc.rc_ctrl_mode == VA_RC_VBR
 +          || self->rc.rc_ctrl_mode == VA_RC_VCM) && bitrate == 0) {
@@ -2733,29 +2746,14 @@ index 000000000000..3bb707986af2
 +    _h265_calculate_bitrate_hrd (self);
 +
 +  /* notifications */
-+  if (self->rc.cpb_size != self->prop.cpb_size) {
-+    self->prop.cpb_size = self->rc.cpb_size;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_CPB_SIZE]);
-+  }
-+
-+  if (self->prop.target_percentage != self->rc.target_percentage) {
-+    self->prop.target_percentage = self->rc.target_percentage;
-+    g_object_notify_by_pspec (G_OBJECT (self),
-+        properties[PROP_TARGET_PERCENTAGE]);
-+  }
-+
-+  if (self->prop.qp_i != self->rc.qp_i) {
-+    self->prop.qp_i = self->rc.qp_i;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_QP_I]);
-+  }
-+  if (self->prop.qp_p != self->rc.qp_p) {
-+    self->prop.qp_p = self->rc.qp_p;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_QP_P]);
-+  }
-+  if (self->prop.qp_b != self->rc.qp_b) {
-+    self->prop.qp_b = self->rc.qp_b;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_QP_B]);
-+  }
++  update_property_uint (base, &self->prop.min_qp, self->rc.min_qp, PROP_MIN_QP);
++  update_property_uint (base, &self->prop.cpb_size,
++      self->rc.cpb_size, PROP_CPB_SIZE);
++  update_property_uint (base, &self->prop.target_percentage,
++      self->rc.target_percentage, PROP_TARGET_PERCENTAGE);
++  update_property_uint (base, &self->prop.qp_i, self->rc.qp_i, PROP_QP_I);
++  update_property_uint (base, &self->prop.qp_p, self->rc.qp_p, PROP_QP_P);
++  update_property_uint (base, &self->prop.qp_b, self->rc.qp_b, PROP_QP_B);
 +}
 +
 +/* Derives the level and tier from the currently set limits */
@@ -3060,10 +3058,8 @@ index 000000000000..3bb707986af2
 +    GST_INFO_OBJECT (self, "Lowering the GOP size to %d", self->gop.idr_period);
 +  }
 +
-+  if (self->gop.idr_period != self->prop.key_int_max) {
-+    self->prop.key_int_max = self->gop.idr_period;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_KEY_INT_MAX]);
-+  }
++  update_property_uint (base, &self->prop.key_int_max, self->gop.idr_period,
++      PROP_KEY_INT_MAX);
 +
 +  /* Prefer have more than 1 refs for the GOP which is not very small. */
 +  if (self->gop.idr_period > 8) {
@@ -3266,26 +3262,14 @@ index 000000000000..3bb707986af2
 +  _h265_print_gop_structure (self);
 +
 +  /* notifications */
-+  if (self->prop.num_ref_frames != self->gop.num_ref_frames) {
-+    self->prop.num_ref_frames = self->gop.num_ref_frames;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_NUM_REF_FRAMES]);
-+  }
-+
-+  if (self->prop.num_iframes != self->gop.num_iframes) {
-+    self->prop.num_iframes = self->gop.num_iframes;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_IFRAMES]);
-+  }
-+
-+  /* num_bframes are modified several times before */
-+  if (self->prop.num_bframes != self->gop.num_bframes) {
-+    self->prop.num_bframes = self->gop.num_bframes;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_BFRAMES]);
-+  }
-+
-+  if (self->prop.b_pyramid != self->gop.b_pyramid) {
-+    self->prop.b_pyramid = self->gop.b_pyramid;
-+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_B_PYRAMID]);
-+  }
++  update_property_uint (base, &self->prop.num_ref_frames,
++      self->gop.num_ref_frames, PROP_NUM_REF_FRAMES);
++  update_property_uint (base, &self->prop.num_iframes,
++      self->gop.num_iframes, PROP_IFRAMES);
++  update_property_uint (base, &self->prop.num_bframes,
++      self->gop.num_bframes, PROP_BFRAMES);
++  update_property_bool (base, &self->prop.b_pyramid,
++      self->gop.b_pyramid, PROP_B_PYRAMID);
 +}
 +
 +static gboolean
@@ -4478,7 +4462,7 @@ index 000000000000..3bb707986af2
 +}
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.h b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.h
 new file mode 100644
-index 000000000000..08501c2395b1
+index 0000000000..08501c2395
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.h
 @@ -0,0 +1,34 @@
@@ -4517,7 +4501,7 @@ index 000000000000..08501c2395b1
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index fee1fedde64e..e04366e127dd 100644
+index fee1fedde6..e04366e127 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
 @@ -15,6 +15,7 @@ va_sources = [
@@ -4529,5 +4513,5 @@ index fee1fedde64e..e04366e127dd 100644
    'gstvampeg2dec.c',
    'gstvaprofile.c',
 -- 
-2.34.3
+2.25.1
 

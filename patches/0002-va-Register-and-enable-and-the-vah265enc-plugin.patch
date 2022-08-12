@@ -1,14 +1,14 @@
-From b7f87586db7829934e61e2dbfe9634db7cb91ce9 Mon Sep 17 00:00:00 2001
+From 311515aee26f61e5c7bb38a1514cc4770351f982 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 25 Mar 2022 21:55:28 +0800
-Subject: [PATCH 02/10] va: Register and enable and the vah265enc plugin.
+Subject: [PATCH 2/8] va: Register and enable and the vah265enc plugin.
 
 ---
  subprojects/gst-plugins-bad/sys/va/plugin.c | 8 ++++++++
  1 file changed, 8 insertions(+)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index 2c1d9ce6d20a..f91923e4da6c 100644
+index 2c1d9ce6d2..f91923e4da 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -36,6 +36,7 @@
@@ -34,5 +34,5 @@ index 2c1d9ce6d20a..f91923e4da6c 100644
          GST_DEBUG ("No encoder implementation for %" GST_FOURCC_FORMAT,
              GST_FOURCC_ARGS (codec));
 -- 
-2.34.1
+2.25.1
 
