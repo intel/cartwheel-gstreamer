@@ -1,4 +1,4 @@
-From 43a34b1a82e3a63f2635a6558a265968742af1ec Mon Sep 17 00:00:00 2001
+From 0edea54d26de350212366abe5a449ef87cdb6baa Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Thu, 21 Apr 2022 17:27:09 +0800
 Subject: [PATCH 13/21] msdkenc: Directly import va memory as mfx surface

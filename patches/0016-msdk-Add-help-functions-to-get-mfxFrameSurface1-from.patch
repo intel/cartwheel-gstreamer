@@ -1,18 +1,131 @@
-From 4245f8a14f1a96032d1328fac247728bef51fe10 Mon Sep 17 00:00:00 2001
+From a2ae5764f75907f2c3e02c11dd1514f0926d663b Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Fri, 27 May 2022 17:56:33 +0800
 Subject: [PATCH 16/21] msdk: Add help functions to get mfxFrameSurface1 from
  GstBuffer and wrap it as GstMsdkSurface
 
+Note that the memory abstraction for system memory is for windows path.
 ---
- .../sys/msdk/gstmsdkallocator.h               |   7 ++
- .../sys/msdk/gstmsdkallocator_libva.c         | 115 ++++++++++++++++++
+ .../sys/msdk/gstmsdkallocator.c               | 103 ++++++++++++++++
+ .../sys/msdk/gstmsdkallocator.h               |  10 ++
+ .../sys/msdk/gstmsdkallocator_libva.c         | 114 ++++++++++++++++++
  .../sys/msdk/gstmsdkallocator_libva.h         |   4 +
+ .../gst-plugins-bad/sys/msdk/meson.build      |   1 +
  subprojects/gst-plugins-bad/sys/msdk/msdk.h   |   1 +
- 4 files changed, 127 insertions(+)
+ 6 files changed, 233 insertions(+)
+ create mode 100644 subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c
 
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c
+new file mode 100644
+index 0000000000..ddda551b61
+--- /dev/null
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c
+@@ -0,0 +1,103 @@
++/*
++ * GStreamer Intel MSDK plugin
++ * Copyright (c) 2022 Intel Corporation. All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions are met:
++ *
++ * 1. Redistributions of source code must retain the above copyright notice,
++ *    this list of conditions and the following disclaimer.
++ *
++ * 2. Redistributions in binary form must reproduce the above copyright notice,
++ *    this list of conditions and the following disclaimer in the documentation
++ *    and/or other materials provided with the distribution.
++ *
++ * 3. Neither the name of the copyright holder nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
++ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
++ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
++ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
++ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
++ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#include "gstmsdkallocator.h"
++
++static gboolean
++map_data (GstBuffer * buffer, mfxFrameSurface1 * mfx_surface, GstVideoInfo info)
++{
++  guint stride;
++  GstVideoFrame frame;
++
++  if (!gst_video_frame_map (&frame, &info, buffer, GST_MAP_READWRITE))
++    return FALSE;
++
++  stride = GST_VIDEO_FRAME_PLANE_STRIDE (&frame, 0);
++
++  switch (GST_VIDEO_INFO_FORMAT (&info)) {
++    case GST_VIDEO_FORMAT_NV12:
++    case GST_VIDEO_FORMAT_P010_10LE:
++      mfx_surface->Data.Y = (mfxU8 *) GST_VIDEO_FRAME_PLANE_DATA (&frame, 0);
++      mfx_surface->Data.UV = (mfxU8 *) GST_VIDEO_FRAME_PLANE_DATA (&frame, 1);
++      mfx_surface->Data.Pitch = (mfxU16) stride;
++      break;
++    case GST_VIDEO_FORMAT_VUYA:
++      mfx_surface->Data.V = (mfxU8 *) GST_VIDEO_FRAME_PLANE_DATA (&frame, 0);
++      mfx_surface->Data.U = mfx_surface->Data.V + 1;
++      mfx_surface->Data.Y = mfx_surface->Data.V + 2;
++      mfx_surface->Data.A = mfx_surface->Data.V + 3;
++      mfx_surface->Data.PitchHigh = (mfxU16) (stride / (1 << 16));
++      mfx_surface->Data.PitchLow = (mfxU16) (stride % (1 << 16));
++      break;
++    case GST_VIDEO_FORMAT_Y410:
++      mfx_surface->Data.Y410 =
++          (mfxY410 *) GST_VIDEO_FRAME_PLANE_DATA (&frame, 0);
++      mfx_surface->Data.Pitch = stride;
++      break;
++    default:
++      break;
++  }
++
++  gst_video_frame_unmap (&frame);
++  return TRUE;
++}
++
++GstMsdkSurface *
++gst_msdk_import_sys_mem_to_msdk_surface (GstBuffer * buf, GstVideoInfo info)
++{
++  GstMsdkSurface *msdk_surface = NULL;
++  GstMapInfo map_info;
++  mfxFrameInfo frame_info = { 0, };
++  mfxFrameSurface1 *mfx_surface = NULL;
++
++  if (!gst_buffer_map (buf, &map_info, GST_MAP_READ)) {
++    GST_ERROR ("Failed to map buffer");
++    return msdk_surface;
++  }
++
++  mfx_surface = g_slice_new0 (mfxFrameSurface1);
++  mfx_surface->Data.MemId = (mfxMemId) map_info.data;
++
++  if (!map_data (buf, mfx_surface, info)) {
++    g_slice_free (mfxFrameSurface1, mfx_surface);
++    return msdk_surface;
++  }
++
++  gst_buffer_unmap (buf, &map_info);
++
++  gst_msdk_set_mfx_frame_info_from_video_info (&frame_info, &info);
++  mfx_surface->Info = frame_info;
++
++  msdk_surface = g_slice_new0 (GstMsdkSurface);
++  msdk_surface->surface = mfx_surface;
++
++  return msdk_surface;
++}
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
-index e0d5616205..0a42299b33 100644
+index e0d5616205..4ef99d649f 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
 @@ -39,6 +39,7 @@
@@ -23,7 +136,7 @@ index e0d5616205..0a42299b33 100644
  
  struct _GstMsdkMemoryID {
    mfxU32 fourcc;
-@@ -56,6 +57,12 @@ struct _GstMsdkMemoryID {
+@@ -56,6 +57,15 @@ struct _GstMsdkMemoryID {
  #endif
  };
  
@@ -33,11 +146,14 @@ index e0d5616205..0a42299b33 100644
 +  GstBuffer *buf;
 +};
 +
++GstMsdkSurface *
++gst_msdk_import_sys_mem_to_msdk_surface (GstBuffer * buf, GstVideoInfo info);
++
  mfxStatus gst_msdk_frame_alloc(mfxHDL pthis, mfxFrameAllocRequest *req, mfxFrameAllocResponse *resp);
  mfxStatus gst_msdk_frame_free(mfxHDL pthis, mfxFrameAllocResponse *resp);
  mfxStatus gst_msdk_frame_lock(mfxHDL pthis, mfxMemId mid, mfxFrameData *ptr);
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index 9f711b008f..febc88f4d2 100644
+index 9f711b008f..2332d172b7 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 @@ -37,6 +37,21 @@
@@ -62,7 +178,7 @@ index 9f711b008f..febc88f4d2 100644
  mfxStatus
  gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
      mfxFrameAllocResponse * resp)
-@@ -704,6 +719,106 @@ error_create_surface:
+@@ -704,6 +719,105 @@ error_create_surface:
    }
  }
  
@@ -121,7 +237,6 @@ index 9f711b008f..febc88f4d2 100644
 +  GstMsdkSurface *msdk_surface = NULL;
 +  mfxFrameSurface1 *mfx_surface = NULL;
 +  GstMsdkMemoryID *msdk_mid = NULL;
-+  mfxMemId *mfx_mid = NULL;
 +
 +  mem = gst_buffer_peek_memory (buf, 0);
 +  msdk_surface = g_slice_new0 (GstMsdkSurface);
@@ -141,18 +256,18 @@ index 9f711b008f..febc88f4d2 100644
 +    va_surface = _get_va_surface (buf, &info, msdk_context);
 +  }
 +
-+  if (va_surface == VA_INVALID_ID)
++  if (va_surface == VA_INVALID_ID) {
++    g_slice_free (GstMsdkSurface, msdk_surface);
 +    return NULL;
++  }
 +
 +  mfx_surface = g_slice_new0 (mfxFrameSurface1);
 +  msdk_mid = g_slice_new0 (GstMsdkMemoryID);
-+  mfx_mid = g_slice_new0 (mfxMemId);
 +
 +  msdk_mid->surface = g_slice_new0 (VASurfaceID);
 +  *msdk_mid->surface = va_surface;
 +
-+  mfx_mid = (mfxMemId *) msdk_mid;
-+  mfx_surface->Data.MemId = mfx_mid;
++  mfx_surface->Data.MemId = (mfxMemId) msdk_mid;
 +
 +  gst_msdk_set_mfx_frame_info_from_video_info (&frame_info, vinfo);
 +  mfx_surface->Info = frame_info;
@@ -184,6 +299,17 @@ index da2f4d3bfe..fa25821fd8 100644
  gboolean
  gst_msdk_replace_mfx_memid (GstMsdkContext *context,
      mfxFrameSurface1 *mfx_surface, VASurfaceID surface_id);
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/meson.build b/subprojects/gst-plugins-bad/sys/msdk/meson.build
+index 3b0af857e6..605e66e3c2 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/meson.build
++++ b/subprojects/gst-plugins-bad/sys/msdk/meson.build
+@@ -1,5 +1,6 @@
+ msdk_sources = [
+   'gstmsdk.c',
++  'gstmsdkallocator.c',
+   'gstmsdkbufferpool.c',
+   'gstmsdkcontext.c',
+   'gstmsdkcontextutil.c',
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/msdk.h b/subprojects/gst-plugins-bad/sys/msdk/msdk.h
 index cb76fd516d..2b197ccce8 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/msdk.h
