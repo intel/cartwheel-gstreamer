@@ -1,4 +1,4 @@
-From cd4418fd3cbee84c02008f50def3adda81ea8087 Mon Sep 17 00:00:00 2001
+From 3c672acff874ca9c72eb1f76dc03f32955981083 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Thu, 19 May 2022 18:57:50 +0800
 Subject: [PATCH 14/21] msdkenc: Directly import dmabuf memory as mfx surface

@@ -1,4 +1,4 @@
-From 3f9d3a2b0ad226475ecf852bd8793268ab752830 Mon Sep 17 00:00:00 2001
+From 31641ca4c883bae5dc5efbbe740da18017c80fcb Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 9 May 2022 18:34:38 +0800
 Subject: [PATCH 19/21] msdkvpp: Import buffer to msdk_surface
@@ -18,7 +18,7 @@ updated one.
  3 files changed, 73 insertions(+), 120 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
-index 0a42299b33..1f1145ea1c 100644
+index 4ef99d649f..9035b548bf 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
 @@ -61,6 +61,7 @@ struct _GstMsdkSurface
@@ -28,12 +28,12 @@ index 0a42299b33..1f1145ea1c 100644
 +  gboolean from_qdata;
  };
  
- mfxStatus gst_msdk_frame_alloc(mfxHDL pthis, mfxFrameAllocRequest *req, mfxFrameAllocResponse *resp);
+ GstMsdkSurface *
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index febc88f4d2..6ed8a58721 100644
+index 2332d172b7..22c7ebb80a 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-@@ -783,6 +783,7 @@ gst_msdk_import_to_msdk_surface (GstBuffer * buf, GstMsdkContext * msdk_context,
+@@ -782,6 +782,7 @@ gst_msdk_import_to_msdk_surface (GstBuffer * buf, GstMsdkContext * msdk_context,
    if ((mfx_surface = gst_mini_object_get_qdata (GST_MINI_OBJECT_CAST (mem),
                GST_MSDK_FRAME_SURFACE))) {
      msdk_surface->surface = mfx_surface;
