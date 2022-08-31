@@ -1,4 +1,4 @@
-From f56741a2b16f7f05756176f1f0b9b3b19db721c5 Mon Sep 17 00:00:00 2001
+From 9369276dd01fdb3fe8a1a23e9183f0b099cd6f48 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Thu, 26 May 2022 18:17:16 +0800
 Subject: [PATCH 21/21] msdkvpp: Add va memory when fixating src caps

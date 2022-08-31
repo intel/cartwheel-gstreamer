@@ -1,4 +1,4 @@
-From 9a90090ce4a7759b8833dcd11f475504f01e5e81 Mon Sep 17 00:00:00 2001
+From 3d1945652e66c367b076bb0ccd30e6916b1eaa4f Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Thu, 3 Mar 2022 10:07:19 +0800
 Subject: [PATCH 12/21] msdk: Use va libs API to get VA surface from buffer
