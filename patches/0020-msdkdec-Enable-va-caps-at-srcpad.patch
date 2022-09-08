@@ -1,0 +1,175 @@
+From 708002496c9caec977cd367d1fae766c580e29d6 Mon Sep 17 00:00:00 2001
+From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
+Date: Wed, 8 Jun 2022 17:13:47 +0800
+Subject: [PATCH 20/26] msdkdec: Enable va caps at srcpad
+
+Set caps with VA memory at src pad with a higher priority, then comes
+dmabuf caps.
+---
+ .../gst-plugins-bad/sys/msdk/gstmsdkav1dec.c  | 11 +++++--
+ .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 31 +++++++++++++------
+ .../gst-plugins-bad/sys/msdk/gstmsdkh264dec.c | 11 +++++--
+ .../gst-plugins-bad/sys/msdk/gstmsdkh265dec.c | 11 +++++--
+ 4 files changed, 49 insertions(+), 15 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkav1dec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkav1dec.c
+index 5e3ab9e08b..46cb9f18f2 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkav1dec.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkav1dec.c
+@@ -57,6 +57,13 @@ GST_DEBUG_CATEGORY_EXTERN (gst_msdkav1dec_debug);
+ 
+ #define COMMON_FORMAT "{ NV12, P010_10LE, VUYA, Y410 }"
+ 
++#ifndef _WIN32
++#define VA_SRC_CAPS_STR \
++    ";" GST_MSDK_CAPS_MAKE_WITH_VA_FEATURE ("{ NV12 }")
++#else
++#define VA_SRC_CAPS_STR ""
++#endif
++
+ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
+     GST_PAD_SINK,
+     GST_PAD_ALWAYS,
+@@ -66,8 +73,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
+ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
+     GST_PAD_SRC,
+     GST_PAD_ALWAYS,
+-    GST_STATIC_CAPS (GST_MSDK_CAPS_STR (COMMON_FORMAT, COMMON_FORMAT))
+-    );
++    GST_STATIC_CAPS (GST_MSDK_CAPS_STR (COMMON_FORMAT, COMMON_FORMAT)
++        VA_SRC_CAPS_STR));
+ 
+ #define gst_msdkav1dec_parent_class parent_class
+ G_DEFINE_TYPE (GstMsdkAV1Dec, gst_msdkav1dec, GST_TYPE_MSDKDEC);
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
+index 4729d62a3e..6bce2c3afc 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
+@@ -41,6 +41,10 @@
+ #include "gstmsdksystemmemory.h"
+ #include "gstmsdkcontextutil.h"
+ 
++#ifndef _WIN32
++#include <gst/va/gstvaallocator.h>
++#endif
++
+ GST_DEBUG_CATEGORY_EXTERN (gst_msdkdec_debug);
+ #define GST_CAT_DEFAULT gst_msdkdec_debug
+ 
+@@ -553,16 +557,20 @@ _gst_caps_has_feature (const GstCaps * caps, const gchar * feature)
+ }
+ 
+ static gboolean
+-srcpad_can_dmabuf (GstMsdkDec * thiz)
++pad_accept_memory (GstMsdkDec * thiz, const gchar * mem_type, GstCaps * filter)
+ {
+   gboolean ret = FALSE;
+   GstCaps *caps, *out_caps;
+-  GstPad *srcpad;
++  GstPad *pad;
+ 
+-  srcpad = GST_VIDEO_DECODER_SRC_PAD (thiz);
+-  caps = gst_pad_get_pad_template_caps (srcpad);
++  pad = GST_VIDEO_DECODER_SRC_PAD (thiz);
+ 
+-  out_caps = gst_pad_peer_query_caps (srcpad, caps);
++  /* make a copy of filter caps since we need to alter the structure
++   * by adding dmabuf-capsfeatures */
++  caps = gst_caps_copy (filter);
++  gst_caps_set_features (caps, 0, gst_caps_features_from_string (mem_type));
++
++  out_caps = gst_pad_peer_query_caps (pad, caps);
+   if (!out_caps)
+     goto done;
+ 
+@@ -570,9 +578,8 @@ srcpad_can_dmabuf (GstMsdkDec * thiz)
+       || out_caps == caps)
+     goto done;
+ 
+-  if (_gst_caps_has_feature (out_caps, GST_CAPS_FEATURE_MEMORY_DMABUF))
++  if (_gst_caps_has_feature (out_caps, mem_type))
+     ret = TRUE;
+-
+ done:
+   if (caps)
+     gst_caps_unref (caps);
+@@ -734,10 +741,16 @@ gst_msdkdec_set_src_caps (GstMsdkDec * thiz, gboolean need_allocation)
+     gst_msdk_set_video_alignment (vinfo, alloc_w, alloc_h, &align);
+   gst_video_info_align (vinfo, &align);
+   output_state->caps = gst_video_info_to_caps (vinfo);
+-
+-  if (srcpad_can_dmabuf (thiz))
++#ifndef _WIN32
++  if (pad_accept_memory (thiz, GST_CAPS_FEATURE_MEMORY_VA, output_state->caps)) {
++    gst_caps_set_features (output_state->caps, 0,
++        gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_VA, NULL));
++  } else if (pad_accept_memory (thiz, GST_CAPS_FEATURE_MEMORY_DMABUF,
++          output_state->caps)) {
+     gst_caps_set_features (output_state->caps, 0,
+         gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_DMABUF, NULL));
++  }
++#endif
+ 
+   if (need_allocation) {
+     /* Find allocation width and height */
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh264dec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh264dec.c
+index 1fcc9437d7..43b6d90aab 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh264dec.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh264dec.c
+@@ -56,6 +56,13 @@ GST_DEBUG_CATEGORY_EXTERN (gst_msdkh264dec_debug);
+ 
+ #define COMMON_FORMAT "{ NV12, BGRA, BGRx }"
+ 
++#ifndef _WIN32
++#define VA_SRC_CAPS_STR \
++    "; " GST_MSDK_CAPS_MAKE_WITH_VA_FEATURE ("{ NV12 }")
++#else
++#define VA_SRC_CAPS_STR ""
++#endif
++
+ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
+     GST_PAD_SINK,
+     GST_PAD_ALWAYS,
+@@ -68,8 +75,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
+ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
+     GST_PAD_SRC,
+     GST_PAD_ALWAYS,
+-    GST_STATIC_CAPS (GST_MSDK_CAPS_STR (COMMON_FORMAT, COMMON_FORMAT))
+-    );
++    GST_STATIC_CAPS (GST_MSDK_CAPS_STR (COMMON_FORMAT, COMMON_FORMAT)
++        VA_SRC_CAPS_STR));
+ 
+ #define gst_msdkh264dec_parent_class parent_class
+ G_DEFINE_TYPE (GstMsdkH264Dec, gst_msdkh264dec, GST_TYPE_MSDKDEC);
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265dec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265dec.c
+index 6b0e4d440b..8de9deaa64 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265dec.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265dec.c
+@@ -58,6 +58,13 @@ GST_DEBUG_CATEGORY_EXTERN (gst_msdkh265dec_debug);
+ #define COMMON_FORMAT \
+   "{ NV12, P010_10LE, YUY2, Y210, VUYA, Y410, P012_LE, Y212_LE, Y412_LE, BGRA, BGRx }"
+ 
++#ifndef _WIN32
++#define VA_SRC_CAPS_STR \
++    "; " GST_MSDK_CAPS_MAKE_WITH_VA_FEATURE ("{ NV12 }")
++#else
++#define VA_SRC_CAPS_STR ""
++#endif
++
+ /* TODO: update both sink and src dynamically */
+ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
+     GST_PAD_SINK,
+@@ -70,8 +77,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
+ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
+     GST_PAD_SRC,
+     GST_PAD_ALWAYS,
+-    GST_STATIC_CAPS (GST_MSDK_CAPS_STR (COMMON_FORMAT, COMMON_FORMAT))
+-    );
++    GST_STATIC_CAPS (GST_MSDK_CAPS_STR (COMMON_FORMAT, COMMON_FORMAT)
++        VA_SRC_CAPS_STR));
+ 
+ #define gst_msdkh265dec_parent_class parent_class
+ G_DEFINE_TYPE (GstMsdkH265Dec, gst_msdkh265dec, GST_TYPE_MSDKDEC);
+-- 
+2.25.1
+

@@ -1,0 +1,64 @@
+From 028c86c97403974c1977e52738e097bf510ae36b Mon Sep 17 00:00:00 2001
+From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
+Date: Mon, 22 Aug 2022 17:44:35 +0800
+Subject: [PATCH 21/26] msdk: Add a bufferpool in GstMsdkContext structure
+
+This alloc_pool is the negotiated pool and will be used in
+mfxFrameAllocator:Alloc to create surfaces.
+---
+ .../gst-plugins-bad/sys/msdk/gstmsdkcontext.c      | 14 ++++++++++++++
+ .../gst-plugins-bad/sys/msdk/gstmsdkcontext.h      |  6 ++++++
+ 2 files changed, 20 insertions(+)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c
+index 06836b7a4b..9aee2e39dd 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c
+@@ -46,6 +46,7 @@ GST_DEBUG_CATEGORY_STATIC (gst_debug_msdkcontext);
+ struct _GstMsdkContextPrivate
+ {
+   MsdkSession session;
++  GstBufferPool *alloc_pool;
+   GList *cached_alloc_responses;
+   gboolean hardware;
+   gboolean has_frame_allocator;
+@@ -733,6 +734,19 @@ gst_msdk_context_put_surface_available (GstMsdkContext * context,
+   g_mutex_unlock (&priv->mutex);
+ }
+ 
++void
++gst_msdk_context_set_alloc_pool (GstMsdkContext * context, GstBufferPool * pool)
++{
++  if (pool)
++    context->priv->alloc_pool = gst_object_ref (pool);
++}
++
++GstBufferPool *
++gst_msdk_context_get_alloc_pool (GstMsdkContext * context)
++{
++  return context->priv->alloc_pool;
++}
++
+ GstMsdkContextJobType
+ gst_msdk_context_get_job_type (GstMsdkContext * context)
+ {
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.h
+index 141f9062e6..5c9bd0e849 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.h
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.h
+@@ -133,6 +133,12 @@ gst_msdk_context_put_surface_locked (GstMsdkContext * context, mfxFrameAllocResp
+ void
+ gst_msdk_context_put_surface_available (GstMsdkContext * context, mfxFrameAllocResponse * resp, mfxFrameSurface1 * surface);
+ 
++void
++gst_msdk_context_set_alloc_pool (GstMsdkContext * context, GstBufferPool * pool);
++
++GstBufferPool *
++gst_msdk_context_get_alloc_pool (GstMsdkContext * context);
++
+ GstMsdkContextJobType
+ gst_msdk_context_get_job_type (GstMsdkContext * context);
+ 
+-- 
+2.25.1
+

@@ -1,0 +1,180 @@
+From 5345e47e88d7c970a277f6c3bda805c058261453 Mon Sep 17 00:00:00 2001
+From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
+Date: Mon, 22 Aug 2022 18:33:35 +0800
+Subject: [PATCH 22/26] msdkdec: Add a function to directly allocate output
+ GstMsdkSurface
+
+---
+ .../sys/msdk/gstmsdkallocator.c               | 12 ++++
+ .../sys/msdk/gstmsdkallocator.h               |  3 +
+ .../sys/msdk/gstmsdkallocator_libva.c         | 11 ---
+ .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 70 +++++++++++++++++++
+ .../gst-plugins-bad/sys/msdk/gstmsdkdec.h     |  1 +
+ 5 files changed, 86 insertions(+), 11 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c
+index 2ea71325d7..7249fc8c4f 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c
+@@ -149,3 +149,15 @@ gst_msdk_import_sys_mem_to_msdk_surface (GstBuffer * buf, GstVideoInfo info)
+ 
+   return msdk_surface;
+ }
++
++GQuark
++gst_msdk_frame_surface_quark_get (void)
++{
++  static gsize g_quark;
++
++  if (g_once_init_enter (&g_quark)) {
++    gsize quark = (gsize) g_quark_from_static_string ("GstMsdkFrameSurface");
++    g_once_init_leave (&g_quark, quark);
++  }
++  return g_quark;
++}
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
+index 9035b548bf..c1ea70a3d9 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
+@@ -75,6 +75,9 @@ mfxStatus gst_msdk_frame_get_hdl(mfxHDL pthis, mfxMemId mid, mfxHDL *hdl);
+ 
+ void gst_msdk_set_frame_allocator (GstMsdkContext * context);
+ 
++GQuark
++gst_msdk_frame_surface_quark_get (void);
++
+ G_END_DECLS
+ 
+ #endif /* GST_MSDK_ALLOCATOR_H_ */
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
+index 22c7ebb80a..55785a180c 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
+@@ -40,17 +40,6 @@
+ #include <gst/va/gstvaallocator.h>
+ 
+ #define GST_MSDK_FRAME_SURFACE gst_msdk_frame_surface_quark_get ()
+-static GQuark
+-gst_msdk_frame_surface_quark_get (void)
+-{
+-  static gsize g_quark;
+-
+-  if (g_once_init_enter (&g_quark)) {
+-    gsize quark = (gsize) g_quark_from_static_string ("GstMsdkFrameSurface");
+-    g_once_init_leave (&g_quark, quark);
+-  }
+-  return g_quark;
+-}
+ 
+ mfxStatus
+ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
+index 6bce2c3afc..177276a406 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
+@@ -42,6 +42,7 @@
+ #include "gstmsdkcontextutil.h"
+ 
+ #ifndef _WIN32
++#include <gstmsdkallocator_libva.h>
+ #include <gst/va/gstvaallocator.h>
+ #endif
+ 
+@@ -64,6 +65,8 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
+ 
+ #define MFX_TIME_IS_VALID(time) ((time) != MFX_TIMESTAMP_UNKNOWN)
+ 
++#define GST_MSDK_FRAME_SURFACE gst_msdk_frame_surface_quark_get ()
++
+ #define gst_msdkdec_parent_class parent_class
+ G_DEFINE_TYPE (GstMsdkDec, gst_msdkdec, GST_TYPE_VIDEO_DECODER);
+ 
+@@ -286,6 +289,73 @@ failed_unref_buffer:
+   return NULL;
+ }
+ 
++static GstMsdkSurface *
++allocate_output_surface (GstMsdkDec * thiz)
++{
++  GstMsdkSurface *msdk_surface = NULL;
++  GstBuffer *out_buffer = NULL;
++
++  /* Free un-unsed msdk surfaces firstly, hence the associated mfx
++   * surfaces will be moved from used list to available list */
++  gst_msdkdec_free_unlocked_msdk_surfaces (thiz);
++#ifndef _WIN32
++  if ((gst_buffer_pool_acquire_buffer (thiz->alloc_pool, &out_buffer, 0))
++      != GST_FLOW_OK) {
++    GST_ERROR_OBJECT (thiz, "Failed to allocate output buffer");
++    return NULL;
++  }
++
++  GstMemory *mem = NULL;
++  mfxFrameSurface1 *mfx_surface = NULL;
++
++  mem = gst_buffer_peek_memory (out_buffer, 0);
++  msdk_surface = g_slice_new0 (GstMsdkSurface);
++  msdk_surface->from_qdata = FALSE;
++
++  if ((mfx_surface = gst_mini_object_get_qdata (GST_MINI_OBJECT_CAST (mem),
++              GST_MSDK_FRAME_SURFACE))) {
++    msdk_surface->surface = mfx_surface;
++    msdk_surface->from_qdata = TRUE;
++  }
++#else
++  if (!gst_buffer_pool_is_active (thiz->pool) &&
++      !gst_buffer_pool_set_active (thiz->pool, TRUE)) {
++    GST_ERROR_OBJECT (thiz, "Failed to activate buffer pool");
++    return NULL;
++  }
++
++  if ((gst_buffer_pool_acquire_buffer (thiz->pool, &out_buffer, 0))
++      != GST_FLOW_OK) {
++    GST_ERROR_OBJECT (thiz, "Failed to allocate output buffer");
++    return NULL;
++  }
++
++  GstVideoCodecState *output_state =
++      gst_video_decoder_get_output_state (GST_VIDEO_DECODER (thiz));
++
++  msdk_surface =
++      gst_msdk_import_sys_mem_to_msdk_surface (out_buffer, output_state->info);
++#endif
++
++  if (msdk_surface) {
++    msdk_surface->buf = out_buffer;
++  }
++
++  if (thiz->use_video_memory && !msdk_surface->from_qdata) {
++    GST_ERROR ("No available surfaces");
++    return NULL;
++  }
++
++  if (!thiz->sfc)
++    gst_msdk_update_mfx_frame_info_from_mfx_video_param
++        (&msdk_surface->surface->Info, &thiz->param);
++
++  thiz->locked_msdk_surfaces =
++      g_list_append (thiz->locked_msdk_surfaces, msdk_surface);
++
++  return msdk_surface;
++}
++
+ static void
+ gst_msdkdec_close_decoder (GstMsdkDec * thiz, gboolean reset_param)
+ {
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.h
+index 39f877fe7b..3a75843584 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.h
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.h
+@@ -69,6 +69,7 @@ struct _GstMsdkDec
+   GstVideoCodecState *input_state;
+   /* aligned msdk pool info */
+   GstBufferPool *pool;
++  GstBufferPool *alloc_pool;
+   /* downstream pool info based on allocation query */
+   GstVideoInfo non_msdk_pool_info;
+   mfxFrameAllocResponse alloc_resp;
+-- 
+2.25.1
+
