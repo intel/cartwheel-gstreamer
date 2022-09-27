@@ -1,4 +1,4 @@
-From 4f6e9e6e1ac6162dffa2cd98ffce4f4245e90499 Mon Sep 17 00:00:00 2001
+From aae77c9148f99ae74a618b1844b44788738b6035 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 6 Apr 2022 17:06:20 +0800
 Subject: [PATCH 3/8] va: Add prediction direction attribute support for H265
@@ -10,10 +10,10 @@ Subject: [PATCH 3/8] va: Add prediction direction attribute support for H265
  2 files changed, 41 insertions(+)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index 19d96c138c..f82a556738 100644
+index 439ef0caf4..f299e4f60d 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-@@ -642,6 +642,44 @@ gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
+@@ -644,6 +644,44 @@ gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
    return TRUE;
  }
  

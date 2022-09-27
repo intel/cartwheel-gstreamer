@@ -1,22 +1,22 @@
-From 57f1e913a5bb1f4c427b16dacc3d339a90392115 Mon Sep 17 00:00:00 2001
+From 56a9e52e20fb7b301ca2f42453061cd18579cb7e Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 25 Mar 2022 21:54:30 +0800
 Subject: [PATCH 1/8] va: Implement the vah265enc plugin for va HEVC encoding.
 
 ---
- .../gst-plugins-bad/sys/va/gstvah265enc.c     | 4443 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvah265enc.c     | 4454 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvah265enc.h     |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    1 +
- 3 files changed, 4478 insertions(+)
+ 3 files changed, 4489 insertions(+)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvah265enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 new file mode 100644
-index 0000000000..93c65e61a0
+index 0000000000..88ff002f97
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -0,0 +1,4443 @@
+@@ -0,0 +1,4454 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -65,6 +65,7 @@ index 0000000000..93c65e61a0
 +
 +#include <gst/codecparsers/gsth265bitwriter.h>
 +#include <gst/va/gstva.h>
++#include <gst/va/gstvavideoformat.h>
 +#include <gst/video/video.h>
 +#include <va/va_drmcommon.h>
 +
@@ -137,7 +138,7 @@ index 0000000000..93c65e61a0
 +  GstVaBaseEncClass parent_class;
 +
 +  GType rate_control_type;
-+  char rate_control_type_name[34];
++  char rate_control_type_name[64];
 +  GEnumValue rate_control[16];
 +};
 +/* *INDENT-ON* */
@@ -433,6 +434,7 @@ index 0000000000..93c65e61a0
 +
 +  return NULL;
 +}
++#endif /* end of GST_DISABLE_GST_DEBUG */
 +
 +static GstVaH265EncFrame *
 +gst_va_h265_enc_frame_new (void)
@@ -446,7 +448,6 @@ index 0000000000..93c65e61a0
 +
 +  return frame;
 +}
-+#endif /* end of GST_DISABLE_GST_DEBUG */
 +
 +static void
 +gst_va_h265_enc_frame_free (gpointer pframe)
@@ -1692,11 +1693,8 @@ index 0000000000..93c65e61a0
 +
 +  frame = _enc_frame (gst_frame);
 +
-+  if (self->aud) {
-+    if ((self->packed_headers & VA_ENC_PACKED_HEADER_RAW_DATA)
-+        && !_h265_add_aud (self, frame))
-+      return FALSE;
-+  }
++  if (self->aud && !_h265_add_aud (self, frame))
++    return FALSE;
 +
 +  /* Repeat the VPS/SPS for IDR. */
 +  if (frame->poc == 0) {
@@ -3009,8 +3007,24 @@ index 0000000000..93c65e61a0
 +  codedbuf_size +=
 +      (self->luma_width * self->luma_height * 3 / 2) / self->min_cr;
 +
++  if (self->rc.rc_ctrl_mode != VA_RC_CQP) {
++    guint bytes_per_frame = 0;
++
++    bytes_per_frame = gst_util_uint64_scale (self->rc.target_bitrate_bits,
++        GST_VIDEO_INFO_FPS_D (&base->input_state->info),
++        GST_VIDEO_INFO_FPS_N (&base->input_state->info)) / 8;
++
++    /* FIXME: In rate control mode, the driver may even add padding bits to
++       meet the target bit rate requirement. Making the buffer 3 times bigger
++       than the average frame size should be safe. */
++    if (codedbuf_size < 3 * bytes_per_frame) {
++      GST_DEBUG_OBJECT (self, "Every bytes per frame is: %u", bytes_per_frame);
++      codedbuf_size = 3 * bytes_per_frame;
++    }
++  }
++
 +  base->codedbuf_size = codedbuf_size;
-+  GST_DEBUG_OBJECT (self, "Calculate codedbuf size: %u", base->codedbuf_size);
++  GST_INFO_OBJECT (self, "Calculate codedbuf size: %u", base->codedbuf_size);
 +}
 +
 +/* Get log2_max_frame_num_minus4, log2_max_pic_order_cnt_lsb_minus4
@@ -3668,7 +3682,7 @@ index 0000000000..93c65e61a0
 +  guint max_ref_frames;
 +  GstVideoCodecState *output_state;
 +
-+  gst_va_h265_enc_reset_state (base);
++  gst_va_base_enc_reset_state (base);
 +
 +  base->width = GST_VIDEO_INFO_WIDTH (&base->input_state->info);
 +  base->height = GST_VIDEO_INFO_HEIGHT (&base->input_state->info);
@@ -3751,6 +3765,9 @@ index 0000000000..93c65e61a0
 +
 +  if (!_h265_init_packed_headers (self))
 +    return FALSE;
++
++  self->aud = self->aud && self->packed_headers & VA_ENC_PACKED_HEADER_RAW_DATA;
++  update_property_bool (base, &self->prop.aud, self->aud, PROP_AUD);
 +
 +  max_ref_frames = self->gop.num_ref_frames + 3 /* scratch frames */ ;
 +  if (!gst_va_encoder_open (base->encoder, base->profile, base->entrypoint,
@@ -4052,12 +4069,6 @@ index 0000000000..93c65e61a0
 +}
 +
 +static void
-+gst_va_h265_enc_dispose (GObject * object)
-+{
-+  G_OBJECT_CLASS (parent_class)->dispose (object);
-+}
-+
-+static void
 +gst_va_h265_enc_class_init (gpointer g_klass, gpointer class_data)
 +{
 +  GstCaps *src_doc_caps, *sink_doc_caps;
@@ -4107,7 +4118,6 @@ index 0000000000..93c65e61a0
 +  gst_pad_template_set_documentation_caps (src_pad_templ, src_doc_caps);
 +  gst_caps_unref (src_doc_caps);
 +
-+  object_class->dispose = gst_va_h265_enc_dispose;
 +  object_class->set_property = gst_va_h265_enc_set_property;
 +  object_class->get_property = gst_va_h265_enc_get_property;
 +
@@ -4131,9 +4141,10 @@ index 0000000000..93c65e61a0
 +            vah265enc_class->rate_control)) {
 +      g_snprintf (vah265enc_class->rate_control_type_name,
 +          G_N_ELEMENTS (vah265enc_class->rate_control_type_name) - 1,
-+          "GstVaEncoderRateControl_%" GST_FOURCC_FORMAT "%s",
++          "GstVaEncoderRateControl_%" GST_FOURCC_FORMAT "%s_%s",
 +          GST_FOURCC_ARGS (va_enc_class->codec),
-+          (va_enc_class->entrypoint == VAEntrypointEncSliceLP) ? "_LP" : "");
++          (va_enc_class->entrypoint == VAEntrypointEncSliceLP) ? "_LP" : "",
++          g_path_get_basename (va_enc_class->render_device_path));
 +      vah265enc_class->rate_control_type =
 +          g_enum_register_static (vah265enc_class->rate_control_type_name,
 +          vah265enc_class->rate_control);
@@ -4501,7 +4512,7 @@ index 0000000000..08501c2395
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index fee1fedde6..e04366e127 100644
+index 5411512ccf..b12f9b3e4e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
 @@ -15,6 +15,7 @@ va_sources = [
