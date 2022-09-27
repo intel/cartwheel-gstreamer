@@ -1,4 +1,4 @@
-From 311515aee26f61e5c7bb38a1514cc4770351f982 Mon Sep 17 00:00:00 2001
+From ba2f7a0a54cd1d97300a80ca8dd838190eeccee3 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 25 Mar 2022 21:55:28 +0800
 Subject: [PATCH 2/8] va: Register and enable and the vah265enc plugin.
@@ -8,7 +8,7 @@ Subject: [PATCH 2/8] va: Register and enable and the vah265enc plugin.
  1 file changed, 8 insertions(+)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index 2c1d9ce6d2..f91923e4da 100644
+index 31c3873ab8..937fa04e7b 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -36,6 +36,7 @@
@@ -26,7 +26,7 @@ index 2c1d9ce6d2..f91923e4da 100644
 +      case HEVC:
 +        if (!gst_va_h265_enc_register (plugin, device, sinkcaps, srccaps,
 +                GST_RANK_NONE, entrypoint)) {
-+          GST_WARNING ("Failed to register H264 decoder: %s",
++          GST_WARNING ("Failed to register H265 encoder: %s",
 +              device->render_device_path);
 +        }
 +        break;
