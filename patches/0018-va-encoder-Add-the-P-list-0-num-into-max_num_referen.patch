@@ -1,0 +1,117 @@
+From 854fc2abf1f1c9b494878d2cfa3d473e91934e9d Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Mon, 12 Sep 2022 14:38:48 +0800
+Subject: [PATCH 8/9] va: encoder: Add the P list 0 num into max_num_reference
+ query.
+
+The driver may report different reference frame number for P and B
+frames' list 0 now. For example, the HW limitation of reference
+number for encoding each frame is 3. When the frame is P, all the
+3 references can be assigned to list 0 and no one in list 1. But
+for B frame, 2 should be assigned to list 0 and 1 should be assigned
+to list 1.
+---
+ .../gst-plugins-bad/sys/va/gstvaencoder.c     | 31 +++++++++++++------
+ .../gst-plugins-bad/sys/va/gstvaencoder.h     |  5 +--
+ .../gst-plugins-bad/sys/va/gstvah264enc.c     |  2 +-
+ .../gst-plugins-bad/sys/va/gstvah265enc.c     |  2 +-
+ 4 files changed, 27 insertions(+), 13 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
+index 06bec0abef..c7ae38ee35 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
+@@ -643,7 +643,7 @@ gst_va_encoder_get_slice_structure (GstVaEncoder * self,
+ gboolean
+ gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
+     VAProfile profile, VAEntrypoint entrypoint,
+-    guint32 * list0, guint32 * list1)
++    guint32 * listp_0, guint32 * listb_0, guint32 * listb_1)
+ {
+   VAStatus status;
+   VADisplay dpy;
+@@ -663,18 +663,31 @@ gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
+   }
+ 
+   if (attrib.value == VA_ATTRIB_NOT_SUPPORTED) {
+-    if (list0)
+-      *list0 = 0;
+-    if (list1)
+-      *list1 = 0;
++    if (listp_0)
++      *listp_0 = 0;
++    if (listb_0)
++      *listb_0 = 0;
++    if (listb_1)
++      *listb_1 = 0;
+ 
+     return TRUE;
+   }
+ 
+-  if (list0)
+-    *list0 = attrib.value & 0xffff;
+-  if (list1)
+-    *list1 = (attrib.value >> 16) & 0xffff;
++  if (profile == VAProfileAV1Profile0 || profile == VAProfileAV1Profile1) {
++    if (listp_0)
++      *listp_0 = attrib.value & 0xff;
++    if (listb_0)
++      *listb_0 = (attrib.value >> 8) & 0xff;
++    if (listb_1)
++      *listb_1 = (attrib.value >> 16) & 0xff;
++  } else {
++    if (listb_0)
++      *listb_0 = attrib.value & 0xffff;
++    if (listb_1)
++      *listb_1 = (attrib.value >> 16) & 0xffff;
++    if (listp_0)
++      *listp_0 = *listb_0;
++  }
+ 
+   return TRUE;
+ }
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
+index dbb7a509a7..5bd997cbe5 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
++++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
+@@ -69,8 +69,9 @@ gint32                gst_va_encoder_get_slice_structure  (GstVaEncoder * self,
+ gboolean              gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
+                                                             VAProfile profile,
+                                                             VAEntrypoint entrypoint,
+-                                                            guint32 * list0,
+-                                                            guint32 * list1);
++                                                            guint32 * listp_0,
++                                                            guint32 * listb_0,
++                                                            guint32 * listb_1);
+ guint                 gst_va_encoder_get_prediction_direction (GstVaEncoder * self,
+                                                                VAProfile profile,
+                                                                VAEntrypoint entrypoint);
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
+index d2329be3fa..00816f7554 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
+@@ -968,7 +968,7 @@ _generate_gop_structure (GstVaH264Enc * self)
+   }
+ 
+   if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,
+-          base->entrypoint, &list0, &list1)) {
++          base->entrypoint, NULL, &list0, &list1)) {
+     GST_INFO_OBJECT (self, "Failed to get the max num reference");
+     list0 = 1;
+     list1 = 0;
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
+index d07c7f0ac8..3fff49e00a 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
+@@ -3727,7 +3727,7 @@ _h265_generate_gop_structure (GstVaH265Enc * self)
+   }
+ 
+   if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,
+-          base->entrypoint, &list0, &list1)) {
++          base->entrypoint, NULL, &list0, &list1)) {
+     GST_INFO_OBJECT (self, "Failed to get the max num reference");
+     list0 = 1;
+     list1 = 0;
+-- 
+2.25.1
+

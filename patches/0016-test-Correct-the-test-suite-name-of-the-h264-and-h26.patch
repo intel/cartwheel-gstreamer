@@ -1,0 +1,40 @@
+From be31cd9a34015c5cfb31150e1e4530c8a815fe1e Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Tue, 19 Jul 2022 17:42:12 +0800
+Subject: [PATCH 6/9] test: Correct the test suite name of the h264 and h265
+ bitwriter.
+
+---
+ subprojects/gst-plugins-bad/tests/check/libs/h264bitwriter.c | 2 +-
+ subprojects/gst-plugins-bad/tests/check/libs/h265bitwriter.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/tests/check/libs/h264bitwriter.c b/subprojects/gst-plugins-bad/tests/check/libs/h264bitwriter.c
+index 17326388cd..75180766e8 100644
+--- a/subprojects/gst-plugins-bad/tests/check/libs/h264bitwriter.c
++++ b/subprojects/gst-plugins-bad/tests/check/libs/h264bitwriter.c
+@@ -525,7 +525,7 @@ GST_END_TEST;
+ static Suite *
+ h264bitwriter_suite (void)
+ {
+-  Suite *s = suite_create ("H264 Parser library");
++  Suite *s = suite_create ("H264 bitwriter library");
+ 
+   TCase *tc_chain = tcase_create ("general");
+ 
+diff --git a/subprojects/gst-plugins-bad/tests/check/libs/h265bitwriter.c b/subprojects/gst-plugins-bad/tests/check/libs/h265bitwriter.c
+index 21101555c1..12915390b5 100644
+--- a/subprojects/gst-plugins-bad/tests/check/libs/h265bitwriter.c
++++ b/subprojects/gst-plugins-bad/tests/check/libs/h265bitwriter.c
+@@ -950,7 +950,7 @@ GST_END_TEST;
+ static Suite *
+ h265bitwriter_suite (void)
+ {
+-  Suite *s = suite_create ("H265 Parser library");
++  Suite *s = suite_create ("H265 bitwriter library");
+ 
+   TCase *tc_chain = tcase_create ("general");
+ 
+-- 
+2.25.1
+
