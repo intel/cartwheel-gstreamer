@@ -1,0 +1,25 @@
+From 6fdbde77e56defaaa1a30144812d605caadad375 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Tue, 19 Jul 2022 17:25:50 +0800
+Subject: [PATCH 2/9] codecparsers: av1: add expected_frame_id in frame header.
+
+We need it to ease the bit code writing of AV1 frame header.
+---
+ .../gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h     | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h
+index 2c7106dd3e..465254a060 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h
+@@ -1561,6 +1561,7 @@ struct _GstAV1FrameHeaderOBU {
+   gint8 last_frame_idx;
+   gint8 gold_frame_idx;
+   gint8 ref_frame_idx[GST_AV1_REFS_PER_FRAME];
++  gint32 expected_frame_id[GST_AV1_REFS_PER_FRAME];
+   gboolean allow_high_precision_mv;
+   gboolean is_motion_mode_switchable;
+   gboolean use_ref_frame_mvs;
+-- 
+2.25.1
+

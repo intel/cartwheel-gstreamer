@@ -1,0 +1,29 @@
+From 0ea12e3f4d5eb385ccbe73268ad672f0ee126b61 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Mon, 12 Sep 2022 11:17:25 +0800
+Subject: [PATCH 3/9] codecparsers: av1: add ref_global_motion_params in frame
+ header.
+
+In order to ease the AV1 bit writer to write the global_motion_params
+when primary_ref_frame is enabled, we need to add this field to set
+the global_motion_params of the reference frame.
+---
+ .../gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h    | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h
+index 465254a060..7d16c30f57 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h
+@@ -1582,6 +1582,8 @@ struct _GstAV1FrameHeaderOBU {
+   gboolean skip_mode_present;
+   gboolean reference_select;
+   GstAV1GlobalMotionParams global_motion_params;
++  /* The ref of global_motion_params for primary_ref_frame, used for writer */
++  GstAV1GlobalMotionParams ref_global_motion_params;
+   GstAV1FilmGrainParams film_grain_params;
+ 
+   /* Global vars set by frame header */
+-- 
+2.25.1
+
