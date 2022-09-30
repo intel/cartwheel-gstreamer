@@ -1,4 +1,4 @@
-From 57494b584f763fa14471d45ad1f1843b484960de Mon Sep 17 00:00:00 2001
+From 794b4a278d00a7a715e6637f93fdac0022705f0b Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 23 Aug 2022 11:47:02 +0800
 Subject: [PATCH 25/26] msdkdec: Apply the modified memory allocation logic
@@ -19,7 +19,7 @@ logic in (3).
  1 file changed, 120 insertions(+), 272 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 3a8a279d13..634525fa32 100644
+index db8c3b99f4..68bb8ad880 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -40,6 +40,7 @@
@@ -496,7 +496,7 @@ index 3a8a279d13..634525fa32 100644
      guint num_buffers)
  {
    GstBufferPool *pool = NULL;
-@@ -1883,7 +1720,7 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -1886,7 +1723,7 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
    GstStructure *pool_config = NULL;
    GstCaps *pool_caps /*, *negotiated_caps */ ;
    guint size, min_buffers, max_buffers;
@@ -505,7 +505,7 @@ index 3a8a279d13..634525fa32 100644
  
    if (!thiz->param.mfx.FrameInfo.Width || !thiz->param.mfx.FrameInfo.Height)
      return FALSE;
-@@ -1898,6 +1735,11 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -1901,6 +1738,11 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
    gst_query_parse_nth_allocation_pool (query, 0, &pool, NULL, NULL, NULL);
    pool_config = gst_buffer_pool_get_config (pool);
  
@@ -517,7 +517,7 @@ index 3a8a279d13..634525fa32 100644
    /* Get the caps of pool and increase the min and max buffers by async_depth.
     * We will always have that number of decode operations in-flight */
    gst_buffer_pool_config_get_params (pool_config, &pool_caps, &size,
-@@ -1913,21 +1755,8 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -1916,21 +1758,8 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
    thiz->min_prealloc_buffers = min_buffers;
  
    if (_gst_caps_has_feature (pool_caps, GST_CAPS_FEATURE_MEMORY_DMABUF)) {
@@ -541,7 +541,7 @@ index 3a8a279d13..634525fa32 100644
    /* Decoder always use its own pool. So we create a pool if msdk APIs
     * previously requested for allocation (do_realloc = TRUE) */
    if (thiz->do_realloc || !thiz->pool) {
-@@ -1943,23 +1772,21 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -1946,23 +1775,21 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
        goto failed_to_create_pool;
      }
    }
@@ -571,7 +571,7 @@ index 3a8a279d13..634525fa32 100644
        || thiz->ds_has_no_msdk_allocator) {
      GstStructure *config;
      GstAllocator *allocator;
-@@ -2003,9 +1830,32 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -2006,9 +1833,32 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
      GST_VIDEO_INFO_HEIGHT (&thiz->non_msdk_pool_info) =
          GST_VIDEO_INFO_HEIGHT (&output_state->info);
  
@@ -604,7 +604,7 @@ index 3a8a279d13..634525fa32 100644
      gst_video_codec_state_unref (output_state);
    }
  
-@@ -2015,7 +1865,6 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -2018,7 +1868,6 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
    if (pool)
      gst_object_unref (pool);
  
@@ -612,7 +612,7 @@ index 3a8a279d13..634525fa32 100644
    return TRUE;
  
  failed_to_create_pool:
-@@ -2036,9 +1885,8 @@ gst_msdkdec_drain (GstVideoDecoder * decoder)
+@@ -2039,9 +1888,8 @@ gst_msdkdec_drain (GstVideoDecoder * decoder)
  {
    GstMsdkDec *thiz = GST_MSDKDEC (decoder);
    GstFlowReturn flow;
@@ -623,7 +623,7 @@ index 3a8a279d13..634525fa32 100644
    mfxFrameSurface1 *out_surface;
    mfxSession session;
    mfxStatus status;
-@@ -2058,10 +1906,7 @@ gst_msdkdec_drain (GstVideoDecoder * decoder)
+@@ -2061,10 +1909,7 @@ gst_msdkdec_drain (GstVideoDecoder * decoder)
      }
  
      if (!surface) {
@@ -635,7 +635,7 @@ index 3a8a279d13..634525fa32 100644
        if (!surface)
          return GST_FLOW_ERROR;
      }
-@@ -2369,4 +2214,7 @@ gst_msdkdec_init (GstMsdkDec * thiz)
+@@ -2372,4 +2217,7 @@ gst_msdkdec_init (GstMsdkDec * thiz)
    thiz->input_state = NULL;
    thiz->pool = NULL;
    thiz->context = NULL;

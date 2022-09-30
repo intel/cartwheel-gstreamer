@@ -1,4 +1,4 @@
-From 5345e47e88d7c970a277f6c3bda805c058261453 Mon Sep 17 00:00:00 2001
+From 2aa3ec77849876ca56380bf5709eac102168d844 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 22 Aug 2022 18:33:35 +0800
 Subject: [PATCH 22/26] msdkdec: Add a function to directly allocate output

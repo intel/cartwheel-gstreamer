@@ -1,4 +1,4 @@
-From 447fcaee3689c5c42ab54e529c589b4560d02305 Mon Sep 17 00:00:00 2001
+From 8b5cf74233a8314f6b50f58b3ee030c4c7caec03 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 23 Aug 2022 14:20:35 +0800
 Subject: [PATCH 26/26] msdkdec: Check available surfaces when all
@@ -9,7 +9,7 @@ Subject: [PATCH 26/26] msdkdec: Check available surfaces when all
  1 file changed, 51 insertions(+), 3 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 634525fa32..68bc1e57e8 100644
+index 68bb8ad880..b6e6bd5096 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -152,7 +152,7 @@ free_surface (GstMsdkSurface * s)

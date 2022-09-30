@@ -1,4 +1,4 @@
-From 301f72274da299bad3795334965c0d5deeacc0eb Mon Sep 17 00:00:00 2001
+From 191f5753c9aec70736ad7c84faf502267d43c41b Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 23 Aug 2022 11:25:15 +0800
 Subject: [PATCH 24/26] msdkdec: Add a function to create va pool
@@ -8,12 +8,12 @@ va pool for video memory in linux and keep system pool for windows.
 This gst_msdkdec_create_buffer_pool2 will replace gst_msdkdec_create_buffer_pool
 when all the memory allocation modifications are ready in the commits after.
 ---
- .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 108 +++++++++++++++++-
+ .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 111 +++++++++++++++++-
  .../gst-plugins-bad/sys/msdk/gstmsdkdec.h     |   2 +
- 2 files changed, 104 insertions(+), 6 deletions(-)
+ 2 files changed, 107 insertions(+), 6 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 177276a406..3a8a279d13 100644
+index 177276a406..db8c3b99f4 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -566,6 +566,7 @@ gst_msdkdec_init_decoder (GstMsdkDec * thiz)
@@ -38,7 +38,7 @@ index 177276a406..3a8a279d13 100644
          frame->output_buffer = gst_buffer_ref (surface->copy.buffer);
          unmap_frame (thiz, surface);
        }
-@@ -1783,6 +1779,102 @@ error_pool_config:
+@@ -1783,6 +1779,105 @@ error_pool_config:
    }
  }
  
@@ -118,6 +118,9 @@ index 177276a406..3a8a279d13 100644
 +  config = gst_buffer_pool_get_config (GST_BUFFER_POOL_CAST (pool));
 +  gst_buffer_pool_config_set_params (config, caps,
 +      GST_VIDEO_INFO_SIZE (&vinfo), num_buffers, 0);
++  gst_buffer_pool_config_add_option (config, GST_BUFFER_POOL_OPTION_VIDEO_META);
++  gst_buffer_pool_config_add_option (config,
++      GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
 +  gst_buffer_pool_config_set_video_alignment (config, &align);
 +
 +  if (!gst_buffer_pool_set_config (pool, config))
@@ -141,7 +144,7 @@ index 177276a406..3a8a279d13 100644
  static gboolean
  gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
  {
-@@ -1910,6 +2002,10 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -1910,6 +2005,10 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
          GST_VIDEO_INFO_WIDTH (&output_state->info);
      GST_VIDEO_INFO_HEIGHT (&thiz->non_msdk_pool_info) =
          GST_VIDEO_INFO_HEIGHT (&output_state->info);
