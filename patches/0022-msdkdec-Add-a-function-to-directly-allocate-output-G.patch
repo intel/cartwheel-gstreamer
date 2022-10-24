@@ -1,16 +1,16 @@
-From 2aa3ec77849876ca56380bf5709eac102168d844 Mon Sep 17 00:00:00 2001
+From 48c70a60b44ba04db547754a2bff97c87d333cd2 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 22 Aug 2022 18:33:35 +0800
 Subject: [PATCH 22/26] msdkdec: Add a function to directly allocate output
  GstMsdkSurface
 
 ---
- .../sys/msdk/gstmsdkallocator.c               | 12 ++++
+ .../sys/msdk/gstmsdkallocator.c               | 12 +++
  .../sys/msdk/gstmsdkallocator.h               |  3 +
  .../sys/msdk/gstmsdkallocator_libva.c         | 11 ---
- .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 70 +++++++++++++++++++
+ .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 74 +++++++++++++++++++
  .../gst-plugins-bad/sys/msdk/gstmsdkdec.h     |  1 +
- 5 files changed, 86 insertions(+), 11 deletions(-)
+ 5 files changed, 90 insertions(+), 11 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c
 index 2ea71325d7..7249fc8c4f 100644
@@ -69,7 +69,7 @@ index 22c7ebb80a..55785a180c 100644
  mfxStatus
  gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 6bce2c3afc..177276a406 100644
+index 6bce2c3afc..57b8c6b896 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -42,6 +42,7 @@
@@ -89,7 +89,7 @@ index 6bce2c3afc..177276a406 100644
  #define gst_msdkdec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkDec, gst_msdkdec, GST_TYPE_VIDEO_DECODER);
  
-@@ -286,6 +289,73 @@ failed_unref_buffer:
+@@ -286,6 +289,77 @@ failed_unref_buffer:
    return NULL;
  }
  
@@ -98,6 +98,10 @@ index 6bce2c3afc..177276a406 100644
 +{
 +  GstMsdkSurface *msdk_surface = NULL;
 +  GstBuffer *out_buffer = NULL;
++#ifndef _WIN32
++  GstMemory *mem = NULL;
++  mfxFrameSurface1 *mfx_surface = NULL;
++#endif
 +
 +  /* Free un-unsed msdk surfaces firstly, hence the associated mfx
 +   * surfaces will be moved from used list to available list */
@@ -109,9 +113,6 @@ index 6bce2c3afc..177276a406 100644
 +    return NULL;
 +  }
 +
-+  GstMemory *mem = NULL;
-+  mfxFrameSurface1 *mfx_surface = NULL;
-+
 +  mem = gst_buffer_peek_memory (out_buffer, 0);
 +  msdk_surface = g_slice_new0 (GstMsdkSurface);
 +  msdk_surface->from_qdata = FALSE;
@@ -120,6 +121,10 @@ index 6bce2c3afc..177276a406 100644
 +              GST_MSDK_FRAME_SURFACE))) {
 +    msdk_surface->surface = mfx_surface;
 +    msdk_surface->from_qdata = TRUE;
++  } else {
++    GST_ERROR ("No available surfaces");
++    g_slice_free (GstMsdkSurface, msdk_surface);
++    return NULL;
 +  }
 +#else
 +  if (!gst_buffer_pool_is_active (thiz->pool) &&
@@ -139,14 +144,13 @@ index 6bce2c3afc..177276a406 100644
 +
 +  msdk_surface =
 +      gst_msdk_import_sys_mem_to_msdk_surface (out_buffer, output_state->info);
++
++  gst_video_codec_state_unref (output_state);
 +#endif
 +
 +  if (msdk_surface) {
 +    msdk_surface->buf = out_buffer;
-+  }
-+
-+  if (thiz->use_video_memory && !msdk_surface->from_qdata) {
-+    GST_ERROR ("No available surfaces");
++  } else {
 +    return NULL;
 +  }
 +
