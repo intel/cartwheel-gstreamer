@@ -1,4 +1,4 @@
-From 3217b204106bf7bd7f0bebd5642e61a72188ac6d Mon Sep 17 00:00:00 2001
+From 7448edd1e308f1f5285cd94ed6e29fb0afca01d5 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 23 Aug 2022 10:48:50 +0800
 Subject: [PATCH 23/26] msdkallocator: Use negotiated pool to alloc surfaces in
@@ -6,12 +6,12 @@ Subject: [PATCH 23/26] msdkallocator: Use negotiated pool to alloc surfaces in
 
 Use negotiated bufferpool stored in GstMsdkContext to allocate buffers
 in the callback MfxFrameAllocator:Alloc, then extract VASurface from buffer,
-wrap it as mfxMemIDs and pass these IDs to MediaSDK.
+wrap it as mfxMemIDs and pass these IDs to MediaSDK/oneVPL.
 ---
  .../sys/msdk/gstmsdkallocator.h               |   2 +-
- .../sys/msdk/gstmsdkallocator_libva.c         | 260 +++++-------------
- .../gst-plugins-bad/sys/msdk/gstmsdkcontext.c |   2 -
- 3 files changed, 64 insertions(+), 200 deletions(-)
+ .../sys/msdk/gstmsdkallocator_libva.c         | 261 +++++-------------
+ .../gst-plugins-bad/sys/msdk/gstmsdkcontext.c |  21 --
+ 3 files changed, 65 insertions(+), 219 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
 index c1ea70a3d9..b8d905095b 100644
@@ -27,10 +27,10 @@ index c1ea70a3d9..b8d905095b 100644
    VADRMPRIMESurfaceDescriptor desc;
  #else
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index 55785a180c..fadac58179 100644
+index 55785a180c..8acae9f1e6 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-@@ -45,20 +45,16 @@ mfxStatus
+@@ -45,20 +45,18 @@ mfxStatus
  gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
      mfxFrameAllocResponse * resp)
  {
@@ -50,10 +50,12 @@ index 55785a180c..fadac58179 100644
    mfxU32 fourcc = req->Info.FourCC;
    mfxU16 surfaces_num = req->NumFrameSuggested;
 +  GList *tmp_list = NULL;
++  GList *l;
++  GstMsdkSurface *tmp_surface = NULL;
  
    /* MFX_MAKEFOURCC('V','P','8','S') is used for MFX_FOURCC_VP9_SEGMAP surface
     * in MSDK and this surface is an internal surface. The external allocator
-@@ -93,158 +89,61 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
+@@ -93,158 +91,62 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
      return MFX_ERR_UNSUPPORTED;
  
    va_fourcc = gst_msdk_get_va_fourcc_from_mfx_fourcc (fourcc);
@@ -83,7 +85,27 @@ index 55785a180c..fadac58179 100644
 -      attribs[1].value.type = VAGenericValueTypeInteger;
 -      attribs[1].value.value.i = VA_SURFACE_ATTRIB_USAGE_HINT_ENCODER;
 -      num_attribs = 2;
--    }
++    GstBufferPool *pool;
++    GstVideoFormat format;
++    GstStructure *config;
++    GstVideoInfo info;
++    GstCaps *caps;
++    GstVideoAlignment align;
++
++    format = gst_msdk_get_video_format_from_mfx_fourcc (fourcc);
++    gst_video_info_set_format (&info, format, req->Info.CropW, req->Info.CropH);
++
++    gst_video_alignment_reset (&align);
++    gst_msdk_set_video_alignment
++        (&info, req->Info.Width, req->Info.Height, &align);
++    gst_video_info_align (&info, &align);
++
++    caps = gst_video_info_to_caps (&info);
++
++    pool = gst_msdk_context_get_alloc_pool (context);
++    if (!pool) {
++      return MFX_ERR_MEMORY_ALLOC;
+     }
 -#endif
 -
 -    format =
@@ -95,7 +117,7 @@ index 55785a180c..fadac58179 100644
 -#else
 -      format = VA_RT_FORMAT_YUV420_10BPP;
 -#endif
--
+ 
 -#if VA_CHECK_VERSION(1, 4, 1)
 -    if (format == VA_RT_FORMAT_YUV444 && va_fourcc == VA_FOURCC_A2R10G10B10)
 -      format = VA_RT_FORMAT_RGB32_10;
@@ -111,7 +133,15 @@ index 55785a180c..fadac58179 100644
 -#if ((MFX_VERSION >= 1031) && VA_CHECK_VERSION(1, 2, 0))
 -    if (format == VA_RT_FORMAT_YUV420 && va_fourcc == VA_FOURCC_P016)
 -      format = VA_RT_FORMAT_YUV420_12;
--
++    config = gst_buffer_pool_get_config (GST_BUFFER_POOL_CAST (pool));
++    gst_buffer_pool_config_set_params (config, caps,
++        GST_VIDEO_INFO_SIZE (&info), surfaces_num, surfaces_num);
++    gst_buffer_pool_config_add_option (config,
++        GST_BUFFER_POOL_OPTION_VIDEO_META);
++    gst_buffer_pool_config_add_option (config,
++        GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
++    gst_buffer_pool_config_set_va_alignment (config, &align);
+ 
 -    if (format == VA_RT_FORMAT_YUV422 && va_fourcc == VA_FOURCC_Y216)
 -      format = VA_RT_FORMAT_YUV422_12;
 -
@@ -134,29 +164,11 @@ index 55785a180c..fadac58179 100644
 -    if (status != MFX_ERR_NONE) {
 -      GST_WARNING ("failed to create VA surface");
 -      return status;
-+    GstBufferPool *pool;
-+    GstVideoFormat format;
-+    GstStructure *config;
-+    GstVideoInfo info;
-+    GstCaps *caps;
-+    GstVideoAlignment align;
-+
-+    format = gst_msdk_get_video_format_from_mfx_fourcc (fourcc);
-+    gst_video_info_set_format (&info, format, req->Info.CropW, req->Info.CropH);
-+
-+    gst_video_alignment_reset (&align);
-+    gst_msdk_set_video_alignment
-+        (&info, req->Info.Width, req->Info.Height, &align);
-+    gst_video_info_align (&info, &align);
-+
-+    caps = gst_video_info_to_caps (&info);
-+
-+    pool = gst_msdk_context_get_alloc_pool (context);
-+    if (!pool) {
-+      return MFX_ERR_MEMORY_ALLOC;
-     }
+-    }
++    gst_buffer_pool_set_config (pool, config);
++    gst_buffer_pool_set_active (pool, TRUE);
  
--    for (i = 0; i < surfaces_num; i++) {
+     for (i = 0; i < surfaces_num; i++) {
 -      /* Get dmabuf handle if MFX_MEMTYPE_EXPORT_FRAME */
 -      if (req->Type & MFX_MEMTYPE_EXPORT_FRAME) {
 -        VADRMPRIMESurfaceDescriptor va_desc = { 0 };
@@ -169,7 +181,8 @@ index 55785a180c..fadac58179 100644
 -            &va_desc);
 -
 -        status = gst_msdk_get_mfx_status_from_va_status (va_status);
--
++      GstBuffer *buf;
+ 
 -        if (MFX_ERR_NONE != status) {
 -          GST_ERROR ("Failed to export surface");
 -          return status;
@@ -185,15 +198,7 @@ index 55785a180c..fadac58179 100644
 -
 -        msdk_mids[i].desc = va_desc;
 -      }
-+    config = gst_buffer_pool_get_config (GST_BUFFER_POOL_CAST (pool));
-+    gst_buffer_pool_config_set_params (config, caps,
-+        GST_VIDEO_INFO_SIZE (&info), surfaces_num, surfaces_num);
-+    gst_buffer_pool_config_add_option (config,
-+        GST_BUFFER_POOL_OPTION_VIDEO_META);
-+    gst_buffer_pool_config_add_option (config,
-+        GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
-+    gst_buffer_pool_config_set_va_alignment (config, &align);
- 
+-
 -      /* Don't use image for DMABuf */
 -      msdk_mids[i].image.image_id = VA_INVALID_ID;
 -      msdk_mids[i].image.buf = VA_INVALID_ID;
@@ -212,24 +217,22 @@ index 55785a180c..fadac58179 100644
 -    gint width32 = 32 * ((req->Info.Width + 31) >> 5);
 -    gint height32 = 32 * ((req->Info.Height + 31) >> 5);
 -    guint64 codedbuf_size = (width32 * height32) * 400LL / (16 * 16);
-+    gst_buffer_pool_set_config (pool, config);
-+    gst_buffer_pool_set_active (pool, TRUE);
- 
-     for (i = 0; i < surfaces_num; i++) {
+-
+-    for (i = 0; i < surfaces_num; i++) {
 -      VABufferID coded_buf;
 -
 -      va_status = vaCreateBuffer (gst_msdk_context_get_handle (context),
 -          context_id, VAEncCodedBufferType, codedbuf_size, 1, NULL, &coded_buf);
-+      GstBuffer *buf;
- 
+-
 -      status = gst_msdk_get_mfx_status_from_va_status (va_status);
 -      if (status < MFX_ERR_NONE) {
 -        GST_ERROR ("failed to create buffer");
 -        return status;
 +      if (gst_buffer_pool_acquire_buffer (pool, &buf, NULL) != GST_FLOW_OK) {
-+        GST_ERROR ("Failed to allocate texture buffer");
++        GST_ERROR ("Failed to allocate buffer");
 +        gst_buffer_pool_set_active (pool, FALSE);
 +        gst_object_unref (pool);
++        return MFX_ERR_MEMORY_ALLOC;
        }
  
 -      surfaces[i] = coded_buf;
@@ -252,22 +255,20 @@ index 55785a180c..fadac58179 100644
    resp->mids = mids;
    resp->NumFrameActual = surfaces_num;
  
-@@ -254,6 +153,14 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
+@@ -254,6 +156,12 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
  
    gst_msdk_context_add_alloc_response (context, msdk_resp);
  
 +  /* We need to put all the buffers back to the pool */
-+  GList *l;
-+  GstMsdkSurface *tmp = NULL;
 +  for (l = tmp_list; l; l = l->next) {
-+    tmp = (GstMsdkSurface *) l->data;
-+    gst_buffer_unref (tmp->buf);
++    tmp_surface = (GstMsdkSurface *) l->data;
++    gst_buffer_unref (tmp_surface->buf);
 +  }
 +
    return status;
  }
  
-@@ -261,11 +168,6 @@ mfxStatus
+@@ -261,11 +169,6 @@ mfxStatus
  gst_msdk_frame_free (mfxHDL pthis, mfxFrameAllocResponse * resp)
  {
    GstMsdkContext *context = (GstMsdkContext *) pthis;
@@ -279,7 +280,7 @@ index 55785a180c..fadac58179 100644
    GstMsdkAllocResponse *cached = NULL;
  
    cached = gst_msdk_context_get_cached_alloc_responses (context, resp);
-@@ -279,45 +181,10 @@ gst_msdk_frame_free (mfxHDL pthis, mfxFrameAllocResponse * resp)
+@@ -279,45 +182,10 @@ gst_msdk_frame_free (mfxHDL pthis, mfxFrameAllocResponse * resp)
    if (!gst_msdk_context_remove_alloc_response (context, resp))
      return MFX_ERR_NONE;
  
@@ -327,7 +328,7 @@ index 55785a180c..fadac58179 100644
  }
  
  mfxStatus
-@@ -327,7 +194,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
+@@ -327,7 +195,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
    VAStatus va_status;
    mfxStatus status;
    mfxU8 *buf = NULL;
@@ -336,7 +337,7 @@ index 55785a180c..fadac58179 100644
    VADisplay dpy;
    GstMsdkMemoryID *mem_id;
  
-@@ -341,7 +208,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
+@@ -341,7 +209,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
    }
  
    if (mem_id->fourcc != MFX_FOURCC_P8) {
@@ -345,7 +346,7 @@ index 55785a180c..fadac58179 100644
      status = gst_msdk_get_mfx_status_from_va_status (va_status);
  
      if (status != MFX_ERR_NONE) {
-@@ -469,7 +336,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
+@@ -469,7 +337,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
    } else {
      VACodedBufferSegment *coded_buffer_segment;
      va_status =
@@ -354,7 +355,7 @@ index 55785a180c..fadac58179 100644
      status = gst_msdk_get_mfx_status_from_va_status (va_status);
      if (MFX_ERR_NONE == status)
        data->Y = (mfxU8 *) coded_buffer_segment->buf;
-@@ -501,7 +368,7 @@ gst_msdk_frame_unlock (mfxHDL pthis, mfxMemId mid, mfxFrameData * ptr)
+@@ -501,7 +369,7 @@ gst_msdk_frame_unlock (mfxHDL pthis, mfxMemId mid, mfxFrameData * ptr)
        mem_id->image.buf = VA_INVALID_ID;
      }
    } else {
@@ -363,7 +364,7 @@ index 55785a180c..fadac58179 100644
    }
  
    status = gst_msdk_get_mfx_status_from_va_status (va_status);
-@@ -518,7 +385,7 @@ gst_msdk_frame_get_hdl (mfxHDL pthis, mfxMemId mid, mfxHDL * hdl)
+@@ -518,7 +386,7 @@ gst_msdk_frame_get_hdl (mfxHDL pthis, mfxMemId mid, mfxHDL * hdl)
      return MFX_ERR_INVALID_HANDLE;
  
    mem_id = mid;
@@ -372,7 +373,7 @@ index 55785a180c..fadac58179 100644
  
    return MFX_ERR_NONE;
  }
-@@ -791,8 +658,7 @@ gst_msdk_import_to_msdk_surface (GstBuffer * buf, GstMsdkContext * msdk_context,
+@@ -791,8 +659,7 @@ gst_msdk_import_to_msdk_surface (GstBuffer * buf, GstMsdkContext * msdk_context,
    mfx_surface = g_slice_new0 (mfxFrameSurface1);
    msdk_mid = g_slice_new0 (GstMsdkMemoryID);
  
@@ -382,7 +383,7 @@ index 55785a180c..fadac58179 100644
  
    mfx_surface->Data.MemId = (mfxMemId) msdk_mid;
  
-@@ -824,7 +690,7 @@ gst_msdk_replace_mfx_memid (GstMsdkContext * context,
+@@ -824,7 +691,7 @@ gst_msdk_replace_mfx_memid (GstMsdkContext * context,
  {
    GstMsdkMemoryID *msdk_mid = NULL;
    VADisplay dpy;
@@ -391,7 +392,7 @@ index 55785a180c..fadac58179 100644
    VAStatus va_status;
    mfxStatus status = MFX_ERR_NONE;
  
-@@ -845,14 +711,14 @@ gst_msdk_replace_mfx_memid (GstMsdkContext * context,
+@@ -845,14 +712,14 @@ gst_msdk_replace_mfx_memid (GstMsdkContext * context,
  
    /* Destroy the associated VASurface */
    old_surface_id = msdk_mid->surface;
@@ -409,7 +410,7 @@ index 55785a180c..fadac58179 100644
  
    return TRUE;
  
-@@ -863,7 +729,7 @@ error_destroy_va_image:
+@@ -863,7 +730,7 @@ error_destroy_va_image:
    }
  error_destroy_va_surface:
    {
@@ -419,10 +420,36 @@ index 55785a180c..fadac58179 100644
    }
  }
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c
-index 9aee2e39dd..3eec631c30 100644
+index 9aee2e39dd..590afb52f1 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c
-@@ -591,8 +591,6 @@ gst_msdk_context_add_alloc_response (GstMsdkContext * context,
+@@ -552,25 +552,6 @@ gst_msdk_context_get_cached_alloc_responses_by_request (GstMsdkContext *
+     return NULL;
+ }
+ 
+-static void
+-create_surfaces (GstMsdkContext * context, GstMsdkAllocResponse * resp)
+-{
+-  gint i;
+-  mfxMemId *mem_id;
+-  mfxFrameSurface1 *surface;
+-
+-  for (i = 0; i < resp->response.NumFrameActual; i++) {
+-    mem_id = resp->response.mids[i];
+-    surface = (mfxFrameSurface1 *) g_slice_new0 (mfxFrameSurface1);
+-    if (!surface) {
+-      GST_ERROR ("failed to allocate surface");
+-      break;
+-    }
+-    surface->Data.MemId = mem_id;
+-    resp->surfaces_avail = g_list_prepend (resp->surfaces_avail, surface);
+-  }
+-}
+-
+ static void
+ free_surface (gpointer surface)
+ {
+@@ -591,8 +572,6 @@ gst_msdk_context_add_alloc_response (GstMsdkContext * context,
  {
    context->priv->cached_alloc_responses =
        g_list_prepend (context->priv->cached_alloc_responses, resp);
