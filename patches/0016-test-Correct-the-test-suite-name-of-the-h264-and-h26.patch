@@ -1,7 +1,7 @@
-From be31cd9a34015c5cfb31150e1e4530c8a815fe1e Mon Sep 17 00:00:00 2001
+From 069f747903b58e090847713c7fe04c2c0f1b6909 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:42:12 +0800
-Subject: [PATCH 6/9] test: Correct the test suite name of the h264 and h265
+Subject: [PATCH 14/18] test: Correct the test suite name of the h264 and h265
  bitwriter.
 
 ---
@@ -10,10 +10,10 @@ Subject: [PATCH 6/9] test: Correct the test suite name of the h264 and h265
  2 files changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/tests/check/libs/h264bitwriter.c b/subprojects/gst-plugins-bad/tests/check/libs/h264bitwriter.c
-index 17326388cd..75180766e8 100644
+index 0d1483ac81..402d783842 100644
 --- a/subprojects/gst-plugins-bad/tests/check/libs/h264bitwriter.c
 +++ b/subprojects/gst-plugins-bad/tests/check/libs/h264bitwriter.c
-@@ -525,7 +525,7 @@ GST_END_TEST;
+@@ -526,7 +526,7 @@ GST_END_TEST;
  static Suite *
  h264bitwriter_suite (void)
  {
@@ -23,7 +23,7 @@ index 17326388cd..75180766e8 100644
    TCase *tc_chain = tcase_create ("general");
  
 diff --git a/subprojects/gst-plugins-bad/tests/check/libs/h265bitwriter.c b/subprojects/gst-plugins-bad/tests/check/libs/h265bitwriter.c
-index 21101555c1..12915390b5 100644
+index 7d0852178d..00377391e1 100644
 --- a/subprojects/gst-plugins-bad/tests/check/libs/h265bitwriter.c
 +++ b/subprojects/gst-plugins-bad/tests/check/libs/h265bitwriter.c
 @@ -950,7 +950,7 @@ GST_END_TEST;

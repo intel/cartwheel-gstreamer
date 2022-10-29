@@ -1,7 +1,7 @@
-From aae77c9148f99ae74a618b1844b44788738b6035 Mon Sep 17 00:00:00 2001
+From 4eabb5d7079836f822c57fb91841d61e5d4608d0 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 6 Apr 2022 17:06:20 +0800
-Subject: [PATCH 3/8] va: Add prediction direction attribute support for H265
+Subject: [PATCH 03/18] va: Add prediction direction attribute support for H265
  encoder.
 
 ---
@@ -10,10 +10,10 @@ Subject: [PATCH 3/8] va: Add prediction direction attribute support for H265
  2 files changed, 41 insertions(+)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index 439ef0caf4..f299e4f60d 100644
+index db836e27aa..2bf06c499a 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-@@ -644,6 +644,44 @@ gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
+@@ -620,6 +620,44 @@ gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
    return TRUE;
  }
  
@@ -59,10 +59,10 @@ index 439ef0caf4..f299e4f60d 100644
  gst_va_encoder_get_rate_control_mode (GstVaEncoder * self,
      VAProfile profile, VAEntrypoint entrypoint)
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
-index dad76309f6..4250a39335 100644
+index 2152f0b78d..4d3d372391 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
-@@ -68,6 +68,9 @@ gboolean              gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
+@@ -66,6 +66,9 @@ gboolean              gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
                                                              VAEntrypoint entrypoint,
                                                              guint32 * list0,
                                                              guint32 * list1);

@@ -1,22 +1,23 @@
-From 56a9e52e20fb7b301ca2f42453061cd18579cb7e Mon Sep 17 00:00:00 2001
+From dd3d8283c600b2f829a1c3f70fca260443fc6c1e Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 25 Mar 2022 21:54:30 +0800
-Subject: [PATCH 1/8] va: Implement the vah265enc plugin for va HEVC encoding.
+Subject: [PATCH 01/18] va: Implement the vah265enc plugin for va HEVC
+ encoding.
 
 ---
- .../gst-plugins-bad/sys/va/gstvah265enc.c     | 4454 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvah265enc.c     | 4464 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvah265enc.h     |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    1 +
- 3 files changed, 4489 insertions(+)
+ 3 files changed, 4499 insertions(+)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvah265enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 new file mode 100644
-index 0000000000..88ff002f97
+index 0000000000..058f9d411f
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -0,0 +1,4454 @@
+@@ -0,0 +1,4464 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -999,7 +1000,7 @@ index 0000000000..88ff002f97
 +_h265_add_vps_header (GstVaH265Enc * self, GstVaH265EncFrame * frame)
 +{
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
-+  gsize size;
++  guint size;
 +#define VPS_SIZE 4 + GST_ROUND_UP_8 (MAX_VPS_HDR_SIZE +  \
 +      MAX_PROFILE_TIER_LEVEL_SIZE + MAX_HRD_PARAMS_SIZE) / 8
 +  guint8 packed_vps[VPS_SIZE] = { 0, };
@@ -1015,7 +1016,7 @@ index 0000000000..88ff002f97
 +  /* VPS does not have its own packed header define, just reuse
 +     VAEncPackedHeaderSequence */
 +  if (!gst_va_encoder_add_packed_header (base->encoder, frame->picture,
-+          VAEncPackedHeaderSequence, packed_vps, size, FALSE)) {
++          VAEncPackedHeaderSequence, packed_vps, size * 8, FALSE)) {
 +    GST_ERROR_OBJECT (self, "Failed to add packed VPS header.");
 +    return FALSE;
 +  }
@@ -1027,7 +1028,7 @@ index 0000000000..88ff002f97
 +_h265_add_sps_header (GstVaH265Enc * self, GstVaH265EncFrame * frame)
 +{
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
-+  gsize size;
++  guint size;
 +#define SPS_SIZE 4 + GST_ROUND_UP_8 (MAX_SPS_HDR_SIZE +                  \
 +      MAX_PROFILE_TIER_LEVEL_SIZE + 64 * MAX_SHORT_TERM_REFPICSET_SIZE + \
 +      MAX_VUI_PARAMS_SIZE + MAX_HRD_PARAMS_SIZE) / 8
@@ -1042,7 +1043,7 @@ index 0000000000..88ff002f97
 +  }
 +
 +  if (!gst_va_encoder_add_packed_header (base->encoder, frame->picture,
-+          VAEncPackedHeaderSequence, packed_sps, size, FALSE)) {
++          VAEncPackedHeaderSequence, packed_sps, size * 8, FALSE)) {
 +    GST_ERROR_OBJECT (self, "Failed to add packed SPS header.");
 +    return FALSE;
 +  }
@@ -1055,7 +1056,7 @@ index 0000000000..88ff002f97
 +    GstH265PPS * pps)
 +{
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
-+  gsize size;
++  guint size;
 +#define PPS_SIZE 4 + GST_ROUND_UP_8 (MAX_PPS_HDR_SIZE) / 8
 +  guint8 packed_pps[PPS_SIZE] = { 0, };
 +#undef PPS_SIZE
@@ -1068,7 +1069,7 @@ index 0000000000..88ff002f97
 +  }
 +
 +  if (!gst_va_encoder_add_packed_header (base->encoder, frame->picture,
-+          VAEncPackedHeaderPicture, packed_pps, size, FALSE)) {
++          VAEncPackedHeaderPicture, packed_pps, size * 8, FALSE)) {
 +    GST_ERROR_OBJECT (self, "Failed to add the packed picture header");
 +    return FALSE;
 +  }
@@ -1082,7 +1083,7 @@ index 0000000000..88ff002f97
 +{
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
 +  GstH265NalUnitType nal_type = _h265_nal_unit_type (frame);
-+  gsize size;
++  guint size;
 +#define SLICE_HDR_SIZE 4 + GST_ROUND_UP_8 (MAX_SLICE_HDR_SIZE) / 8
 +  guint8 packed_slice_hdr[SLICE_HDR_SIZE] = { 0, };
 +#undef SLICE_HDR_SIZE
@@ -1095,7 +1096,7 @@ index 0000000000..88ff002f97
 +  }
 +
 +  if (!gst_va_encoder_add_packed_header (base->encoder, frame->picture,
-+          VAEncPackedHeaderSlice, packed_slice_hdr, size, FALSE)) {
++          VAEncPackedHeaderSlice, packed_slice_hdr, size * 8, FALSE)) {
 +    GST_ERROR_OBJECT (self, "Failed to add the packed slice header");
 +    return FALSE;
 +  }
@@ -1108,7 +1109,7 @@ index 0000000000..88ff002f97
 +{
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
 +  guint8 aud_data[8] = { };
-+  gsize size;
++  guint size;
 +  guint8 pic_type = 0;
 +
 +  switch (frame->type) {
@@ -1134,7 +1135,7 @@ index 0000000000..88ff002f97
 +  }
 +
 +  if (!gst_va_encoder_add_packed_header (base->encoder, frame->picture,
-+          VAEncPackedHeaderRawData, aud_data, size, FALSE)) {
++          VAEncPackedHeaderRawData, aud_data, size * 8, FALSE)) {
 +    GST_ERROR_OBJECT (self, "Failed to add the AUD");
 +    return FALSE;
 +  }
@@ -2443,8 +2444,7 @@ index 0000000000..88ff002f97
 +    if (profile == VAProfileNone)
 +      continue;
 +
-+    if (!gst_va_encoder_has_profile_and_entrypoint (base->encoder,
-+            profile, VAEntrypointEncSlice))
++    if (!gst_va_encoder_has_profile (base->encoder, profile))
 +      continue;
 +
 +    if ((rt_format & gst_va_encoder_get_rtformat (base->encoder,
@@ -2452,7 +2452,6 @@ index 0000000000..88ff002f97
 +      continue;
 +
 +    base->profile = profile;
-+    base->entrypoint = VAEntrypointEncSlice;
 +    base->rt_format = rt_format;
 +    ret = TRUE;
 +    goto out;
@@ -2493,7 +2492,7 @@ index 0000000000..88ff002f97
 +   * hardware. */
 +  g_assert (self->num_slices >= 1);
 +  max_slices = gst_va_encoder_get_max_slice_num (base->encoder,
-+      base->profile, base->entrypoint);
++      base->profile, GST_VA_BASE_ENC_ENTRYPOINT (base));
 +  if (self->num_slices > max_slices)
 +    self->num_slices = max_slices;
 +
@@ -2507,7 +2506,7 @@ index 0000000000..88ff002f97
 +  /* Ensure trellis. */
 +  if (self->features.use_trellis &&
 +      !gst_va_encoder_has_trellis (base->encoder, base->profile,
-+          base->entrypoint)) {
++          GST_VA_BASE_ENC_ENTRYPOINT (base))) {
 +    GST_INFO_OBJECT (self, "The trellis is not supported");
 +    self->features.use_trellis = FALSE;
 +  }
@@ -2552,7 +2551,7 @@ index 0000000000..88ff002f97
 +}
 +
 +/* Estimates a good enough bitrate if none was supplied */
-+static void
++static gboolean
 +_h265_ensure_rate_control (GstVaH265Enc * self)
 +{
 +  /* User can specify the properties of: "bitrate", "target-percentage",
@@ -2605,7 +2604,7 @@ index 0000000000..88ff002f97
 +  guint32 rc_mode, quality_level, rc_ctrl;
 +
 +  quality_level = gst_va_encoder_get_quality_level (base->encoder,
-+      base->profile, base->entrypoint);
++      base->profile, GST_VA_BASE_ENC_ENTRYPOINT (base));
 +  if (self->rc.target_usage > quality_level) {
 +    GST_INFO_OBJECT (self, "User setting target-usage: %d is not supported, "
 +        "fallback to %d", self->rc.target_usage, quality_level);
@@ -2620,7 +2619,7 @@ index 0000000000..88ff002f97
 +
 +  if (rc_ctrl != VA_RC_NONE) {
 +    rc_mode = gst_va_encoder_get_rate_control_mode (base->encoder,
-+        base->profile, base->entrypoint);
++        base->profile, GST_VA_BASE_ENC_ENTRYPOINT (base));
 +    if (!(rc_mode & rc_ctrl)) {
 +      guint32 defval =
 +          G_PARAM_SPEC_ENUM (properties[PROP_RATE_CONTROL])->default_value;
@@ -2706,6 +2705,7 @@ index 0000000000..88ff002f97
 +
 +  /* Adjust the setting based on RC mode. */
 +  switch (self->rc.rc_ctrl_mode) {
++    case VA_RC_NONE:
 +    case VA_RC_CQP:
 +      self->rc.max_bitrate = 0;
 +      self->rc.target_bitrate = 0;
@@ -2738,9 +2738,17 @@ index 0000000000..88ff002f97
 +        self->gop.b_pyramid = FALSE;
 +      }
 +      break;
++    default:
++      GST_WARNING_OBJECT (self, "Unsupported rate control");
++      return FALSE;
++      break;
 +  }
 +
-+  if (self->rc.rc_ctrl_mode != VA_RC_CQP)
++  GST_DEBUG_OBJECT (self, "Max bitrate: %u bits/sec, "
++      "Target bitrate: %u bits/sec", self->rc.max_bitrate,
++      self->rc.target_bitrate);
++
++  if (self->rc.rc_ctrl_mode != VA_RC_NONE && self->rc.rc_ctrl_mode != VA_RC_CQP)
 +    _h265_calculate_bitrate_hrd (self);
 +
 +  /* notifications */
@@ -2752,6 +2760,8 @@ index 0000000000..88ff002f97
 +  update_property_uint (base, &self->prop.qp_i, self->rc.qp_i, PROP_QP_I);
 +  update_property_uint (base, &self->prop.qp_p, self->rc.qp_p, PROP_QP_P);
 +  update_property_uint (base, &self->prop.qp_b, self->rc.qp_b, PROP_QP_B);
++
++  return TRUE;
 +}
 +
 +/* Derives the level and tier from the currently set limits */
@@ -3096,7 +3106,7 @@ index 0000000000..88ff002f97
 +  }
 +
 +  if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,
-+          base->entrypoint, &list0, &list1)) {
++          GST_VA_BASE_ENC_ENTRYPOINT (base), &list0, &list1)) {
 +    GST_INFO_OBJECT (self, "Failed to get the max num reference");
 +    list0 = 1;
 +    list1 = 0;
@@ -3299,7 +3309,7 @@ index 0000000000..88ff002f97
 +  self->packed_headers = 0;
 +
 +  if (!gst_va_encoder_get_packed_headers (base->encoder, base->profile,
-+          base->entrypoint, &packed_headers))
++          GST_VA_BASE_ENC_ENTRYPOINT (base), &packed_headers))
 +    return FALSE;
 +
 +  if (desired_packed_headers & ~packed_headers) {
@@ -3374,7 +3384,7 @@ index 0000000000..88ff002f97
 +  VAConfigAttrib attrib = {.type = VAConfigAttribEncHEVCFeatures };
 +
 +  status = vaGetConfigAttributes (gst_va_display_get_va_dpy (base->display),
-+      base->profile, base->entrypoint, &attrib, 1);
++      base->profile, GST_VA_BASE_ENC_ENTRYPOINT (base), &attrib, 1);
 +  if (status != VA_STATUS_SUCCESS) {
 +    GST_INFO_OBJECT (self, "Failed to query encoding features: %s",
 +        vaErrorStr (status));
@@ -3551,7 +3561,7 @@ index 0000000000..88ff002f97
 +  VAConfigAttrib attrib = {.type = VAConfigAttribEncHEVCBlockSizes };
 +
 +  status = vaGetConfigAttributes (gst_va_display_get_va_dpy (base->display),
-+      base->profile, base->entrypoint, &attrib, 1);
++      base->profile, GST_VA_BASE_ENC_ENTRYPOINT (base), &attrib, 1);
 +  if (status != VA_STATUS_SUCCESS) {
 +    GST_INFO_OBJECT (self, "Failed to query coding block size: %s",
 +        vaErrorStr (status));
@@ -3752,7 +3762,8 @@ index 0000000000..88ff002f97
 +
 +  _h265_validate_parameters (self);
 +
-+  _h265_ensure_rate_control (self);
++  if (!_h265_ensure_rate_control (self))
++    return FALSE;
 +
 +  if (!_h265_calculate_tier_level (self))
 +    return FALSE;
@@ -3770,7 +3781,7 @@ index 0000000000..88ff002f97
 +  update_property_bool (base, &self->prop.aud, self->aud, PROP_AUD);
 +
 +  max_ref_frames = self->gop.num_ref_frames + 3 /* scratch frames */ ;
-+  if (!gst_va_encoder_open (base->encoder, base->profile, base->entrypoint,
++  if (!gst_va_encoder_open (base->encoder, base->profile,
 +          GST_VIDEO_INFO_FORMAT (&base->input_state->info), base->rt_format,
 +          self->luma_width, self->luma_height, base->codedbuf_size,
 +          max_ref_frames, self->rc.rc_ctrl_mode, self->packed_headers)) {

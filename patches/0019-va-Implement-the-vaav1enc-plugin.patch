@@ -1,23 +1,23 @@
-From 0a6fcbfdf26b0047f30455e61a31756f6c741039 Mon Sep 17 00:00:00 2001
+From c787d3931185a1f7c45c233c28e84f30a0ef1791 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:48:50 +0800
-Subject: [PATCH 9/9] va: Implement the vaav1enc plugin.
+Subject: [PATCH 17/18] va: Implement the vaav1enc plugin.
 
 ---
- .../gst-plugins-bad/sys/va/gstvaav1enc.c      | 4330 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvaav1enc.c      | 4342 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvaav1enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +
  subprojects/gst-plugins-bad/sys/va/plugin.c   |   10 +
- 4 files changed, 4377 insertions(+)
+ 4 files changed, 4389 insertions(+)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvaav1enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 new file mode 100644
-index 0000000000..6e2c188b31
+index 0000000000..81e6d01a31
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-@@ -0,0 +1,4330 @@
+@@ -0,0 +1,4342 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -1946,12 +1946,11 @@ index 0000000000..6e2c188b31
 +    VAProfile p;
 +
 +    p = g_array_index (candidates, VAProfile, i);
-+    if (!gst_va_encoder_has_profile_and_entrypoint (base->encoder,
-+            p, base->entrypoint))
++    if (!gst_va_encoder_has_profile (base->encoder, p))
 +      continue;
 +
 +    if ((base->rt_format & gst_va_encoder_get_rtformat (base->encoder,
-+                p, base->entrypoint)) == 0)
++                p, GST_VA_BASE_ENC_ENTRYPOINT (base))) == 0)
 +      continue;
 +
 +    if (p == va_profile) {
@@ -1977,7 +1976,7 @@ index 0000000000..6e2c188b31
 +  self->packed_headers = 0;
 +
 +  if (!gst_va_encoder_get_packed_headers (base->encoder, base->profile,
-+          base->entrypoint, &packed_headers))
++          GST_VA_BASE_ENC_ENTRYPOINT (base), &packed_headers))
 +    return FALSE;
 +
 +  if (desired_packed_headers & ~packed_headers) {
@@ -2011,7 +2010,7 @@ index 0000000000..6e2c188b31
 +    self->gop.gf_group_size = self->gop.keyframe_interval - 1;
 +
 +  if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,
-+          base->entrypoint, &listp_0, &list0, &list1)) {
++          GST_VA_BASE_ENC_ENTRYPOINT (base), &listp_0, &list0, &list1)) {
 +    GST_INFO_OBJECT (self, "Failed to get the max num reference");
 +    list0 = 1;
 +    list1 = 0;
@@ -2249,7 +2248,7 @@ index 0000000000..6e2c188b31
 +  attrib.type = VAConfigAttribEncAV1;
 +  attrib.value = 0;
 +  status = vaGetConfigAttributes (gst_va_display_get_va_dpy (base->display),
-+      base->profile, base->entrypoint, &attrib, 1);
++      base->profile, GST_VA_BASE_ENC_ENTRYPOINT (base), &attrib, 1);
 +  if (status != VA_STATUS_SUCCESS || attrib.value == VA_ATTRIB_NOT_SUPPORTED) {
 +    if (status != VA_STATUS_SUCCESS) {
 +      GST_INFO_OBJECT (self, "Failed to query encoding features: %s",
@@ -2326,7 +2325,7 @@ index 0000000000..6e2c188b31
 +  attrib.type = VAConfigAttribEncAV1Ext1;
 +  attrib.value = 0;
 +  status = vaGetConfigAttributes (gst_va_display_get_va_dpy (base->display),
-+      base->profile, base->entrypoint, &attrib, 1);
++      base->profile, GST_VA_BASE_ENC_ENTRYPOINT (base), &attrib, 1);
 +  if (status != VA_STATUS_SUCCESS || attrib.value == VA_ATTRIB_NOT_SUPPORTED) {
 +    if (status != VA_STATUS_SUCCESS) {
 +      GST_INFO_OBJECT (self, "Failed to query encoding feature ext1: %s",
@@ -2373,7 +2372,7 @@ index 0000000000..6e2c188b31
 +  attrib.type = VAConfigAttribEncAV1Ext2;
 +  attrib.value = 0;
 +  status = vaGetConfigAttributes (gst_va_display_get_va_dpy (base->display),
-+      base->profile, base->entrypoint, &attrib, 1);
++      base->profile, GST_VA_BASE_ENC_ENTRYPOINT (base), &attrib, 1);
 +  if (status != VA_STATUS_SUCCESS || attrib.value == VA_ATTRIB_NOT_SUPPORTED) {
 +    if (status != VA_STATUS_SUCCESS) {
 +      GST_INFO_OBJECT (self, "Failed to query encoding feature ext2: %s",
@@ -2501,7 +2500,7 @@ index 0000000000..6e2c188b31
 +}
 +
 +/* Estimates a good enough bitrate if none was supplied */
-+static void
++static gboolean
 +_av1_ensure_rate_control (GstVaAV1Enc * self)
 +{
 +  /* User can specify the properties of: "bitrate", "target-percentage",
@@ -2554,7 +2553,7 @@ index 0000000000..6e2c188b31
 +  guint32 rc_ctrl, rc_mode, quality_level;
 +
 +  quality_level = gst_va_encoder_get_quality_level (base->encoder,
-+      base->profile, base->entrypoint);
++      base->profile, GST_VA_BASE_ENC_ENTRYPOINT (base));
 +  if (self->rc.target_usage > quality_level) {
 +    GST_INFO_OBJECT (self, "User setting target-usage: %d is not supported, "
 +        "fallback to %d", self->rc.target_usage, quality_level);
@@ -2570,7 +2569,7 @@ index 0000000000..6e2c188b31
 +
 +  if (rc_ctrl != VA_RC_NONE) {
 +    rc_mode = gst_va_encoder_get_rate_control_mode (base->encoder,
-+        base->profile, base->entrypoint);
++        base->profile, GST_VA_BASE_ENC_ENTRYPOINT (base));
 +    if (!(rc_mode & rc_ctrl)) {
 +      guint32 defval =
 +          G_PARAM_SPEC_ENUM (properties[PROP_RATE_CONTROL])->default_value;
@@ -2654,6 +2653,7 @@ index 0000000000..6e2c188b31
 +
 +  /* Adjust the setting based on RC mode. */
 +  switch (self->rc.rc_ctrl_mode) {
++    case VA_RC_NONE:
 +    case VA_RC_CQP:
 +      self->rc.max_bitrate = 0;
 +      self->rc.target_bitrate = 0;
@@ -2686,9 +2686,17 @@ index 0000000000..6e2c188b31
 +        self->gop.max_level = 1;
 +      }
 +      break;
++    default:
++      GST_WARNING_OBJECT (self, "Unsupported rate control");
++      return FALSE;
++      break;
 +  }
 +
-+  if (self->rc.rc_ctrl_mode != VA_RC_CQP)
++  GST_DEBUG_OBJECT (self, "Max bitrate: %u bits/sec, "
++      "Target bitrate: %u bits/sec", self->rc.max_bitrate,
++      self->rc.target_bitrate);
++
++  if (self->rc.rc_ctrl_mode != VA_RC_NONE && self->rc.rc_ctrl_mode != VA_RC_CQP)
 +    _av1_calculate_bitrate_hrd (self);
 +
 +  /* notifications */
@@ -2698,6 +2706,8 @@ index 0000000000..6e2c188b31
 +      self->rc.target_percentage, PROP_TARGET_PERCENTAGE);
 +  update_property_uint (base, &self->prop.qp, self->rc.base_qindex, PROP_QP);
 +  update_property_uint (base, &self->prop.mbbrc, self->rc.mbbrc, PROP_MBBRC);
++
++  return TRUE;
 +}
 +
 +static gboolean
@@ -2739,7 +2749,8 @@ index 0000000000..6e2c188b31
 +  if (!_av1_decide_profile (self))
 +    return FALSE;
 +
-+  _av1_ensure_rate_control (self);
++  if (!_av1_ensure_rate_control (self))
++    return FALSE;
 +
 +  if (!_av1_calculate_level_and_tier (self))
 +    return FALSE;
@@ -2758,7 +2769,7 @@ index 0000000000..6e2c188b31
 +  _av1_calculate_coded_size (self);
 +
 +  max_ref_frames = GST_AV1_NUM_REF_FRAMES + 3 /* scratch frames */ ;
-+  if (!gst_va_encoder_open (base->encoder, base->profile, base->entrypoint,
++  if (!gst_va_encoder_open (base->encoder, base->profile,
 +          GST_VIDEO_INFO_FORMAT (&base->input_state->info), base->rt_format,
 +          base->width, base->height, base->codedbuf_size, max_ref_frames,
 +          self->rc.rc_ctrl_mode, self->packed_headers)) {
@@ -2927,7 +2938,7 @@ index 0000000000..6e2c188b31
 +    guint * size_offset)
 +{
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
-+  gsize size;
++  guint size;
 +  guint8 packed_sps[256] = { 0, };
 +
 +  size = sizeof (packed_sps);
@@ -3454,7 +3465,7 @@ index 0000000000..6e2c188b31
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
 +  VAEncPictureParameterBufferAV1 pic_param;
 +  GstAV1FrameHeaderOBU frame_hdr;
-+  gsize frame_hdr_size;
++  guint frame_hdr_size;
 +  guint8 packed_frame_hdr[512] = { 0, };
 +  guint i;
 +
@@ -3462,7 +3473,7 @@ index 0000000000..6e2c188b31
 +
 +  if (!_av1_fill_frame_param (self, va_frame, &pic_param)) {
 +    GST_ERROR_OBJECT (self, "Fails to fill the frame parameter.");
-+    return GST_FLOW_ERROR;
++    return FALSE;
 +  }
 +
 +  _av1_fill_frame_header (self, &pic_param, &frame_hdr, va_frame);
@@ -3543,8 +3554,8 @@ index 0000000000..6e2c188b31
 +_av1_add_repeat_frame_header (GstVaAV1Enc * self, GstVaAV1EncFrame * va_frame)
 +{
 +  GstAV1FrameHeaderOBU frame_hdr = { };
-+  gsize td_data_size;
-+  gsize frame_hdr_data_size;
++  guint td_data_size;
++  guint frame_hdr_data_size;
 +
 +  memset (va_frame->repeat_frame_header, 0,
 +      sizeof (va_frame->repeat_frame_header));
@@ -3577,7 +3588,7 @@ index 0000000000..6e2c188b31
 +{
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
 +  guint8 td_data[16] = { };
-+  gsize td_data_size = sizeof (td_data);
++  guint td_data_size = sizeof (td_data);
 +
 +  if (gst_av1_bit_writer_temporal_delimiter_obu (TRUE, td_data,
 +          &td_data_size) != GST_AV1_BIT_WRITER_OK) {
@@ -3683,7 +3694,8 @@ index 0000000000..6e2c188b31
 +
 +  frame_enc = _enc_frame (frame);
 +
-+  if (frame_enc->flags & FRAME_FLAG_NOT_SHOW) {
++  if (frame_enc->flags & FRAME_FLAG_NOT_SHOW &&
++      ((frame_enc->type & FRAME_TYPE_REPEAT) == 0)) {
 +    frame->pts = self->last_pts;
 +    frame->dts = self->last_dts;
 +    frame->duration = GST_CLOCK_TIME_NONE;
@@ -4051,7 +4063,7 @@ index 0000000000..6e2c188b31
 +  g_free (cdata);
 +
 +  /**
-+   * GstVaAV1Encoder:key-int-max:
++   * GstVaAV1Enc:key-int-max:
 +   *
 +   * The maximal distance between two keyframes.
 +   */
@@ -4062,7 +4074,7 @@ index 0000000000..6e2c188b31
 +      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
 +
 +  /**
-+   * GstVaAV1Encoder:gf-group-size:
++   * GstVaAV1Enc:gf-group-size:
 +   *
 +   * The size of the golden frame group.
 +   */

@@ -1,7 +1,7 @@
-From 0a60a7667bf4f1d911f9da35443eb3070afd56bf Mon Sep 17 00:00:00 2001
+From 0e4c24d972d10350a78047aadf604d37aa7072b9 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 16:27:01 +0800
-Subject: [PATCH 1/9] codecparsers: av1: delete the useless
+Subject: [PATCH 09/18] codecparsers: av1: delete the useless
  increment_tile_rows_log2 in tile info.
 
 ---
