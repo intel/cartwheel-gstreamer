@@ -1,7 +1,7 @@
-From 31f135c3b477b29d7ce3a367c8b8e7919c12e891 Mon Sep 17 00:00:00 2001
+From 13e152adf63457f612eeaf175b79c762308e0c25 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 2 May 2022 23:14:32 +0800
-Subject: [PATCH 7/8] va: Add extended formats support such as 10/12 bits,
+Subject: [PATCH 07/18] va: Add extended formats support such as 10/12 bits,
  4:2:2 and 4:4:4.
 
 ---
@@ -9,7 +9,7 @@ Subject: [PATCH 7/8] va: Add extended formats support such as 10/12 bits,
  1 file changed, 180 insertions(+), 41 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index 01f48ec008..09083b0a73 100644
+index b00ab952b2..a9080d874b 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -566,8 +566,8 @@ _h265_fill_ptl (GstVaH265Enc * self,
@@ -218,11 +218,11 @@ index 01f48ec008..09083b0a73 100644
 +  /* Just use the first HW available profile in candidate. */
 +  for (i = 0; i < chroma_candidates->len; i++) {
 +    profile = g_array_index (chroma_candidates, VAProfile, i);
-     if (!gst_va_encoder_has_profile_and_entrypoint (base->encoder,
-             profile, base->entrypoint))
+     if (!gst_va_encoder_has_profile (base->encoder, profile))
        continue;
-@@ -2488,17 +2578,23 @@ _h265_decide_profile (GstVaH265Enc * self)
-                 profile, base->entrypoint)) == 0)
+ 
+@@ -2487,17 +2577,23 @@ _h265_decide_profile (GstVaH265Enc * self)
+                 profile, GST_VA_BASE_ENC_ENTRYPOINT (base))) == 0)
        continue;
  
 +    for (j = 0; j < caps_candidates->len; j++) {
@@ -249,7 +249,7 @@ index 01f48ec008..09083b0a73 100644
    g_clear_pointer (&allowed_caps, gst_caps_unref);
  
    if (ret) {
-@@ -3066,16 +3162,35 @@ _h265_ensure_rate_control (GstVaH265Enc * self)
+@@ -3065,16 +3161,35 @@ _h265_ensure_rate_control (GstVaH265Enc * self)
    if ((self->rc.rc_ctrl_mode == VA_RC_CBR || self->rc.rc_ctrl_mode == VA_RC_VBR
            || self->rc.rc_ctrl_mode == VA_RC_VCM) && bitrate == 0) {
      /* FIXME: Provide better estimation. */
@@ -288,7 +288,7 @@ index 01f48ec008..09083b0a73 100644
    }
  
    /* Adjust the setting based on RC mode. */
-@@ -3359,11 +3474,40 @@ static void
+@@ -3369,11 +3484,40 @@ static void
  _h265_calculate_coded_size (GstVaH265Enc * self)
  {
    GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
@@ -330,7 +330,7 @@ index 01f48ec008..09083b0a73 100644
  
    /* Account for VPS header */
    codedbuf_size += 4 /* start code */  + GST_ROUND_UP_8 (MAX_VPS_HDR_SIZE +
-@@ -3381,11 +3525,6 @@ _h265_calculate_coded_size (GstVaH265Enc * self)
+@@ -3391,11 +3535,6 @@ _h265_calculate_coded_size (GstVaH265Enc * self)
    codedbuf_size += self->partition.num_slices * (4 +
        GST_ROUND_UP_8 (MAX_SLICE_HDR_SIZE + MAX_SHORT_TERM_REFPICSET_SIZE) / 8);
  

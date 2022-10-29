@@ -1,7 +1,7 @@
-From 2838d0c8c27d83519237c4e519172808fbf956b2 Mon Sep 17 00:00:00 2001
+From 23e67e35ba393ed577846410c302b5b7eadddb2b Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:39:30 +0800
-Subject: [PATCH 5/9] tests: Add the av1 bit code writer test case.
+Subject: [PATCH 13/18] tests: Add the av1 bit code writer test case.
 
 ---
  .../tests/check/libs/av1bitwriter.c           | 646 ++++++++++++++++++
@@ -11,7 +11,7 @@ Subject: [PATCH 5/9] tests: Add the av1 bit code writer test case.
 
 diff --git a/subprojects/gst-plugins-bad/tests/check/libs/av1bitwriter.c b/subprojects/gst-plugins-bad/tests/check/libs/av1bitwriter.c
 new file mode 100644
-index 0000000000..9e43ef7e46
+index 0000000000..33f95ccffc
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/tests/check/libs/av1bitwriter.c
 @@ -0,0 +1,646 @@
@@ -297,13 +297,13 @@ index 0000000000..9e43ef7e46
 +{
 +  GstAV1ParserResult res;
 +  gboolean ret;
-+  gsize size;
++  guint size;
 +  guint i;
 +  GstAV1Parser *const parser = gst_av1_parser_new ();
 +  GstAV1OBU obu;
 +  guint32 consumed;
-+  GstAV1SequenceHeaderOBU seq_header = { };
-+  GstAV1FrameHeaderOBU frame_header = { };
++  GstAV1SequenceHeaderOBU seq_header = { 0, };
++  GstAV1FrameHeaderOBU frame_header = { 0, };
 +  guint8 sequence_obu[128] = { 0, };
 +  guint8 frame_header_obu[256] = { 0, };
 +  guint8 td_obu[16] = { 0, };
@@ -587,12 +587,12 @@ index 0000000000..9e43ef7e46
 +{
 +  GstAV1ParserResult res;
 +  gboolean ret;
-+  gsize size;
++  guint size;
 +  guint i;
 +  GstAV1Parser *const parser = gst_av1_parser_new ();
 +  GstAV1OBU obu;
 +  guint32 consumed;
-+  GstAV1MetadataOBU metadata = { };
++  GstAV1MetadataOBU metadata = { 0, };
 +  guint8 meta_obu[128] = { 0, };
 +
 +  size = sizeof (meta_obu);
@@ -662,10 +662,10 @@ index 0000000000..9e43ef7e46
 +
 +GST_CHECK_MAIN (av1bitwriter);
 diff --git a/subprojects/gst-plugins-bad/tests/check/meson.build b/subprojects/gst-plugins-bad/tests/check/meson.build
-index a85d70e483..3d4570fa4e 100644
+index ac96323dfc..5e42c66f41 100644
 --- a/subprojects/gst-plugins-bad/tests/check/meson.build
 +++ b/subprojects/gst-plugins-bad/tests/check/meson.build
-@@ -89,6 +89,7 @@ base_tests = [
+@@ -90,6 +90,7 @@ base_tests = [
    [['libs/av1parser.c'], false, [gstcodecparsers_dep]],
    [['libs/h264bitwriter.c'], false, [gstcodecparsers_dep]],
    [['libs/h265bitwriter.c'], false, [gstcodecparsers_dep]],

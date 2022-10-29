@@ -1,14 +1,14 @@
-From 4a4d76068800027256b61bd19c38229d7656eac9 Mon Sep 17 00:00:00 2001
+From f91c38e5973d9f3e8fafc8b04698ef3ed03a98b3 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 4 May 2022 10:42:59 +0800
-Subject: [PATCH 8/8] va: Add H265 SCC profile support.
+Subject: [PATCH 08/18] va: Add H265 SCC profile support.
 
 ---
  .../gst-plugins-bad/sys/va/gstvah265enc.c     | 178 ++++++++++++++++--
  1 file changed, 167 insertions(+), 11 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index 09083b0a73..8c82eec4c3 100644
+index a9080d874b..46a232e6d2 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -478,6 +478,20 @@ _is_tile_enabled (GstVaH265Enc * self)
