@@ -1,0 +1,60 @@
+From 0ca9a076d82ca043ce6d3a2a6bcfcf911842aff5 Mon Sep 17 00:00:00 2001
+From: Tong Wu <tong1.wu@intel.com>
+Date: Wed, 7 Sep 2022 16:26:22 +0800
+Subject: [PATCH 39/39] msdkvpp: delete the macros to make video memory work on
+ Windows
+
+Since gst_msdk_import_to_msdk_surface has been implemented for d3d11, we
+delete the macros to make it work on Windows.
+---
+ .../gst-plugins-bad/sys/msdk/gstmsdkvpp.c     | 24 +++++++++----------
+ 1 file changed, 11 insertions(+), 13 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
+index ea99d1905f..a27f915192 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
+@@ -934,13 +934,12 @@ gst_msdkvpp_transform (GstBaseTransform * trans, GstBuffer * inbuf,
+     out_surface = g_slice_new0 (GstMsdkSurface);
+     out_surface->surface = gst_msdk_get_surface_from_buffer (outbuf);
+   } else {
+-#ifndef _WIN32
+     out_surface = gst_msdk_import_to_msdk_surface (outbuf, thiz->context,
+-        &thiz->srcpad_info, 0);
+-#else
+-    out_surface =
+-        gst_msdk_import_sys_mem_to_msdk_surface (outbuf, thiz->srcpad_info);
+-#endif
++        &thiz->srcpad_info, GST_MAP_WRITE);
++    if (!thiz->use_video_memory) {
++      out_surface =
++          gst_msdk_import_sys_mem_to_msdk_surface (outbuf, thiz->srcpad_info);
++    }
+     if (out_surface)
+       out_surface->buf = gst_buffer_ref (outbuf);
+     else {
+@@ -1027,15 +1026,14 @@ gst_msdkvpp_transform (GstBaseTransform * trans, GstBuffer * inbuf,
+         create_new_surface = TRUE;
+       } else {
+         release_out_surface (thiz, out_surface);
+-#ifndef _WIN32
+         out_surface =
+             gst_msdk_import_to_msdk_surface (outbuf_new, thiz->context,
+-            &thiz->srcpad_buffer_pool_info, 0);
+-#else
+-        out_surface =
+-            gst_msdk_import_sys_mem_to_msdk_surface (outbuf_new,
+-            thiz->srcpad_buffer_pool_info);
+-#endif
++            &thiz->srcpad_buffer_pool_info, GST_MAP_WRITE);
++        if (!thiz->use_video_memory) {
++          out_surface =
++              gst_msdk_import_sys_mem_to_msdk_surface (outbuf_new,
++              thiz->srcpad_buffer_pool_info);
++        }
+         if (out_surface) {
+           out_surface->buf = gst_buffer_ref (outbuf_new);
+           create_new_surface = TRUE;
+-- 
+2.35.1.windows.2
+
