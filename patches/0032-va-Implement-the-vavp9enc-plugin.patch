@@ -1,20 +1,18 @@
-From 96493d2bf8acec20a879d2eb274a3a1c42e468e7 Mon Sep 17 00:00:00 2001
+From 10793016a4313cc6bd2e7e8cc2181241cac8cdc5 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
-Subject: [PATCH 18/18] va: Implement the vavp9enc plugin.
+Subject: [PATCH 11/18] va: Implement the vavp9enc plugin.
 
 Also implement the VP9 bitwriter.
 ---
- .../gst/codecparsers/gstvp9bitwriter.c        |  168 +
+ .../gst/codecparsers/gstvp9bitwriter.c        |  171 +
  .../gst/codecparsers/gstvp9bitwriter.h        |   59 +
  .../gst-libs/gst/codecparsers/meson.build     |    1 +
- .../gst-plugins-bad/sys/va/gstvabaseenc.c     |   67 +-
- .../gst-plugins-bad/sys/va/gstvabaseenc.h     |    5 +-
  .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3175 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvavp9enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +-
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
- 9 files changed, 3511 insertions(+), 9 deletions(-)
+ 7 files changed, 3450 insertions(+), 1 deletion(-)
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstvp9bitwriter.c
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstvp9bitwriter.h
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
@@ -22,10 +20,10 @@ Also implement the VP9 bitwriter.
 
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstvp9bitwriter.c b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstvp9bitwriter.c
 new file mode 100644
-index 0000000000..ffedd7da62
+index 0000000000..845b68db18
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstvp9bitwriter.c
-@@ -0,0 +1,168 @@
+@@ -0,0 +1,171 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -145,7 +143,7 @@ index 0000000000..ffedd7da62
 +  GstBitWriter bw;
 +  GstVp9BitWriterResult ret = GST_VP9_BIT_WRITER_OK;
 +  guint data_sz = 0;
-+  guint i;
++  guint i, j;
 +
 +  g_return_val_if_fail (frame_num <= GST_VP9_MAX_FRAMES_IN_SUPERFRAME,
 +      GST_VP9_BIT_WRITER_ERROR);
@@ -173,8 +171,11 @@ index 0000000000..ffedd7da62
 +  /* frames_in_superframe_minus_1 */
 +  gst_bit_writer_put_bits_uint8 (&bw, frame_num - 1, 3);
 +
-+  for (i = 0; i < frame_num; i++)
-+    gst_bit_writer_put_bits_uint32 (&bw, GUINT32_TO_BE (frame_size[i]), 32);
++  for (i = 0; i < frame_num; i++) {
++    guint32 value = frame_size[i];
++    for (j = 0; j < 4; j++)
++      gst_bit_writer_put_bits_uint8 (&bw, (value >> j * 8) & 0xff, 8);
++  }
 +
 +  /* superframe_header() again */
 +  gst_bit_writer_put_bits_uint8 (&bw, GST_VP9_SUPERFRAME_MARKER, 3);
@@ -260,125 +261,20 @@ index 0000000000..f86c80d6f6
 +G_END_DECLS
 +#endif /* __GST_VP9_BIT_WRITER_H__ */
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
-index 7e968354a8..5865b373ef 100644
+index c06c2992f5..b462628604 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
-@@ -19,6 +19,7 @@ codecparser_sources = files([
+@@ -18,6 +18,7 @@ codecparser_sources = files([
+   'gstav1parser.c',
    'gsth264bitwriter.c',
    'gsth265bitwriter.c',
-   'gstav1bitwriter.c',
 +  'gstvp9bitwriter.c',
  ])
  codecparser_headers = [
    'codecparsers-prelude.h',
-diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index a31cb4ab4c..5351f5a375 100644
---- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-+++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-@@ -371,6 +371,53 @@ error:
-   return NULL;
- }
- 
-+/* Return 0 means error and -1 means not enough data. */
-+gint
-+gst_va_base_enc_copy_output_data (GstVaBaseEnc * base,
-+    GstVaEncodePicture * picture, guint8 * data, gint size)
-+{
-+  guint coded_size;
-+  VASurfaceID surface;
-+  VACodedBufferSegment *seg, *seg_list;
-+  gint ret_sz = 0;
-+
-+  /* Wait for encoding to finish */
-+  surface = gst_va_encode_picture_get_raw_surface (picture);
-+  if (!va_sync_surface (base->display, surface))
-+    goto out;
-+
-+  seg_list = NULL;
-+  if (!va_map_buffer (base->display, picture->coded_buffer,
-+          (gpointer *) & seg_list))
-+    goto out;
-+
-+  if (!seg_list) {
-+    va_unmap_buffer (base->display, picture->coded_buffer);
-+    GST_WARNING_OBJECT (base, "coded buffer has no segment list");
-+    goto out;
-+  }
-+
-+  coded_size = 0;
-+  for (seg = seg_list; seg; seg = seg->next)
-+    coded_size += seg->size;
-+
-+  if (coded_size > size) {
-+    GST_DEBUG_OBJECT (base, "Not enough space for coded data");
-+    ret_sz = -1;
-+    goto out;
-+  }
-+
-+  for (seg = seg_list; seg; seg = seg->next) {
-+    memcpy (data + ret_sz, seg->buf, seg->size);
-+    ret_sz += seg->size;
-+  }
-+
-+  va_unmap_buffer (base->display, picture->coded_buffer);
-+
-+out:
-+  return ret_sz;
-+}
-+
- static GstAllocator *
- _allocator_from_caps (GstVaBaseEnc * base, GstCaps * caps)
- {
-@@ -456,17 +503,23 @@ _push_buffer_to_downstream (GstVaBaseEnc * base, GstVideoCodecFrame * frame)
-     goto error;
-   }
- 
--  GST_LOG_OBJECT (base, "Push to downstream: frame system_frame_number: %d,"
--      " pts: %" GST_TIME_FORMAT ", dts: %" GST_TIME_FORMAT
--      " duration: %" GST_TIME_FORMAT ", buffer size: %" G_GSIZE_FORMAT,
--      frame->system_frame_number, GST_TIME_ARGS (frame->pts),
--      GST_TIME_ARGS (frame->dts), GST_TIME_ARGS (frame->duration),
--      gst_buffer_get_size (frame->output_buffer));
-+  if (frame->output_buffer)
-+    GST_LOG_OBJECT (base, "Push to downstream: frame system_frame_number: %d,"
-+        " pts: %" GST_TIME_FORMAT ", dts: %" GST_TIME_FORMAT
-+        " duration: %" GST_TIME_FORMAT ", buffer size: %" G_GSIZE_FORMAT,
-+        frame->system_frame_number, GST_TIME_ARGS (frame->pts),
-+        GST_TIME_ARGS (frame->dts), GST_TIME_ARGS (frame->duration),
-+        gst_buffer_get_size (frame->output_buffer));
- 
-   if (complete) {
-     ret = gst_video_encoder_finish_frame (GST_VIDEO_ENCODER (base), frame);
-   } else {
--    ret = gst_video_encoder_finish_subframe (GST_VIDEO_ENCODER (base), frame);
-+    if (frame->output_buffer) {
-+      ret = gst_video_encoder_finish_subframe (GST_VIDEO_ENCODER (base), frame);
-+    } else {
-+      /* Allow to output later and no data here. */
-+      ret = GST_FLOW_OK;
-+    }
-   }
-   return ret;
- 
-diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
-index 99a26c565f..a723768075 100644
---- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
-+++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
-@@ -133,7 +133,10 @@ void                  gst_va_base_enc_add_codec_tag       (GstVaBaseEnc * base,
- void                  gst_va_base_enc_reset_state         (GstVaBaseEnc * base);
- GstBuffer *           gst_va_base_enc_create_output_buffer (GstVaBaseEnc * base,
-                                                             GstVaEncodePicture * picture);
--
-+gint                  gst_va_base_enc_copy_output_data    (GstVaBaseEnc * base,
-+                                                           GstVaEncodePicture * picture,
-+                                                           guint8 * data,
-+                                                           gint size);
- void                  gst_va_base_enc_update_property_uint (GstVaBaseEnc * base,
-                                                             guint32 * old_val,
-                                                             guint32 new_val,
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 new file mode 100644
-index 0000000000..6e4c3ed2fb
+index 0000000000..b7a8126a00
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 @@ -0,0 +1,3175 @@
@@ -2009,7 +1905,7 @@ index 0000000000..6e4c3ed2fb
 +
 +  /* VP9 does not define reference list1 in spec. */
 +  if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,
-+          GST_VA_BASE_ENC_ENTRYPOINT (base), NULL, &list0, NULL)) {
++          GST_VA_BASE_ENC_ENTRYPOINT (base), &list0, NULL)) {
 +    GST_INFO_OBJECT (self, "Failed to get the max num reference");
 +    list0 = 1;
 +  }
@@ -3598,7 +3494,7 @@ index 0000000000..94db2e8e3b
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index a00ef30816..0bc61d8f89 100644
+index b12f9b3e4e..e0d479846e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
 @@ -21,6 +21,7 @@ va_sources = [
@@ -3609,7 +3505,7 @@ index a00ef30816..0bc61d8f89 100644
    'gstvavpp.c',
  ]
  
-@@ -57,7 +58,7 @@ gstva = library('gstva',
+@@ -54,7 +55,7 @@ gstva = library('gstva',
    va_sources,
    c_args : gst_plugins_bad_args + gstva_cargs,
    include_directories : [configinc],
@@ -3619,10 +3515,10 @@ index a00ef30816..0bc61d8f89 100644
    install_dir : plugins_install_dir,
  )
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index a8dc43209a..2f64daf2cb 100644
+index 937fa04e7b..d2e2648118 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
-@@ -43,6 +43,7 @@
+@@ -42,6 +42,7 @@
  #include "gstvaprofile.h"
  #include "gstvavp8dec.h"
  #include "gstvavp9dec.h"
@@ -3630,10 +3526,10 @@ index a8dc43209a..2f64daf2cb 100644
  #include "gstvavpp.h"
  
  #define GST_CAT_DEFAULT gstva_debug
-@@ -213,6 +214,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -203,6 +204,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+               device->render_device_path);
          }
          break;
- #endif
 +      case VP9:
 +        if (!gst_va_vp9_enc_register (plugin, device, sinkcaps, srccaps,
 +                GST_RANK_NONE, entrypoint)) {

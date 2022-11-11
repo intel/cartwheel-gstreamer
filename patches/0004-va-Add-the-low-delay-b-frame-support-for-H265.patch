@@ -1,4 +1,4 @@
-From e12ef96f0de1c4dad3611d71e893743d510985ae Mon Sep 17 00:00:00 2001
+From bff51fb8c5a6dc126d4034112c20eb554a519ec2 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 18 Apr 2022 22:36:09 +0800
 Subject: [PATCH 04/18] va: Add the low-delay-b frame support for H265.
@@ -8,7 +8,7 @@ Subject: [PATCH 04/18] va: Add the low-delay-b frame support for H265.
  1 file changed, 73 insertions(+), 12 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index 058f9d411f..60ee03eb7c 100644
+index 29f9f2dfaa..bac096f9ee 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -277,6 +277,7 @@ struct _GstVaH265Enc
@@ -115,7 +115,7 @@ index 058f9d411f..60ee03eb7c 100644
    self->gop.highest_pyramid_level = 0;
    memset (self->gop.frame_types, 0, sizeof (self->gop.frame_types));
    self->gop.cur_frame_index = 0;
-@@ -2939,8 +2963,13 @@ _h265_print_gop_structure (GstVaH265Enc * self)
+@@ -2940,8 +2964,13 @@ _h265_print_gop_structure (GstVaH265Enc * self)
        g_string_append_printf (str, ", ");
      }
  
@@ -131,7 +131,7 @@ index 058f9d411f..60ee03eb7c 100644
  
      if (self->gop.b_pyramid
          && self->gop.frame_types[i].slice_type == GST_H265_B_SLICE) {
-@@ -3041,13 +3070,14 @@ _get_log2_max_num (guint num)
+@@ -3042,13 +3071,14 @@ _get_log2_max_num (guint num)
  /* Consider the idr_period, num_bframes, L0/L1 reference number.
   * TODO: Load some preset fixed GOP structure.
   * TODO: Skip this if in lookahead mode. */
@@ -147,7 +147,7 @@ index 058f9d411f..60ee03eb7c 100644
  
    /* If not set, generate a idr every second */
    if (self->gop.idr_period == 0) {
-@@ -3098,12 +3128,40 @@ _h265_generate_gop_structure (GstVaH265Enc * self)
+@@ -3099,12 +3129,40 @@ _h265_generate_gop_structure (GstVaH265Enc * self)
  
    forward_num = list0;
    backward_num = list1;
@@ -189,7 +189,7 @@ index 058f9d411f..60ee03eb7c 100644
    if (forward_num == 0) {
      GST_INFO_OBJECT (self,
          "No reference support, fallback to intra only stream");
-@@ -3274,6 +3332,8 @@ create_poc:
+@@ -3275,6 +3333,8 @@ create_poc:
        self->gop.num_bframes, PROP_BFRAMES);
    update_property_bool (base, &self->prop.b_pyramid,
        self->gop.b_pyramid, PROP_B_PYRAMID);
@@ -198,7 +198,7 @@ index 058f9d411f..60ee03eb7c 100644
  }
  
  static gboolean
-@@ -3748,7 +3808,8 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+@@ -3778,7 +3838,8 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
    if (!_h265_calculate_tier_level (self))
      return FALSE;
  

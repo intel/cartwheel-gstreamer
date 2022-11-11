@@ -1,4 +1,4 @@
-From c787d3931185a1f7c45c233c28e84f30a0ef1791 Mon Sep 17 00:00:00 2001
+From 2e23fc68bd14c3e49fbbc59e35906055b2c668b4 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:48:50 +0800
 Subject: [PATCH 17/18] va: Implement the vaav1enc plugin.
@@ -14,7 +14,7 @@ Subject: [PATCH 17/18] va: Implement the vaav1enc plugin.
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 new file mode 100644
-index 0000000000..81e6d01a31
+index 0000000000..4ce400f8d4
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 @@ -0,0 +1,4342 @@
@@ -2984,7 +2984,7 @@ index 0000000000..81e6d01a31
 +
 +  /* Prefer to let the driver make decision. */
 +  reference_mode = frame_is_intra ? 0 : (va_frame->bidir_ref ? 2 : 0);
-+  
++
 +  if (va_frame->type != GST_AV1_INTER_FRAME) {
 +    primary_ref_frame = GST_AV1_PRIMARY_REF_NONE;
 +  } else {
@@ -4401,10 +4401,10 @@ index 0000000000..4ebb3b5771
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index b12f9b3e4e..a00ef30816 100644
+index e0d479846e..0bc61d8f89 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
-@@ -39,6 +39,9 @@ cdata.set10('HAVE_GUDEV', libgudev_dep.found())
+@@ -40,6 +40,9 @@ cdata.set10('HAVE_GUDEV', libgudev_dep.found())
  if libva_dep.version().version_compare('>= 1.8')
    va_sources += 'gstvaav1dec.c'
  endif
@@ -4415,7 +4415,7 @@ index b12f9b3e4e..a00ef30816 100644
  driverdir = libva_dep.get_variable('driverdir', default_value: '')
  if driverdir == ''
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index 937fa04e7b..a8dc43209a 100644
+index d2e2648118..1de6e4fc86 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -28,6 +28,7 @@
@@ -4426,7 +4426,7 @@ index 937fa04e7b..a8dc43209a 100644
  #include "gstvacaps.h"
  #include "gstvacompositor.h"
  #include "gstvadeinterlace.h"
-@@ -203,6 +204,15 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -211,6 +212,15 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
                device->render_device_path);
          }
          break;

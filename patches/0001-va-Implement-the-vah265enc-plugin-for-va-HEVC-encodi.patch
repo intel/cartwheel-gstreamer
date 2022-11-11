@@ -1,23 +1,23 @@
-From dd3d8283c600b2f829a1c3f70fca260443fc6c1e Mon Sep 17 00:00:00 2001
+From 09d604f91bb183a0c6cdfdd2cdf54f095a5d7838 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 25 Mar 2022 21:54:30 +0800
 Subject: [PATCH 01/18] va: Implement the vah265enc plugin for va HEVC
  encoding.
 
 ---
- .../gst-plugins-bad/sys/va/gstvah265enc.c     | 4464 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvah265enc.c     | 4524 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvah265enc.h     |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    1 +
- 3 files changed, 4499 insertions(+)
+ 3 files changed, 4559 insertions(+)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvah265enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 new file mode 100644
-index 0000000000..058f9d411f
+index 0000000000..29f9f2dfaa
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -0,0 +1,4464 @@
+@@ -0,0 +1,4524 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -2370,7 +2370,8 @@ index 0000000000..058f9d411f
 +}
 +
 +static gboolean
-+_h265_decide_profile (GstVaH265Enc * self)
++_h265_decide_profile (GstVaH265Enc * self, VAProfile * _profile,
++    guint * _rt_format)
 +{
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
 +  gboolean ret = FALSE;
@@ -2451,8 +2452,8 @@ index 0000000000..058f9d411f
 +                profile, VAEntrypointEncSlice)) == 0)
 +      continue;
 +
-+    base->profile = profile;
-+    base->rt_format = rt_format;
++    *_profile = profile;
++    *_rt_format = rt_format;
 +    ret = TRUE;
 +    goto out;
 +  }
@@ -3688,14 +3689,46 @@ index 0000000000..058f9d411f
 +{
 +  GstVideoEncoder *venc = GST_VIDEO_ENCODER (base);
 +  GstVaH265Enc *self = GST_VA_H265_ENC (base);
-+  GstCaps *out_caps;
-+  guint max_ref_frames;
-+  GstVideoCodecState *output_state;
++  GstCaps *out_caps, *reconf_caps = NULL;;
++  GstVideoCodecState *output_state = NULL;
++  GstVideoFormat format, reconf_format = GST_VIDEO_FORMAT_UNKNOWN;
++  VAProfile profile = VAProfileNone;
++  gboolean do_renegotiation = TRUE, do_reopen, need_negotiation;
++  guint max_ref_frames, max_surfaces = 0, rt_format = 0, codedbuf_size;
++  gint width, height;
++
++  width = GST_VIDEO_INFO_WIDTH (&base->input_state->info);
++  height = GST_VIDEO_INFO_HEIGHT (&base->input_state->info);
++  format = GST_VIDEO_INFO_FORMAT (&base->input_state->info);
++  codedbuf_size = base->codedbuf_size;
++
++  need_negotiation =
++      !gst_va_encoder_get_reconstruct_pool_config (base->encoder, &reconf_caps,
++      &max_surfaces);
++  if (!need_negotiation && reconf_caps) {
++    GstVideoInfo vi;
++    if (!gst_video_info_from_caps (&vi, reconf_caps))
++      return FALSE;
++    reconf_format = GST_VIDEO_INFO_FORMAT (&vi);
++  }
++
++  if (!_h265_decide_profile (self, &profile, &rt_format))
++    return FALSE;
++
++  /* first check */
++  do_reopen = !(base->profile == profile && base->rt_format == rt_format
++      && format == reconf_format && width == base->width
++      && height == base->height && self->prop.rc_ctrl == self->rc.rc_ctrl_mode);
++
++  if (do_reopen && gst_va_encoder_is_open (base->encoder))
++    gst_va_encoder_close (base->encoder);
 +
 +  gst_va_base_enc_reset_state (base);
 +
-+  base->width = GST_VIDEO_INFO_WIDTH (&base->input_state->info);
-+  base->height = GST_VIDEO_INFO_HEIGHT (&base->input_state->info);
++  base->profile = profile;
++  base->rt_format = rt_format;
++  base->width = width;
++  base->height = height;
 +
 +  self->luma_width = GST_ROUND_UP_16 (base->width);
 +  self->luma_height = GST_ROUND_UP_16 (base->height);
@@ -3716,9 +3749,6 @@ index 0000000000..058f9d411f
 +    self->conf_win_bottom_offset =
 +        (self->luma_height - base->height) / SubHeightC[index];
 +  }
-+
-+  if (!_h265_decide_profile (self))
-+    return FALSE;
 +
 +  _h265_set_coding_block_size (self);
 +
@@ -3781,10 +3811,18 @@ index 0000000000..058f9d411f
 +  update_property_bool (base, &self->prop.aud, self->aud, PROP_AUD);
 +
 +  max_ref_frames = self->gop.num_ref_frames + 3 /* scratch frames */ ;
-+  if (!gst_va_encoder_open (base->encoder, base->profile,
-+          GST_VIDEO_INFO_FORMAT (&base->input_state->info), base->rt_format,
-+          self->luma_width, self->luma_height, base->codedbuf_size,
-+          max_ref_frames, self->rc.rc_ctrl_mode, self->packed_headers)) {
++
++  /* second check after calculations */
++  do_reopen |=
++      !(max_ref_frames == max_surfaces && codedbuf_size == base->codedbuf_size);
++  if (do_reopen && gst_va_encoder_is_open (base->encoder))
++    gst_va_encoder_close (base->encoder);
++
++  if (!gst_va_encoder_is_open (base->encoder)
++      && !gst_va_encoder_open (base->encoder, base->profile,
++          format, base->rt_format, self->luma_width, self->luma_height,
++          base->codedbuf_size, max_ref_frames, self->rc.rc_ctrl_mode,
++          self->packed_headers)) {
 +    GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
 +    return FALSE;
 +  }
@@ -3803,6 +3841,21 @@ index 0000000000..058f9d411f
 +  gst_caps_set_simple (out_caps, "width", G_TYPE_INT, base->width,
 +      "height", G_TYPE_INT, base->height, "alignment", G_TYPE_STRING, "au",
 +      "stream-format", G_TYPE_STRING, "byte-stream", NULL);
++
++  if (!need_negotiation) {
++    output_state = gst_video_encoder_get_output_state (venc);
++    do_renegotiation = TRUE;
++
++    if (output_state) {
++      do_renegotiation = !gst_caps_is_subset (output_state->caps, out_caps);
++      gst_video_codec_state_unref (output_state);
++    }
++
++    if (!do_renegotiation) {
++      gst_caps_unref (out_caps);
++      return TRUE;
++    }
++  }
 +
 +  GST_DEBUG_OBJECT (self, "output caps is %" GST_PTR_FORMAT, out_caps);
 +
@@ -3916,12 +3969,7 @@ index 0000000000..058f9d411f
 +{
 +  GstVaH265Enc *const self = GST_VA_H265_ENC (object);
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
-+
-+  if (base->encoder && gst_va_encoder_is_open (base->encoder)) {
-+    GST_ERROR_OBJECT (object,
-+        "failed to set any property after encoding started");
-+    return;
-+  }
++  gboolean already_effect = FALSE;
 +
 +  GST_OBJECT_LOCK (self);
 +
@@ -3952,12 +4000,18 @@ index 0000000000..058f9d411f
 +      break;
 +    case PROP_QP_I:
 +      self->prop.qp_i = g_value_get_uint (value);
++      g_atomic_int_set (&GST_VA_BASE_ENC (self)->reconf, TRUE);
++      already_effect = TRUE;
 +      break;
 +    case PROP_QP_P:
 +      self->prop.qp_p = g_value_get_uint (value);
++      g_atomic_int_set (&GST_VA_BASE_ENC (self)->reconf, TRUE);
++      already_effect = TRUE;
 +      break;
 +    case PROP_QP_B:
 +      self->prop.qp_b = g_value_get_uint (value);
++      g_atomic_int_set (&GST_VA_BASE_ENC (self)->reconf, TRUE);
++      already_effect = TRUE;
 +      break;
 +    case PROP_TRELLIS:
 +      self->prop.use_trellis = g_value_get_boolean (value);
@@ -3986,15 +4040,23 @@ index 0000000000..058f9d411f
 +    }
 +    case PROP_BITRATE:
 +      self->prop.bitrate = g_value_get_uint (value);
++      g_atomic_int_set (&GST_VA_BASE_ENC (self)->reconf, TRUE);
++      already_effect = TRUE;
 +      break;
 +    case PROP_TARGET_PERCENTAGE:
 +      self->prop.target_percentage = g_value_get_uint (value);
++      g_atomic_int_set (&GST_VA_BASE_ENC (self)->reconf, TRUE);
++      already_effect = TRUE;
 +      break;
 +    case PROP_TARGET_USAGE:
 +      self->prop.target_usage = g_value_get_uint (value);
++      g_atomic_int_set (&GST_VA_BASE_ENC (self)->reconf, TRUE);
++      already_effect = TRUE;
 +      break;
 +    case PROP_RATE_CONTROL:
 +      self->prop.rc_ctrl = g_value_get_enum (value);
++      g_atomic_int_set (&GST_VA_BASE_ENC (self)->reconf, TRUE);
++      already_effect = TRUE;
 +      break;
 +    case PROP_CPB_SIZE:
 +      self->prop.cpb_size = g_value_get_uint (value);
@@ -4004,6 +4066,14 @@ index 0000000000..058f9d411f
 +  }
 +
 +  GST_OBJECT_UNLOCK (self);
++
++#ifndef GST_DISABLE_GST_DEBUG
++  if (!already_effect &&
++      base->encoder && gst_va_encoder_is_open (base->encoder)) {
++    GST_WARNING_OBJECT (self, "Property `%s` change ignored while processing.",
++        pspec->name);
++  }
++#endif
 +}
 +
 +static void
@@ -4094,6 +4164,8 @@ index 0000000000..058f9d411f
 +  struct CData *cdata = class_data;
 +  gchar *long_name;
 +  gint n_props = N_PROPERTIES;
++  GParamFlags param_flags =
++      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT;
 +
 +  if (cdata->description) {
 +    long_name = g_strdup_printf ("VA-API H.265 Encoder in %s",
@@ -4180,8 +4252,7 @@ index 0000000000..058f9d411f
 +  properties[PROP_KEY_INT_MAX] = g_param_spec_uint ("key-int-max",
 +      "Key frame maximal interval",
 +      "The maximal distance between two keyframes. It decides the size of GOP"
-+      " (0: auto-calculate)", 0, MAX_GOP_SIZE, 0,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      " (0: auto-calculate)", 0, MAX_GOP_SIZE, 0, param_flags);
 +
 +  /**
 +   * GstVaH265Enc:b-frames:
@@ -4190,7 +4261,7 @@ index 0000000000..058f9d411f
 +   */
 +  properties[PROP_BFRAMES] = g_param_spec_uint ("b-frames", "B Frames",
 +      "Number of B frames between I and P reference frames", 0, 31, 0,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      param_flags);
 +
 +  /**
 +   * GstVaH265Enc:i-frames:
@@ -4199,8 +4270,7 @@ index 0000000000..058f9d411f
 +   */
 +  properties[PROP_IFRAMES] = g_param_spec_uint ("i-frames", "I Frames",
 +      "Force the number of I frames insertion within one GOP, not including the "
-+      "first IDR frame", 0, 1023, 0,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      "first IDR frame", 0, 1023, 0, param_flags);
 +
 +  /* The VA only define 15 refs */
 +  /**
@@ -4211,7 +4281,7 @@ index 0000000000..058f9d411f
 +  properties[PROP_NUM_REF_FRAMES] = g_param_spec_uint ("ref-frames",
 +      "Number of Reference Frames",
 +      "Number of reference frames, including both the forward and the backward",
-+      0, 15, 3, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      0, 15, 3, param_flags);
 +
 +  /**
 +   * GstVaH265Enc:b-pyramid:
@@ -4220,7 +4290,7 @@ index 0000000000..058f9d411f
 +   */
 +  properties[PROP_B_PYRAMID] = g_param_spec_boolean ("b-pyramid", "b pyramid",
 +      "Enable the b-pyramid reference structure in the GOP", FALSE,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      param_flags);
 +
 +  /**
 +   * GstVaH265Enc:num-slices:
@@ -4228,8 +4298,7 @@ index 0000000000..058f9d411f
 +   * The number of slices per frame.
 +   */
 +  properties[PROP_NUM_SLICES] = g_param_spec_uint ("num-slices",
-+      "Number of Slices", "Number of slices per frame", 1, 200, 1,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      "Number of Slices", "Number of slices per frame", 1, 200, 1, param_flags);
 +
 +  /**
 +   * GstVaH265Enc:max-qp:
@@ -4237,8 +4306,7 @@ index 0000000000..058f9d411f
 +   * The maximum quantizer value.
 +   */
 +  properties[PROP_MAX_QP] = g_param_spec_uint ("max-qp", "Maximum QP",
-+      "Maximum quantizer value for each frame", 0, 51, 51,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      "Maximum quantizer value for each frame", 0, 51, 51, param_flags);
 +
 +  /**
 +   * GstVaH265Enc:min-qp:
@@ -4246,8 +4314,7 @@ index 0000000000..058f9d411f
 +   * The minimum quantizer value.
 +   */
 +  properties[PROP_MIN_QP] = g_param_spec_uint ("min-qp", "Minimum QP",
-+      "Minimum quantizer value for each frame", 0, 51, 1,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      "Minimum quantizer value for each frame", 0, 51, 1, param_flags);
 +
 +  /**
 +   * GstVaH265Enc:qpi:
@@ -4258,7 +4325,7 @@ index 0000000000..058f9d411f
 +  properties[PROP_QP_I] = g_param_spec_uint ("qpi", "I Frame QP",
 +      "The quantizer value for I frame. In CQP mode, it specifies the QP of I "
 +      "frame, in other mode, it specifies the init QP of all frames", 0, 51, 26,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      param_flags | GST_PARAM_MUTABLE_PLAYING);
 +
 +  /**
 +   * GstVaH265Enc:qpp:
@@ -4268,8 +4335,7 @@ index 0000000000..058f9d411f
 +  properties[PROP_QP_P] = g_param_spec_uint ("qpp",
 +      "The quantizer value for P frame",
 +      "The quantizer value for P frame. This is available only in CQP mode",
-+      0, 51, 26,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      0, 51, 26, param_flags | GST_PARAM_MUTABLE_PLAYING);
 +
 +  /**
 +   * GstVaH265Enc:qpb:
@@ -4279,8 +4345,7 @@ index 0000000000..058f9d411f
 +  properties[PROP_QP_B] = g_param_spec_uint ("qpb",
 +      "The quantizer value for B frame",
 +      "The quantizer value for B frame. This is available only in CQP mode",
-+      0, 51, 26,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      0, 51, 26, param_flags | GST_PARAM_MUTABLE_PLAYING);
 +
 +  /**
 +   * GstVaH265Enc:trellis:
@@ -4289,8 +4354,7 @@ index 0000000000..058f9d411f
 +   * Trellis is an improved quantization algorithm.
 +   */
 +  properties[PROP_TRELLIS] = g_param_spec_boolean ("trellis", "Enable trellis",
-+      "Enable the trellis quantization method", FALSE,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      "Enable the trellis quantization method", FALSE, param_flags);
 +
 +  /**
 +   * GstVaH265Enc:aud:
@@ -4298,8 +4362,7 @@ index 0000000000..058f9d411f
 +   * Insert the AU (Access Unit) delimeter for each frame.
 +   */
 +  properties[PROP_AUD] = g_param_spec_boolean ("aud", "Insert AUD",
-+      "Insert AU (Access Unit) delimeter for each frame", FALSE,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      "Insert AU (Access Unit) delimeter for each frame", FALSE, param_flags);
 +
 +  /**
 +   * GstVaH265Enc:mbbrc:
@@ -4310,8 +4373,7 @@ index 0000000000..058f9d411f
 +  properties[PROP_MBBRC] = g_param_spec_enum ("mbbrc",
 +      "Macroblock level Bitrate Control",
 +      "Macroblock level Bitrate Control. It is not compatible with CQP",
-+      GST_TYPE_VA_FEATURE, GST_VA_FEATURE_AUTO,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      GST_TYPE_VA_FEATURE, GST_VA_FEATURE_AUTO, param_flags);
 +
 +  /**
 +   * GstVaH265Enc:bitrate:
@@ -4327,8 +4389,7 @@ index 0000000000..058f9d411f
 +   */
 +  properties[PROP_BITRATE] = g_param_spec_uint ("bitrate", "Bitrate (kbps)",
 +      "The desired bitrate expressed in kbps (0: auto-calculate)",
-+      0, 2000 * 1024, 0,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      0, 2000 * 1024, 0, param_flags | GST_PARAM_MUTABLE_PLAYING);
 +
 +  /**
 +   * GstVaH265Enc:target-percentage:
@@ -4342,8 +4403,7 @@ index 0000000000..058f9d411f
 +  properties[PROP_TARGET_PERCENTAGE] = g_param_spec_uint ("target-percentage",
 +      "target bitrate percentage",
 +      "The percentage for 'target bitrate'/'maximum bitrate' (Only in VBR)",
-+      50, 100, 66,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      50, 100, 66, param_flags | GST_PARAM_MUTABLE_PLAYING);
 +
 +  /**
 +   * GstVaH265Enc:target-usage:
@@ -4355,7 +4415,7 @@ index 0000000000..058f9d411f
 +  properties[PROP_TARGET_USAGE] = g_param_spec_uint ("target-usage",
 +      "target usage",
 +      "The target usage to control and balance the encoding speed/quality",
-+      1, 7, 4, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      1, 7, 4, param_flags | GST_PARAM_MUTABLE_PLAYING);
 +
 +  /**
 +   * GstVaH265Enc:cpb-size:
@@ -4365,15 +4425,15 @@ index 0000000000..058f9d411f
 +  properties[PROP_CPB_SIZE] = g_param_spec_uint ("cpb-size",
 +      "max CPB size in Kb",
 +      "The desired max CPB size in Kb (0: auto-calculate)", 0, 2000 * 1024, 0,
-+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++      param_flags);
 +
 +  if (vah265enc_class->rate_control_type > 0) {
 +    properties[PROP_RATE_CONTROL] = g_param_spec_enum ("rate-control",
 +        "rate control mode", "The desired rate control mode for the encoder",
 +        vah265enc_class->rate_control_type,
 +        vah265enc_class->rate_control[0].value,
-+        GST_PARAM_CONDITIONALLY_AVAILABLE | G_PARAM_READWRITE
-+        | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT);
++        GST_PARAM_CONDITIONALLY_AVAILABLE | GST_PARAM_MUTABLE_PLAYING
++        | param_flags);
 +  } else {
 +    n_props--;
 +    properties[PROP_RATE_CONTROL] = NULL;

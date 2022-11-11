@@ -1,7 +1,7 @@
-From 66c3c3771f9feb432c468c4185a3c62ab56ec007 Mon Sep 17 00:00:00 2001
+From a40780727db46bbf28635484c971f301002db08c Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 11:17:25 +0800
-Subject: [PATCH 11/18] codecparsers: av1: add ref_global_motion_params in
+Subject: [PATCH 14/18] codecparsers: av1: add ref_global_motion_params in
  frame header.
 
 In order to ease the AV1 bit writer to write the global_motion_params
