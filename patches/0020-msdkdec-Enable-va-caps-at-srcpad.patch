@@ -1,4 +1,4 @@
-From 1faca1c41a2e4e12904ee7c594052cc83c1c9116 Mon Sep 17 00:00:00 2001
+From 79d51dd275168316a164d8740bb9b0270053b113 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Wed, 8 Jun 2022 17:13:47 +0800
 Subject: [PATCH 20/26] msdkdec: Enable va caps at srcpad
@@ -45,7 +45,7 @@ index 5e3ab9e08b..46cb9f18f2 100644
  #define gst_msdkav1dec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkAV1Dec, gst_msdkav1dec, GST_TYPE_MSDKDEC);
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 4729d62a3e..6bce2c3afc 100644
+index ba9c444c21..ce2c0d5f8e 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -41,6 +41,10 @@
@@ -59,7 +59,7 @@ index 4729d62a3e..6bce2c3afc 100644
  GST_DEBUG_CATEGORY_EXTERN (gst_msdkdec_debug);
  #define GST_CAT_DEFAULT gst_msdkdec_debug
  
-@@ -553,16 +557,20 @@ _gst_caps_has_feature (const GstCaps * caps, const gchar * feature)
+@@ -564,16 +568,20 @@ _gst_caps_has_feature (const GstCaps * caps, const gchar * feature)
  }
  
  static gboolean
@@ -85,7 +85,7 @@ index 4729d62a3e..6bce2c3afc 100644
    if (!out_caps)
      goto done;
  
-@@ -570,9 +578,8 @@ srcpad_can_dmabuf (GstMsdkDec * thiz)
+@@ -581,9 +589,8 @@ srcpad_can_dmabuf (GstMsdkDec * thiz)
        || out_caps == caps)
      goto done;
  
@@ -96,7 +96,7 @@ index 4729d62a3e..6bce2c3afc 100644
  done:
    if (caps)
      gst_caps_unref (caps);
-@@ -734,10 +741,16 @@ gst_msdkdec_set_src_caps (GstMsdkDec * thiz, gboolean need_allocation)
+@@ -745,10 +752,16 @@ gst_msdkdec_set_src_caps (GstMsdkDec * thiz, gboolean need_allocation)
      gst_msdk_set_video_alignment (vinfo, alloc_w, alloc_h, &align);
    gst_video_info_align (vinfo, &align);
    output_state->caps = gst_video_info_to_caps (vinfo);
