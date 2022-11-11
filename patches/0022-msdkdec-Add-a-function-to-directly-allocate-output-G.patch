@@ -1,4 +1,4 @@
-From 48c70a60b44ba04db547754a2bff97c87d333cd2 Mon Sep 17 00:00:00 2001
+From 3dd6aca5c9c57cd4c60501feeda65949d79bfdd2 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 22 Aug 2022 18:33:35 +0800
 Subject: [PATCH 22/26] msdkdec: Add a function to directly allocate output
@@ -8,9 +8,9 @@ Subject: [PATCH 22/26] msdkdec: Add a function to directly allocate output
  .../sys/msdk/gstmsdkallocator.c               | 12 +++
  .../sys/msdk/gstmsdkallocator.h               |  3 +
  .../sys/msdk/gstmsdkallocator_libva.c         | 11 ---
- .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 74 +++++++++++++++++++
+ .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 73 +++++++++++++++++++
  .../gst-plugins-bad/sys/msdk/gstmsdkdec.h     |  1 +
- 5 files changed, 90 insertions(+), 11 deletions(-)
+ 5 files changed, 89 insertions(+), 11 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.c
 index 2ea71325d7..7249fc8c4f 100644
@@ -33,12 +33,12 @@ index 2ea71325d7..7249fc8c4f 100644
 +  return g_quark;
 +}
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
-index 9035b548bf..c1ea70a3d9 100644
+index 53bbdda595..9ce84af6c0 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
-@@ -75,6 +75,9 @@ mfxStatus gst_msdk_frame_get_hdl(mfxHDL pthis, mfxMemId mid, mfxHDL *hdl);
- 
- void gst_msdk_set_frame_allocator (GstMsdkContext * context);
+@@ -78,6 +78,9 @@ GstMsdkSurface *
+ gst_msdk_import_to_msdk_surface (GstBuffer * buf, GstMsdkContext * msdk_context,
+     GstVideoInfo * vinfo, guint map_flag);
  
 +GQuark
 +gst_msdk_frame_surface_quark_get (void);
@@ -47,7 +47,7 @@ index 9035b548bf..c1ea70a3d9 100644
  
  #endif /* GST_MSDK_ALLOCATOR_H_ */
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index 22c7ebb80a..55785a180c 100644
+index b1a2d29a9e..e9f0125bae 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 @@ -40,17 +40,6 @@
@@ -69,7 +69,7 @@ index 22c7ebb80a..55785a180c 100644
  mfxStatus
  gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 6bce2c3afc..57b8c6b896 100644
+index ce2c0d5f8e..4a8157804d 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -42,6 +42,7 @@
@@ -89,7 +89,7 @@ index 6bce2c3afc..57b8c6b896 100644
  #define gst_msdkdec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkDec, gst_msdkdec, GST_TYPE_VIDEO_DECODER);
  
-@@ -286,6 +289,77 @@ failed_unref_buffer:
+@@ -286,6 +289,76 @@ failed_unref_buffer:
    return NULL;
  }
  
@@ -107,7 +107,7 @@ index 6bce2c3afc..57b8c6b896 100644
 +   * surfaces will be moved from used list to available list */
 +  gst_msdkdec_free_unlocked_msdk_surfaces (thiz);
 +#ifndef _WIN32
-+  if ((gst_buffer_pool_acquire_buffer (thiz->alloc_pool, &out_buffer, 0))
++  if ((gst_buffer_pool_acquire_buffer (thiz->alloc_pool, &out_buffer, NULL))
 +      != GST_FLOW_OK) {
 +    GST_ERROR_OBJECT (thiz, "Failed to allocate output buffer");
 +    return NULL;
@@ -133,7 +133,7 @@ index 6bce2c3afc..57b8c6b896 100644
 +    return NULL;
 +  }
 +
-+  if ((gst_buffer_pool_acquire_buffer (thiz->pool, &out_buffer, 0))
++  if ((gst_buffer_pool_acquire_buffer (thiz->pool, &out_buffer, NULL))
 +      != GST_FLOW_OK) {
 +    GST_ERROR_OBJECT (thiz, "Failed to allocate output buffer");
 +    return NULL;
@@ -146,13 +146,12 @@ index 6bce2c3afc..57b8c6b896 100644
 +      gst_msdk_import_sys_mem_to_msdk_surface (out_buffer, output_state->info);
 +
 +  gst_video_codec_state_unref (output_state);
++
++  if (!msdk_surface)
++    return NULL;
 +#endif
 +
-+  if (msdk_surface) {
-+    msdk_surface->buf = out_buffer;
-+  } else {
-+    return NULL;
-+  }
++  msdk_surface->buf = out_buffer;
 +
 +  if (!thiz->sfc)
 +    gst_msdk_update_mfx_frame_info_from_mfx_video_param
