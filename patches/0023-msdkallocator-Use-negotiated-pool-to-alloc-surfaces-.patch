@@ -1,4 +1,4 @@
-From 7448edd1e308f1f5285cd94ed6e29fb0afca01d5 Mon Sep 17 00:00:00 2001
+From 0f2429ea4f15169f078e516ca605679222db7a15 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 23 Aug 2022 10:48:50 +0800
 Subject: [PATCH 23/26] msdkallocator: Use negotiated pool to alloc surfaces in
@@ -9,12 +9,12 @@ in the callback MfxFrameAllocator:Alloc, then extract VASurface from buffer,
 wrap it as mfxMemIDs and pass these IDs to MediaSDK/oneVPL.
 ---
  .../sys/msdk/gstmsdkallocator.h               |   2 +-
- .../sys/msdk/gstmsdkallocator_libva.c         | 261 +++++-------------
+ .../sys/msdk/gstmsdkallocator_libva.c         | 249 ++++++------------
  .../gst-plugins-bad/sys/msdk/gstmsdkcontext.c |  21 --
- 3 files changed, 65 insertions(+), 219 deletions(-)
+ 3 files changed, 78 insertions(+), 194 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
-index c1ea70a3d9..b8d905095b 100644
+index 9ce84af6c0..66ecc0a54c 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator.h
 @@ -45,7 +45,7 @@ struct _GstMsdkMemoryID {
@@ -27,7 +27,7 @@ index c1ea70a3d9..b8d905095b 100644
    VADRMPRIMESurfaceDescriptor desc;
  #else
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index 55785a180c..8acae9f1e6 100644
+index e9f0125bae..83bdd26014 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 @@ -45,20 +45,18 @@ mfxStatus
@@ -38,7 +38,7 @@ index 55785a180c..8acae9f1e6 100644
    mfxStatus status = MFX_ERR_NONE;
    gint i;
 -  guint format;
-   guint va_fourcc = 0;
+-  guint va_fourcc = 0;
 -  VASurfaceID *surfaces = NULL;
 -  VASurfaceAttrib attribs[2];
 -  guint num_attribs = 0;
@@ -52,13 +52,15 @@ index 55785a180c..8acae9f1e6 100644
 +  GList *tmp_list = NULL;
 +  GList *l;
 +  GstMsdkSurface *tmp_surface = NULL;
++  VAStatus va_status;
  
    /* MFX_MAKEFOURCC('V','P','8','S') is used for MFX_FOURCC_VP9_SEGMAP surface
     * in MSDK and this surface is an internal surface. The external allocator
-@@ -93,158 +91,62 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
+@@ -92,128 +90,65 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
+               MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET)))
      return MFX_ERR_UNSUPPORTED;
  
-   va_fourcc = gst_msdk_get_va_fourcc_from_mfx_fourcc (fourcc);
+-  va_fourcc = gst_msdk_get_va_fourcc_from_mfx_fourcc (fourcc);
 -
 -  msdk_mids =
 -      (GstMsdkMemoryID *) g_slice_alloc0 (surfaces_num *
@@ -66,10 +68,10 @@ index 55785a180c..8acae9f1e6 100644
    mids = (mfxMemId *) g_slice_alloc0 (surfaces_num * sizeof (mfxMemId));
 -  surfaces =
 -      (VASurfaceID *) g_slice_alloc0 (surfaces_num * sizeof (VASurfaceID));
-   msdk_resp =
-       (GstMsdkAllocResponse *) g_slice_alloc0 (sizeof (GstMsdkAllocResponse));
- 
-   if (va_fourcc != VA_FOURCC_P208) {
+-  msdk_resp =
+-      (GstMsdkAllocResponse *) g_slice_alloc0 (sizeof (GstMsdkAllocResponse));
+-
+-  if (va_fourcc != VA_FOURCC_P208) {
 -    attribs[0].type = VASurfaceAttribPixelFormat;
 -    attribs[0].flags = VA_SURFACE_ATTRIB_SETTABLE;
 -    attribs[0].value.type = VAGenericValueTypeInteger;
@@ -85,27 +87,7 @@ index 55785a180c..8acae9f1e6 100644
 -      attribs[1].value.type = VAGenericValueTypeInteger;
 -      attribs[1].value.value.i = VA_SURFACE_ATTRIB_USAGE_HINT_ENCODER;
 -      num_attribs = 2;
-+    GstBufferPool *pool;
-+    GstVideoFormat format;
-+    GstStructure *config;
-+    GstVideoInfo info;
-+    GstCaps *caps;
-+    GstVideoAlignment align;
-+
-+    format = gst_msdk_get_video_format_from_mfx_fourcc (fourcc);
-+    gst_video_info_set_format (&info, format, req->Info.CropW, req->Info.CropH);
-+
-+    gst_video_alignment_reset (&align);
-+    gst_msdk_set_video_alignment
-+        (&info, req->Info.Width, req->Info.Height, &align);
-+    gst_video_info_align (&info, &align);
-+
-+    caps = gst_video_info_to_caps (&info);
-+
-+    pool = gst_msdk_context_get_alloc_pool (context);
-+    if (!pool) {
-+      return MFX_ERR_MEMORY_ALLOC;
-     }
+-    }
 -#endif
 -
 -    format =
@@ -117,38 +99,45 @@ index 55785a180c..8acae9f1e6 100644
 -#else
 -      format = VA_RT_FORMAT_YUV420_10BPP;
 -#endif
- 
+-
 -#if VA_CHECK_VERSION(1, 4, 1)
 -    if (format == VA_RT_FORMAT_YUV444 && va_fourcc == VA_FOURCC_A2R10G10B10)
 -      format = VA_RT_FORMAT_RGB32_10;
 -#endif
--
++  msdk_resp = g_slice_new0 (GstMsdkAllocResponse);
+
 -#if ((MFX_VERSION >= 1027) && VA_CHECK_VERSION(1, 2, 0))
 -    if (format == VA_RT_FORMAT_YUV422 && va_fourcc == VA_FOURCC_Y210)
 -      format = VA_RT_FORMAT_YUV422_10;
 -    else if (format == VA_RT_FORMAT_YUV444 && va_fourcc == VA_FOURCC_Y410)
 -      format = VA_RT_FORMAT_YUV444_10;
 -#endif
--
++  if (fourcc != MFX_FOURCC_P8) {
++    GstBufferPool *pool;
++    GstVideoFormat format;
++    GstStructure *config;
++    GstVideoInfo info;
++    GstCaps *caps;
++    GstVideoAlignment align;
+
 -#if ((MFX_VERSION >= 1031) && VA_CHECK_VERSION(1, 2, 0))
 -    if (format == VA_RT_FORMAT_YUV420 && va_fourcc == VA_FOURCC_P016)
 -      format = VA_RT_FORMAT_YUV420_12;
-+    config = gst_buffer_pool_get_config (GST_BUFFER_POOL_CAST (pool));
-+    gst_buffer_pool_config_set_params (config, caps,
-+        GST_VIDEO_INFO_SIZE (&info), surfaces_num, surfaces_num);
-+    gst_buffer_pool_config_add_option (config,
-+        GST_BUFFER_POOL_OPTION_VIDEO_META);
-+    gst_buffer_pool_config_add_option (config,
-+        GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
-+    gst_buffer_pool_config_set_va_alignment (config, &align);
++    format = gst_msdk_get_video_format_from_mfx_fourcc (fourcc);
++    gst_video_info_set_format (&info, format, req->Info.CropW, req->Info.CropH);
  
 -    if (format == VA_RT_FORMAT_YUV422 && va_fourcc == VA_FOURCC_Y216)
 -      format = VA_RT_FORMAT_YUV422_12;
--
++    gst_video_alignment_reset (&align);
++    gst_msdk_set_video_alignment
++        (&info, req->Info.Width, req->Info.Height, &align);
++    gst_video_info_align (&info, &align);
+
 -    if (format == VA_RT_FORMAT_YUV444 && va_fourcc == VA_FOURCC_Y416)
 -      format = VA_RT_FORMAT_YUV444_12;
 -#endif
--
++    caps = gst_video_info_to_caps (&info);
+
 -#if (MFX_VERSION >= 2004)
 -    if (format == VA_RT_FORMAT_YUV444 && (va_fourcc == VA_FOURCC_RGBP
 -            || va_fourcc == VA_FOURCC_BGRP))
@@ -164,11 +153,12 @@ index 55785a180c..8acae9f1e6 100644
 -    if (status != MFX_ERR_NONE) {
 -      GST_WARNING ("failed to create VA surface");
 -      return status;
--    }
-+    gst_buffer_pool_set_config (pool, config);
-+    gst_buffer_pool_set_active (pool, TRUE);
++    pool = gst_msdk_context_get_alloc_pool (context);
++    if (!pool) {
++      goto error_alloc;
+     }
  
-     for (i = 0; i < surfaces_num; i++) {
+-    for (i = 0; i < surfaces_num; i++) {
 -      /* Get dmabuf handle if MFX_MEMTYPE_EXPORT_FRAME */
 -      if (req->Type & MFX_MEMTYPE_EXPORT_FRAME) {
 -        VADRMPRIMESurfaceDescriptor va_desc = { 0 };
@@ -179,9 +169,18 @@ index 55785a180c..8acae9f1e6 100644
 -            vaExportSurfaceHandle (gst_msdk_context_get_handle (context),
 -            surfaces[i], VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2, export_flags,
 -            &va_desc);
--
++    config = gst_buffer_pool_get_config (GST_BUFFER_POOL_CAST (pool));
++    gst_buffer_pool_config_set_params (config, caps,
++        GST_VIDEO_INFO_SIZE (&info), surfaces_num, surfaces_num);
++    gst_buffer_pool_config_add_option (config,
++        GST_BUFFER_POOL_OPTION_VIDEO_META);
++    gst_buffer_pool_config_add_option (config,
++        GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
++    gst_buffer_pool_config_set_va_alignment (config, &align);
+
 -        status = gst_msdk_get_mfx_status_from_va_status (va_status);
-+      GstBuffer *buf;
++    gst_buffer_pool_set_config (pool, config);
++    gst_buffer_pool_set_active (pool, TRUE);
  
 -        if (MFX_ERR_NONE != status) {
 -          GST_ERROR ("Failed to export surface");
@@ -195,67 +194,69 @@ index 55785a180c..8acae9f1e6 100644
 -          GST_ERROR ("Can not support multiple objects");
 -          return MFX_ERR_UNSUPPORTED;
 -        }
--
++    for (i = 0; i < surfaces_num; i++) {
++      GstBuffer *buf;
+
 -        msdk_mids[i].desc = va_desc;
--      }
--
++      if (gst_buffer_pool_acquire_buffer (pool, &buf, NULL) != GST_FLOW_OK) {
++        GST_ERROR ("Failed to allocate buffer");
++        gst_buffer_pool_set_active (pool, FALSE);
++        gst_object_unref (pool);
++        goto error_alloc;
+       }
+
 -      /* Don't use image for DMABuf */
 -      msdk_mids[i].image.image_id = VA_INVALID_ID;
 -      msdk_mids[i].image.buf = VA_INVALID_ID;
 -
 -      msdk_mids[i].surface = &surfaces[i];
 -      mids[i] = (mfxMemId *) & msdk_mids[i];
--    }
--  } else {
--    /* This is requested from the driver when h265 encoding.
--     * These buffers will be used inside the driver and released by
--     * gst_msdk_frame_free functions. Application doesn't need to handle these buffers.
--     *
--     * See https://github.com/Intel-Media-SDK/samples/issues/13 for more details.
--     */
--    VAContextID context_id = req->AllocId;
--    gint width32 = 32 * ((req->Info.Width + 31) >> 5);
--    gint height32 = 32 * ((req->Info.Height + 31) >> 5);
--    guint64 codedbuf_size = (width32 * height32) * 400LL / (16 * 16);
--
--    for (i = 0; i < surfaces_num; i++) {
--      VABufferID coded_buf;
--
--      va_status = vaCreateBuffer (gst_msdk_context_get_handle (context),
--          context_id, VAEncCodedBufferType, codedbuf_size, 1, NULL, &coded_buf);
--
--      status = gst_msdk_get_mfx_status_from_va_status (va_status);
--      if (status < MFX_ERR_NONE) {
--        GST_ERROR ("failed to create buffer");
--        return status;
-+      if (gst_buffer_pool_acquire_buffer (pool, &buf, NULL) != GST_FLOW_OK) {
-+        GST_ERROR ("Failed to allocate buffer");
-+        gst_buffer_pool_set_active (pool, FALSE);
-+        gst_object_unref (pool);
-+        return MFX_ERR_MEMORY_ALLOC;
-       }
- 
--      surfaces[i] = coded_buf;
--      msdk_mids[i].surface = &surfaces[i];
--      msdk_mids[i].fourcc = fourcc;
--
--      /* Don't use image for P208 */
--      msdk_mids[i].image.image_id = VA_INVALID_ID;
--      msdk_mids[i].image.buf = VA_INVALID_ID;
--
--      mids[i] = (mfxMemId *) & msdk_mids[i];
-+      msdk_surface = gst_msdk_import_to_msdk_surface (buf, context, &info);
++      msdk_surface = gst_msdk_import_to_msdk_surface (buf, context, &info, 0);
 +      if (msdk_surface)
 +        msdk_surface->buf = buf;
 +      mids[i] = msdk_surface->surface->Data.MemId;
 +      tmp_list = g_list_prepend (tmp_list, msdk_surface);
      }
-   }
--
-   resp->mids = mids;
-   resp->NumFrameActual = surfaces_num;
+   } else {
+-    /* This is requested from the driver when h265 encoding.
++    /* This path is to handle a special case when requesting MFX_FOURCC_P208, We keep
++     * this to avoid failure when building gst-msdk plugins using old version of MediaSDK.
+      * These buffers will be used inside the driver and released by
+      * gst_msdk_frame_free functions. Application doesn't need to handle these buffers.
+-     *
+      * See https://github.com/Intel-Media-SDK/samples/issues/13 for more details.
+      */
+     VAContextID context_id = req->AllocId;
+@@ -223,6 +158,7 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
+
+     for (i = 0; i < surfaces_num; i++) {
+       VABufferID coded_buf;
++      GstMsdkMemoryID msdk_mid;
+
+       va_status = vaCreateBuffer (gst_msdk_context_get_handle (context),
+           context_id, VAEncCodedBufferType, codedbuf_size, 1, NULL, &coded_buf);
+@@ -233,15 +169,14 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
+         return status;
+       }
  
-@@ -254,6 +156,12 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
+-      surfaces[i] = coded_buf;
+-      msdk_mids[i].surface = &surfaces[i];
+-      msdk_mids[i].fourcc = fourcc;
++      msdk_mid.surface = coded_buf;
++      msdk_mid.fourcc = fourcc;
+
+       /* Don't use image for P208 */
+-      msdk_mids[i].image.image_id = VA_INVALID_ID;
+-      msdk_mids[i].image.buf = VA_INVALID_ID;
++      msdk_mid.image.image_id = VA_INVALID_ID;
++      msdk_mid.image.buf = VA_INVALID_ID;
+
+-      mids[i] = (mfxMemId *) & msdk_mids[i];
++      mids[i] = (mfxMemId *) & msdk_mid;
+     }
+   }
+ 
+@@ -254,18 +189,24 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
  
    gst_msdk_context_add_alloc_response (context, msdk_resp);
  
@@ -266,9 +267,14 @@ index 55785a180c..8acae9f1e6 100644
 +  }
 +
    return status;
++
++error_alloc:
++  g_slice_free1 (surfaces_num * sizeof (mfxMemId), mids);
++  g_slice_free (GstMsdkAllocResponse, msdk_resp);
++  return MFX_ERR_MEMORY_ALLOC;
  }
  
-@@ -261,11 +169,6 @@ mfxStatus
+ mfxStatus
  gst_msdk_frame_free (mfxHDL pthis, mfxFrameAllocResponse * resp)
  {
    GstMsdkContext *context = (GstMsdkContext *) pthis;
@@ -280,7 +286,7 @@ index 55785a180c..8acae9f1e6 100644
    GstMsdkAllocResponse *cached = NULL;
  
    cached = gst_msdk_context_get_cached_alloc_responses (context, resp);
-@@ -279,45 +182,10 @@ gst_msdk_frame_free (mfxHDL pthis, mfxFrameAllocResponse * resp)
+@@ -279,45 +220,10 @@ gst_msdk_frame_free (mfxHDL pthis, mfxFrameAllocResponse * resp)
    if (!gst_msdk_context_remove_alloc_response (context, resp))
      return MFX_ERR_NONE;
  
@@ -328,7 +334,7 @@ index 55785a180c..8acae9f1e6 100644
  }
  
  mfxStatus
-@@ -327,7 +195,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
+@@ -327,7 +233,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
    VAStatus va_status;
    mfxStatus status;
    mfxU8 *buf = NULL;
@@ -337,7 +343,7 @@ index 55785a180c..8acae9f1e6 100644
    VADisplay dpy;
    GstMsdkMemoryID *mem_id;
  
-@@ -341,7 +209,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
+@@ -341,7 +247,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
    }
  
    if (mem_id->fourcc != MFX_FOURCC_P8) {
@@ -346,7 +352,7 @@ index 55785a180c..8acae9f1e6 100644
      status = gst_msdk_get_mfx_status_from_va_status (va_status);
  
      if (status != MFX_ERR_NONE) {
-@@ -469,7 +337,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
+@@ -469,7 +375,7 @@ gst_msdk_frame_lock (mfxHDL pthis, mfxMemId mid, mfxFrameData * data)
    } else {
      VACodedBufferSegment *coded_buffer_segment;
      va_status =
@@ -355,7 +361,7 @@ index 55785a180c..8acae9f1e6 100644
      status = gst_msdk_get_mfx_status_from_va_status (va_status);
      if (MFX_ERR_NONE == status)
        data->Y = (mfxU8 *) coded_buffer_segment->buf;
-@@ -501,7 +369,7 @@ gst_msdk_frame_unlock (mfxHDL pthis, mfxMemId mid, mfxFrameData * ptr)
+@@ -501,7 +407,7 @@ gst_msdk_frame_unlock (mfxHDL pthis, mfxMemId mid, mfxFrameData * ptr)
        mem_id->image.buf = VA_INVALID_ID;
      }
    } else {
@@ -364,7 +370,7 @@ index 55785a180c..8acae9f1e6 100644
    }
  
    status = gst_msdk_get_mfx_status_from_va_status (va_status);
-@@ -518,7 +386,7 @@ gst_msdk_frame_get_hdl (mfxHDL pthis, mfxMemId mid, mfxHDL * hdl)
+@@ -518,7 +424,7 @@ gst_msdk_frame_get_hdl (mfxHDL pthis, mfxMemId mid, mfxHDL * hdl)
      return MFX_ERR_INVALID_HANDLE;
  
    mem_id = mid;
@@ -373,7 +379,7 @@ index 55785a180c..8acae9f1e6 100644
  
    return MFX_ERR_NONE;
  }
-@@ -791,8 +659,7 @@ gst_msdk_import_to_msdk_surface (GstBuffer * buf, GstMsdkContext * msdk_context,
+@@ -792,8 +698,7 @@ gst_msdk_import_to_msdk_surface (GstBuffer * buf, GstMsdkContext * msdk_context,
    mfx_surface = g_slice_new0 (mfxFrameSurface1);
    msdk_mid = g_slice_new0 (GstMsdkMemoryID);
  
@@ -383,7 +389,7 @@ index 55785a180c..8acae9f1e6 100644
  
    mfx_surface->Data.MemId = (mfxMemId) msdk_mid;
  
-@@ -824,7 +691,7 @@ gst_msdk_replace_mfx_memid (GstMsdkContext * context,
+@@ -825,7 +730,7 @@ gst_msdk_replace_mfx_memid (GstMsdkContext * context,
  {
    GstMsdkMemoryID *msdk_mid = NULL;
    VADisplay dpy;
@@ -392,7 +398,7 @@ index 55785a180c..8acae9f1e6 100644
    VAStatus va_status;
    mfxStatus status = MFX_ERR_NONE;
  
-@@ -845,14 +712,14 @@ gst_msdk_replace_mfx_memid (GstMsdkContext * context,
+@@ -846,14 +751,14 @@ gst_msdk_replace_mfx_memid (GstMsdkContext * context,
  
    /* Destroy the associated VASurface */
    old_surface_id = msdk_mid->surface;
@@ -410,7 +416,7 @@ index 55785a180c..8acae9f1e6 100644
  
    return TRUE;
  
-@@ -863,7 +730,7 @@ error_destroy_va_image:
+@@ -864,7 +769,7 @@ error_destroy_va_image:
    }
  error_destroy_va_surface:
    {
@@ -420,10 +426,10 @@ index 55785a180c..8acae9f1e6 100644
    }
  }
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c
-index 9aee2e39dd..590afb52f1 100644
+index f0eaed9e82..8ed3c4651d 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcontext.c
-@@ -552,25 +552,6 @@ gst_msdk_context_get_cached_alloc_responses_by_request (GstMsdkContext *
+@@ -736,25 +736,6 @@ gst_msdk_context_get_cached_alloc_responses_by_request (GstMsdkContext *
      return NULL;
  }
  
@@ -449,7 +455,7 @@ index 9aee2e39dd..590afb52f1 100644
  static void
  free_surface (gpointer surface)
  {
-@@ -591,8 +572,6 @@ gst_msdk_context_add_alloc_response (GstMsdkContext * context,
+@@ -775,8 +756,6 @@ gst_msdk_context_add_alloc_response (GstMsdkContext * context,
  {
    context->priv->cached_alloc_responses =
        g_list_prepend (context->priv->cached_alloc_responses, resp);

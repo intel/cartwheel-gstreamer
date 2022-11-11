@@ -1,4 +1,4 @@
-From b770ec5faa5bf99e8d1228d6e71042cfbc5323e1 Mon Sep 17 00:00:00 2001
+From cdc668f7c943ea33bcfb993985b81d747a936397 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 23 Aug 2022 14:20:35 +0800
 Subject: [PATCH 26/26] msdkdec: Check available surfaces when all
@@ -9,7 +9,7 @@ Subject: [PATCH 26/26] msdkdec: Check available surfaces when all
  1 file changed, 38 insertions(+), 5 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 036d752cee..e4abc69f2c 100644
+index bc8274f028..e823a0b629 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -152,8 +152,9 @@ free_surface (GstMsdkSurface * s)
@@ -81,9 +81,9 @@ index 036d752cee..e4abc69f2c 100644
 +    }
 +  }
  #ifndef _WIN32
-   if ((gst_buffer_pool_acquire_buffer (thiz->alloc_pool, &out_buffer, 0))
+   if ((gst_buffer_pool_acquire_buffer (thiz->alloc_pool, &out_buffer, NULL))
        != GST_FLOW_OK) {
-@@ -1095,7 +1128,7 @@ release_msdk_surfaces (GstMsdkDec * thiz)
+@@ -1105,7 +1138,7 @@ release_msdk_surfaces (GstMsdkDec * thiz)
    GList *l;
    GstMsdkSurface *surface;
    gint locked = 0;

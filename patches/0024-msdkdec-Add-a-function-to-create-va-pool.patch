@@ -1,4 +1,4 @@
-From b1cca98d056ade3787f922e41fa29af770ba7179 Mon Sep 17 00:00:00 2001
+From 6886d28be5beeff7e8d2fed4563a29711aa67e1b Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 23 Aug 2022 11:25:15 +0800
 Subject: [PATCH 24/26] msdkdec: Add a function to create va pool
@@ -13,10 +13,10 @@ when all the memory allocation modifications are ready in the commits after.
  2 files changed, 107 insertions(+), 6 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 57b8c6b896..574dfbc2f1 100644
+index 4a8157804d..c222e2cbdf 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-@@ -570,6 +570,7 @@ gst_msdkdec_init_decoder (GstMsdkDec * thiz)
+@@ -580,6 +580,7 @@ gst_msdkdec_init_decoder (GstMsdkDec * thiz)
  #endif
  
      gst_msdk_frame_alloc (thiz->context, &request, &thiz->alloc_resp);
@@ -24,7 +24,7 @@ index 57b8c6b896..574dfbc2f1 100644
    }
  
    /* update the prealloc_buffer count, which will be used later
-@@ -998,12 +999,7 @@ gst_msdkdec_finish_task (GstMsdkDec * thiz, MsdkDecTask * task)
+@@ -1008,12 +1009,7 @@ gst_msdkdec_finish_task (GstMsdkDec * thiz, MsdkDecTask * task)
          GST_MINI_OBJECT_FLAG_SET (surface->buf, GST_MINI_OBJECT_FLAG_LOCKABLE);
          frame->output_buffer = gst_buffer_ref (surface->buf);
        } else {
@@ -38,7 +38,7 @@ index 57b8c6b896..574dfbc2f1 100644
          frame->output_buffer = gst_buffer_ref (surface->copy.buffer);
          unmap_frame (thiz, surface);
        }
-@@ -1787,6 +1783,105 @@ error_pool_config:
+@@ -1797,6 +1793,105 @@ error_pool_config:
    }
  }
  
@@ -54,7 +54,7 @@ index 57b8c6b896..574dfbc2f1 100644
 +  GstVaDisplay *display = NULL;
 +  GstCaps *caps = NULL;
 +
-+  display = (GstVaDisplay *) gst_msdk_context_get_display (thiz->context);
++  display = (GstVaDisplay *) gst_msdk_context_get_va_display (thiz->context);
 +
 +  if (thiz->use_dmabuf)
 +    allocator = gst_va_dmabuf_allocator_new (display);
@@ -144,7 +144,7 @@ index 57b8c6b896..574dfbc2f1 100644
  static gboolean
  gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
  {
-@@ -1914,6 +2009,10 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -1924,6 +2019,10 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
          GST_VIDEO_INFO_WIDTH (&output_state->info);
      GST_VIDEO_INFO_HEIGHT (&thiz->non_msdk_pool_info) =
          GST_VIDEO_INFO_HEIGHT (&output_state->info);

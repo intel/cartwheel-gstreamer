@@ -1,4 +1,4 @@
-From 296b95fa41777bf47aa51b8d43a54dbb40b0573d Mon Sep 17 00:00:00 2001
+From b095e1deeb00c759789a82ba737998de734caa39 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 23 Aug 2022 11:47:02 +0800
 Subject: [PATCH 25/26] msdkdec: Apply the modified memory allocation logic
@@ -19,7 +19,7 @@ logic in (3).
  1 file changed, 120 insertions(+), 272 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 574dfbc2f1..036d752cee 100644
+index c222e2cbdf..bc8274f028 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -40,6 +40,7 @@
@@ -194,7 +194,7 @@ index 574dfbc2f1..036d752cee 100644
  static GstMsdkSurface *
  allocate_output_surface (GstMsdkDec * thiz)
  {
-@@ -686,7 +567,7 @@ static gboolean
+@@ -696,7 +577,7 @@ static gboolean
  gst_msdkdec_set_src_caps (GstMsdkDec * thiz, gboolean need_allocation)
  {
    GstVideoCodecState *output_state;
@@ -203,7 +203,7 @@ index 574dfbc2f1..036d752cee 100644
    GstVideoAlignment align;
    GstCaps *allocation_caps = NULL;
    GstCaps *allowed_caps = NULL, *temp_caps;
-@@ -809,13 +690,13 @@ gst_msdkdec_set_src_caps (GstMsdkDec * thiz, gboolean need_allocation)
+@@ -819,13 +700,13 @@ gst_msdkdec_set_src_caps (GstMsdkDec * thiz, gboolean need_allocation)
  
    /* Ensure output_state->caps and info have same width and height
     * Also, mandate 32 bit alignment */
@@ -222,7 +222,7 @@ index 574dfbc2f1..036d752cee 100644
  #ifndef _WIN32
    if (pad_accept_memory (thiz, GST_CAPS_FEATURE_MEMORY_VA, output_state->caps)) {
      gst_caps_set_features (output_state->caps, 0,
-@@ -895,7 +776,7 @@ gst_msdkdec_set_latency (GstMsdkDec * thiz)
+@@ -905,7 +786,7 @@ gst_msdkdec_set_latency (GstMsdkDec * thiz)
  static gint
  _find_msdk_surface (gconstpointer msdk_surface, gconstpointer comp_surface)
  {
@@ -231,7 +231,7 @@ index 574dfbc2f1..036d752cee 100644
    mfxFrameSurface1 *_surface = (mfxFrameSurface1 *) comp_surface;
  
    return cached_surface ? cached_surface->surface != _surface : -1;
-@@ -904,11 +785,8 @@ _find_msdk_surface (gconstpointer msdk_surface, gconstpointer comp_surface)
+@@ -914,11 +795,8 @@ _find_msdk_surface (gconstpointer msdk_surface, gconstpointer comp_surface)
  static void
  finish_task (GstMsdkDec * thiz, MsdkDecTask * task)
  {
@@ -244,7 +244,7 @@ index 574dfbc2f1..036d752cee 100644
      thiz->locked_msdk_surfaces =
          g_list_append (thiz->locked_msdk_surfaces, surface);
    }
-@@ -954,7 +832,7 @@ gst_msdkdec_finish_task (GstMsdkDec * thiz, MsdkDecTask * task)
+@@ -964,7 +842,7 @@ gst_msdkdec_finish_task (GstMsdkDec * thiz, MsdkDecTask * task)
    GstVideoDecoder *decoder = GST_VIDEO_DECODER (thiz);
    GstFlowReturn flow;
    GstVideoCodecFrame *frame;
@@ -253,7 +253,7 @@ index 574dfbc2f1..036d752cee 100644
    mfxStatus status;
    guint64 pts = MFX_TIMESTAMP_UNKNOWN;
  
-@@ -993,15 +871,65 @@ gst_msdkdec_finish_task (GstMsdkDec * thiz, MsdkDecTask * task)
+@@ -1003,15 +881,65 @@ gst_msdkdec_finish_task (GstMsdkDec * thiz, MsdkDecTask * task)
      }
  
      if (G_LIKELY (frame)) {
@@ -324,7 +324,7 @@ index 574dfbc2f1..036d752cee 100644
        }
        GST_DEBUG_OBJECT (thiz, "surface %p TimeStamp: %" G_GUINT64_FORMAT
            " frame %p TimeStamp: %" G_GUINT64_FORMAT,
-@@ -1022,6 +950,7 @@ gst_msdkdec_finish_task (GstMsdkDec * thiz, MsdkDecTask * task)
+@@ -1032,6 +960,7 @@ gst_msdkdec_finish_task (GstMsdkDec * thiz, MsdkDecTask * task)
      return flow;
    }
    finish_task (thiz, task);
@@ -332,7 +332,7 @@ index 574dfbc2f1..036d752cee 100644
    return GST_FLOW_OK;
  }
  
-@@ -1164,13 +1093,12 @@ static void
+@@ -1174,13 +1103,12 @@ static void
  release_msdk_surfaces (GstMsdkDec * thiz)
  {
    GList *l;
@@ -348,7 +348,7 @@ index 574dfbc2f1..036d752cee 100644
      free_surface (surface);
      locked++;
    }
-@@ -1270,7 +1198,7 @@ find_msdk_surface (GstMsdkDec * thiz, MsdkDecTask * task,
+@@ -1280,7 +1208,7 @@ find_msdk_surface (GstMsdkDec * thiz, MsdkDecTask * task,
      GST_ERROR_OBJECT (thiz, "msdk return an invalid surface %p", out_surface);
      return FALSE;
    }
@@ -357,7 +357,7 @@ index 574dfbc2f1..036d752cee 100644
    thiz->locked_msdk_surfaces =
        g_list_delete_link (thiz->locked_msdk_surfaces, l);
    return TRUE;
-@@ -1343,11 +1271,11 @@ gst_msdkdec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
+@@ -1353,11 +1281,11 @@ gst_msdkdec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
    GstMsdkDec *thiz = GST_MSDKDEC (decoder);
    GstMsdkDecClass *klass = GST_MSDKDEC_GET_CLASS (thiz);
    GstFlowReturn flow;
@@ -371,7 +371,7 @@ index 574dfbc2f1..036d752cee 100644
    mfxFrameSurface1 *out_surface = NULL;
    mfxSession session;
    mfxStatus status;
-@@ -1517,13 +1445,7 @@ gst_msdkdec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
+@@ -1527,13 +1455,7 @@ gst_msdkdec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
        goto error;
      }
      if (!surface) {
@@ -386,7 +386,7 @@ index 574dfbc2f1..036d752cee 100644
        if (!surface) {
          /* Can't get a surface for some reason; finish tasks, then see if
             a surface becomes available. */
-@@ -1533,7 +1455,7 @@ gst_msdkdec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
+@@ -1543,7 +1465,7 @@ gst_msdkdec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
            flow = gst_msdkdec_finish_task (thiz, task);
            if (flow != GST_FLOW_OK)
              goto error;
@@ -395,7 +395,7 @@ index 574dfbc2f1..036d752cee 100644
            if (surface)
              break;
          }
-@@ -1698,91 +1620,6 @@ gst_msdkdec_parse (GstVideoDecoder * decoder, GstVideoCodecFrame * frame,
+@@ -1708,91 +1630,6 @@ gst_msdkdec_parse (GstVideoDecoder * decoder, GstVideoCodecFrame * frame,
    return ret;
  }
  
@@ -487,7 +487,7 @@ index 574dfbc2f1..036d752cee 100644
  #ifndef _WIN32
  static GstBufferPool *
  gst_msdk_create_va_pool (GstMsdkDec * thiz, GstVideoInfo * info,
-@@ -1827,7 +1664,7 @@ gst_msdk_create_va_pool (GstMsdkDec * thiz, GstVideoInfo * info,
+@@ -1837,7 +1674,7 @@ gst_msdk_create_va_pool (GstMsdkDec * thiz, GstVideoInfo * info,
  #endif
  
  static GstBufferPool *
@@ -496,7 +496,7 @@ index 574dfbc2f1..036d752cee 100644
      guint num_buffers)
  {
    GstBufferPool *pool = NULL;
-@@ -1890,7 +1727,7 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -1900,7 +1737,7 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
    GstStructure *pool_config = NULL;
    GstCaps *pool_caps /*, *negotiated_caps */ ;
    guint size, min_buffers, max_buffers;
@@ -505,7 +505,7 @@ index 574dfbc2f1..036d752cee 100644
  
    if (!thiz->param.mfx.FrameInfo.Width || !thiz->param.mfx.FrameInfo.Height)
      return FALSE;
-@@ -1905,6 +1742,11 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -1915,6 +1752,11 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
    gst_query_parse_nth_allocation_pool (query, 0, &pool, NULL, NULL, NULL);
    pool_config = gst_buffer_pool_get_config (pool);
  
@@ -517,7 +517,7 @@ index 574dfbc2f1..036d752cee 100644
    /* Get the caps of pool and increase the min and max buffers by async_depth.
     * We will always have that number of decode operations in-flight */
    gst_buffer_pool_config_get_params (pool_config, &pool_caps, &size,
-@@ -1920,21 +1762,8 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -1930,21 +1772,8 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
    thiz->min_prealloc_buffers = min_buffers;
  
    if (_gst_caps_has_feature (pool_caps, GST_CAPS_FEATURE_MEMORY_DMABUF)) {
@@ -541,7 +541,7 @@ index 574dfbc2f1..036d752cee 100644
    /* Decoder always use its own pool. So we create a pool if msdk APIs
     * previously requested for allocation (do_realloc = TRUE) */
    if (thiz->do_realloc || !thiz->pool) {
-@@ -1950,23 +1779,21 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -1960,23 +1789,21 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
        goto failed_to_create_pool;
      }
    }
@@ -571,7 +571,7 @@ index 574dfbc2f1..036d752cee 100644
        || thiz->ds_has_no_msdk_allocator) {
      GstStructure *config;
      GstAllocator *allocator;
-@@ -2010,9 +1837,32 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -2020,9 +1847,32 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
      GST_VIDEO_INFO_HEIGHT (&thiz->non_msdk_pool_info) =
          GST_VIDEO_INFO_HEIGHT (&output_state->info);
  
@@ -604,7 +604,7 @@ index 574dfbc2f1..036d752cee 100644
      gst_video_codec_state_unref (output_state);
    }
  
-@@ -2022,7 +1872,6 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -2032,7 +1882,6 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
    if (pool)
      gst_object_unref (pool);
  
@@ -612,7 +612,7 @@ index 574dfbc2f1..036d752cee 100644
    return TRUE;
  
  failed_to_create_pool:
-@@ -2043,9 +1892,8 @@ gst_msdkdec_drain (GstVideoDecoder * decoder)
+@@ -2053,9 +1902,8 @@ gst_msdkdec_drain (GstVideoDecoder * decoder)
  {
    GstMsdkDec *thiz = GST_MSDKDEC (decoder);
    GstFlowReturn flow;
@@ -623,7 +623,7 @@ index 574dfbc2f1..036d752cee 100644
    mfxFrameSurface1 *out_surface;
    mfxSession session;
    mfxStatus status;
-@@ -2065,10 +1913,7 @@ gst_msdkdec_drain (GstVideoDecoder * decoder)
+@@ -2075,10 +1923,7 @@ gst_msdkdec_drain (GstVideoDecoder * decoder)
      }
  
      if (!surface) {
@@ -635,7 +635,7 @@ index 574dfbc2f1..036d752cee 100644
        if (!surface)
          return GST_FLOW_ERROR;
      }
-@@ -2376,4 +2221,7 @@ gst_msdkdec_init (GstMsdkDec * thiz)
+@@ -2386,4 +2231,7 @@ gst_msdkdec_init (GstMsdkDec * thiz)
    thiz->input_state = NULL;
    thiz->pool = NULL;
    thiz->context = NULL;
