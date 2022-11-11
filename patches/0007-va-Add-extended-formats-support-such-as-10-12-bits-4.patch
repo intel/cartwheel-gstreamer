@@ -1,4 +1,4 @@
-From 13e152adf63457f612eeaf175b79c762308e0c25 Mon Sep 17 00:00:00 2001
+From d26137269e3c438cca3af80826cad8ac4d0d29b1 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 2 May 2022 23:14:32 +0800
 Subject: [PATCH 07/18] va: Add extended formats support such as 10/12 bits,
@@ -9,7 +9,7 @@ Subject: [PATCH 07/18] va: Add extended formats support such as 10/12 bits,
  1 file changed, 180 insertions(+), 41 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index b00ab952b2..a9080d874b 100644
+index 9fd6979d07..c152613ce8 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -566,8 +566,8 @@ _h265_fill_ptl (GstVaH265Enc * self,
@@ -89,7 +89,7 @@ index b00ab952b2..a9080d874b 100644
    }
  
    return chroma;
-@@ -2414,13 +2456,15 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2415,13 +2457,15 @@ _h265_decide_profile (GstVaH265Enc * self, VAProfile * _profile,
    VAProfile profile;
    guint rt_format;
    GstCaps *allowed_caps = NULL;
@@ -109,7 +109,7 @@ index b00ab952b2..a9080d874b 100644
  
    /* First, check whether the downstream requires a specified profile. */
    allowed_caps = gst_pad_get_allowed_caps (GST_VIDEO_ENCODER_SRC_PAD (base));
-@@ -2436,8 +2480,12 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2437,8 +2481,12 @@ _h265_decide_profile (GstVaH265Enc * self, VAProfile * _profile,
          continue;
  
        if (G_VALUE_HOLDS_STRING (v_profile)) {
@@ -124,7 +124,7 @@ index b00ab952b2..a9080d874b 100644
        } else if (GST_VALUE_HOLDS_LIST (v_profile)) {
          guint j;
  
-@@ -2446,21 +2494,23 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2447,21 +2495,23 @@ _h265_decide_profile (GstVaH265Enc * self, VAProfile * _profile,
            if (!p)
              continue;
  
@@ -152,7 +152,7 @@ index b00ab952b2..a9080d874b 100644
    if (!rt_format) {
      GST_ERROR_OBJECT (self, "unsupported video format %s",
          gst_video_format_to_string (in_format));
-@@ -2468,18 +2518,58 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2469,18 +2519,58 @@ _h265_decide_profile (GstVaH265Enc * self, VAProfile * _profile,
      goto out;
    }
  
@@ -221,7 +221,7 @@ index b00ab952b2..a9080d874b 100644
      if (!gst_va_encoder_has_profile (base->encoder, profile))
        continue;
  
-@@ -2487,17 +2577,23 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2488,17 +2578,23 @@ _h265_decide_profile (GstVaH265Enc * self, VAProfile * _profile,
                  profile, GST_VA_BASE_ENC_ENTRYPOINT (base))) == 0)
        continue;
  
@@ -233,8 +233,8 @@ index b00ab952b2..a9080d874b 100644
 +    if (j == caps_candidates->len)
 +      continue;
 +
-     base->profile = profile;
-     base->rt_format = rt_format;
+     *_profile = profile;
+     *_rt_format = rt_format;
      ret = TRUE;
      goto out;
    }
@@ -249,7 +249,7 @@ index b00ab952b2..a9080d874b 100644
    g_clear_pointer (&allowed_caps, gst_caps_unref);
  
    if (ret) {
-@@ -3065,16 +3161,35 @@ _h265_ensure_rate_control (GstVaH265Enc * self)
+@@ -3066,16 +3162,35 @@ _h265_ensure_rate_control (GstVaH265Enc * self)
    if ((self->rc.rc_ctrl_mode == VA_RC_CBR || self->rc.rc_ctrl_mode == VA_RC_VBR
            || self->rc.rc_ctrl_mode == VA_RC_VCM) && bitrate == 0) {
      /* FIXME: Provide better estimation. */
@@ -288,7 +288,7 @@ index b00ab952b2..a9080d874b 100644
    }
  
    /* Adjust the setting based on RC mode. */
-@@ -3369,11 +3484,40 @@ static void
+@@ -3370,11 +3485,40 @@ static void
  _h265_calculate_coded_size (GstVaH265Enc * self)
  {
    GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
@@ -330,7 +330,7 @@ index b00ab952b2..a9080d874b 100644
  
    /* Account for VPS header */
    codedbuf_size += 4 /* start code */  + GST_ROUND_UP_8 (MAX_VPS_HDR_SIZE +
-@@ -3391,11 +3535,6 @@ _h265_calculate_coded_size (GstVaH265Enc * self)
+@@ -3392,11 +3536,6 @@ _h265_calculate_coded_size (GstVaH265Enc * self)
    codedbuf_size += self->partition.num_slices * (4 +
        GST_ROUND_UP_8 (MAX_SLICE_HDR_SIZE + MAX_SHORT_TERM_REFPICSET_SIZE) / 8);
  

@@ -1,4 +1,4 @@
-From f91c38e5973d9f3e8fafc8b04698ef3ed03a98b3 Mon Sep 17 00:00:00 2001
+From dd1cfa99fa80cb832799515ee760e6742e9161d4 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 4 May 2022 10:42:59 +0800
 Subject: [PATCH 08/18] va: Add H265 SCC profile support.
@@ -8,7 +8,7 @@ Subject: [PATCH 08/18] va: Add H265 SCC profile support.
  1 file changed, 167 insertions(+), 11 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index a9080d874b..46a232e6d2 100644
+index c152613ce8..2c3701c7e1 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -478,6 +478,20 @@ _is_tile_enabled (GstVaH265Enc * self)
@@ -291,7 +291,7 @@ index a9080d874b..46a232e6d2 100644
  
    if ((self->packed_headers & VA_ENC_PACKED_HEADER_PICTURE)
        && frame->type == GST_H265_I_SLICE
-@@ -2527,11 +2675,15 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2528,11 +2676,15 @@ _h265_decide_profile (GstVaH265Enc * self, VAProfile * _profile,
      if (depth == 8) {
        profile = VAProfileHEVCMain444;
        g_array_append_val (chroma_candidates, profile);
@@ -307,7 +307,7 @@ index a9080d874b..46a232e6d2 100644
      }
  
      if (depth <= 12) {
-@@ -2554,11 +2706,15 @@ _h265_decide_profile (GstVaH265Enc * self)
+@@ -2555,11 +2707,15 @@ _h265_decide_profile (GstVaH265Enc * self, VAProfile * _profile,
      if (depth == 8) {
        profile = VAProfileHEVCMain;
        g_array_append_val (chroma_candidates, profile);

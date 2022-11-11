@@ -1,7 +1,7 @@
-From 35d96ecfab83599924c6185305514c22c3a745cb Mon Sep 17 00:00:00 2001
+From fa6e31b0e4f5e75cbf9b3ffa714fd2a787020d62 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:33:13 +0800
-Subject: [PATCH 12/18] codecparsers: Implement the AV1 bit code writer.
+Subject: [PATCH 15/18] codecparsers: Implement the AV1 bit code writer.
 
 ---
  .../gst/codecparsers/gstav1bitwriter.c        | 2507 +++++++++++++++++
@@ -2617,13 +2617,13 @@ index 0000000000..5cfb67b1e0
 +
 +#endif /* __GST_AV1_BIT_WRITER_H__ */
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
-index c06c2992f5..7e968354a8 100644
+index b462628604..94c1a53aa4 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
-@@ -18,6 +18,7 @@ codecparser_sources = files([
-   'gstav1parser.c',
+@@ -19,6 +19,7 @@ codecparser_sources = files([
    'gsth264bitwriter.c',
    'gsth265bitwriter.c',
+   'gstvp9bitwriter.c',
 +  'gstav1bitwriter.c',
  ])
  codecparser_headers = [

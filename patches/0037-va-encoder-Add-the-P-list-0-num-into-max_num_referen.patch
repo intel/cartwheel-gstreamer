@@ -1,4 +1,4 @@
-From 04eeb62fb7fbfd17cc22a3848ee05fee61126107 Mon Sep 17 00:00:00 2001
+From 04f3fba02c957269ae515e9194cdc1465a00047b Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:38:48 +0800
 Subject: [PATCH 16/18] va: encoder: Add the P list 0 num into
@@ -15,13 +15,14 @@ to list 1.
  .../gst-plugins-bad/sys/va/gstvaencoder.h     |  5 +--
  .../gst-plugins-bad/sys/va/gstvah264enc.c     |  2 +-
  .../gst-plugins-bad/sys/va/gstvah265enc.c     |  2 +-
- 4 files changed, 27 insertions(+), 13 deletions(-)
+ .../gst-plugins-bad/sys/va/gstvavp9enc.c      |  2 +-
+ 5 files changed, 28 insertions(+), 14 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index 945e3543c1..fb4c411384 100644
+index 9e08df713e..9850d90296 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-@@ -619,7 +619,7 @@ gst_va_encoder_get_slice_structure (GstVaEncoder * self,
+@@ -635,7 +635,7 @@ gst_va_encoder_get_slice_structure (GstVaEncoder * self,
  gboolean
  gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
      VAProfile profile, VAEntrypoint entrypoint,
@@ -30,7 +31,7 @@ index 945e3543c1..fb4c411384 100644
  {
    VAStatus status;
    VADisplay dpy;
-@@ -639,18 +639,31 @@ gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
+@@ -655,18 +655,31 @@ gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
    }
  
    if (attrib.value == VA_ATTRIB_NOT_SUPPORTED) {
@@ -71,10 +72,10 @@ index 945e3543c1..fb4c411384 100644
    return TRUE;
  }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
-index fa966a07ec..a41d661ef7 100644
+index 290fb3531a..d233693be1 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
-@@ -67,8 +67,9 @@ gint32                gst_va_encoder_get_slice_structure  (GstVaEncoder * self,
+@@ -70,8 +70,9 @@ gint32                gst_va_encoder_get_slice_structure  (GstVaEncoder * self,
  gboolean              gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
                                                              VAProfile profile,
                                                              VAEntrypoint entrypoint,
@@ -87,10 +88,10 @@ index fa966a07ec..a41d661ef7 100644
                                                                 VAProfile profile,
                                                                 VAEntrypoint entrypoint);
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index fd2f42d35c..95a7945299 100644
+index e142d9d9a1..6c4318f822 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-@@ -980,7 +980,7 @@ _generate_gop_structure (GstVaH264Enc * self)
+@@ -983,7 +983,7 @@ _generate_gop_structure (GstVaH264Enc * self)
    }
  
    if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,
@@ -100,10 +101,10 @@ index fd2f42d35c..95a7945299 100644
      list0 = 1;
      list1 = 0;
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index f714a94a23..2ac299c63b 100644
+index 3df3152a8a..5e59b8e417 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -3781,7 +3781,7 @@ _h265_generate_gop_structure (GstVaH265Enc * self)
+@@ -3782,7 +3782,7 @@ _h265_generate_gop_structure (GstVaH265Enc * self)
    }
  
    if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,
@@ -112,6 +113,19 @@ index f714a94a23..2ac299c63b 100644
      GST_INFO_OBJECT (self, "Failed to get the max num reference");
      list0 = 1;
      list1 = 0;
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
+index b7a8126a00..6e4c3ed2fb 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
+@@ -1625,7 +1625,7 @@ _vp9_generate_gop_structure (GstVaVp9Enc * self)
+ 
+   /* VP9 does not define reference list1 in spec. */
+   if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,
+-          GST_VA_BASE_ENC_ENTRYPOINT (base), &list0, NULL)) {
++          GST_VA_BASE_ENC_ENTRYPOINT (base), NULL, &list0, NULL)) {
+     GST_INFO_OBJECT (self, "Failed to get the max num reference");
+     list0 = 1;
+   }
 -- 
 2.25.1
 
