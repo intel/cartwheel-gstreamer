@@ -1,7 +1,7 @@
-From 2e23fc68bd14c3e49fbbc59e35906055b2c668b4 Mon Sep 17 00:00:00 2001
+From 92cd09980b3d6a914f565318c62fc7e2888fe1ed Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:48:50 +0800
-Subject: [PATCH 17/18] va: Implement the vaav1enc plugin.
+Subject: [PATCH 19/20] va: Implement the vaav1enc plugin.
 
 ---
  .../gst-plugins-bad/sys/va/gstvaav1enc.c      | 4342 +++++++++++++++++

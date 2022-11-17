@@ -1,7 +1,7 @@
-From 68b2e929d988fe54a4bbe7781899cebd18d11c0d Mon Sep 17 00:00:00 2001
+From c937f57086bc04d257839049a893bbffb45e1eec Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 6 Apr 2022 17:06:20 +0800
-Subject: [PATCH 03/18] va: Add prediction direction attribute support for H265
+Subject: [PATCH 03/20] va: Add prediction direction attribute support for H265
  encoder.
 
 ---

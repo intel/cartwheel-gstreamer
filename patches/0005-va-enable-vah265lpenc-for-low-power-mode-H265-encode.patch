@@ -1,14 +1,14 @@
-From cfa910a0c1af0d56d59e145a543aa4b60be39126 Mon Sep 17 00:00:00 2001
+From f51dadc010a88ef5e8d7d9ef6793cfa3f9af3008 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 2 Jun 2022 21:18:16 +0800
-Subject: [PATCH 05/18] va: enable vah265lpenc for low power mode H265 encoder.
+Subject: [PATCH 05/20] va: enable vah265lpenc for low power mode H265 encoder.
 
 ---
  .../gst-plugins-bad/sys/va/gstvah265enc.c     | 43 ++++++++++++-------
  1 file changed, 27 insertions(+), 16 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index bac096f9ee..56b57c9086 100644
+index baa92c6990..e542d43d9c 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -2453,7 +2453,7 @@ _h265_decide_profile (GstVaH265Enc * self, VAProfile * _profile,
@@ -20,7 +20,7 @@ index bac096f9ee..56b57c9086 100644
        continue;
  
      *_profile = profile;
-@@ -4204,20 +4204,26 @@ gst_va_h265_enc_class_init (gpointer g_klass, gpointer class_data)
+@@ -4188,20 +4188,26 @@ gst_va_h265_enc_class_init (gpointer g_klass, gpointer class_data)
    GstVaEncoder *encoder;
    struct CData *cdata = class_data;
    gchar *long_name;
@@ -53,7 +53,7 @@ index bac096f9ee..56b57c9086 100644
  
    sink_doc_caps = gst_caps_from_string (sink_caps_str);
    src_doc_caps = gst_caps_from_string (src_caps_str);
-@@ -4536,11 +4542,6 @@ gst_va_h265_enc_register (GstPlugin * plugin, GstVaDevice * device,
+@@ -4520,11 +4526,6 @@ gst_va_h265_enc_register (GstPlugin * plugin, GstVaDevice * device,
    g_return_val_if_fail (entrypoint == VAEntrypointEncSlice ||
        entrypoint == VAEntrypointEncSliceLP, FALSE);
  
@@ -65,7 +65,7 @@ index bac096f9ee..56b57c9086 100644
    cdata = g_new (struct CData, 1);
    cdata->entrypoint = entrypoint;
    cdata->description = NULL;
-@@ -4555,8 +4556,13 @@ gst_va_h265_enc_register (GstPlugin * plugin, GstVaDevice * device,
+@@ -4539,8 +4540,13 @@ gst_va_h265_enc_register (GstPlugin * plugin, GstVaDevice * device,
        GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
  
    type_info.class_data = cdata;
@@ -81,7 +81,7 @@ index bac096f9ee..56b57c9086 100644
  
    /* The first encoder to be registered should use a constant name,
     * like vah265enc, for any additional encoders, we create unique
-@@ -4565,8 +4571,13 @@ gst_va_h265_enc_register (GstPlugin * plugin, GstVaDevice * device,
+@@ -4549,8 +4555,13 @@ gst_va_h265_enc_register (GstPlugin * plugin, GstVaDevice * device,
      gchar *basename = g_path_get_basename (device->render_device_path);
      g_free (type_name);
      g_free (feature_name);
