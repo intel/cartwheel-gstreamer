@@ -1,7 +1,7 @@
-From 50e6abf57833e283b18cf6b3eecd293c2b9c9649 Mon Sep 17 00:00:00 2001
+From 6e8304a82b9cc2fc73fc6536189e07ed918c7ad2 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 25 Apr 2022 15:49:31 +0800
-Subject: [PATCH 06/18] va: enable multi tile support for H265 encoder.
+Subject: [PATCH 06/20] va: enable multi tile support for H265 encoder.
 
 ---
  .../gst-plugins-bad/sys/va/gstvaencoder.c     |  58 ++
@@ -110,7 +110,7 @@ index 3f13291f47..290fb3531a 100644
                                                             VAProfile profile,
                                                             VAEntrypoint entrypoint);
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index 56b57c9086..9fd6979d07 100644
+index e542d43d9c..78dc342d31 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -90,6 +90,8 @@ enum
@@ -722,7 +722,7 @@ index 56b57c9086..9fd6979d07 100644
        GST_ROUND_UP_8 (MAX_SLICE_HDR_SIZE + MAX_SHORT_TERM_REFPICSET_SIZE) / 8);
  
    /* TODO: Only YUV 4:2:0 formats are supported for now.
-@@ -3497,7 +3867,7 @@ _h265_setup_encoding_features (GstVaH265Enc * self)
+@@ -3481,7 +3851,7 @@ _h265_setup_encoding_features (GstVaH265Enc * self)
  
    self->features.transquant_bypass_enabled_flag =
        (features.bits.transquant_bypass != 0);
@@ -731,7 +731,7 @@ index 56b57c9086..9fd6979d07 100644
  #endif
  
  default_options:
-@@ -3530,7 +3900,7 @@ default_options:
+@@ -3514,7 +3884,7 @@ default_options:
    self->features.weighted_bipred_flag = FALSE;
    self->features.transquant_bypass_enabled_flag = FALSE;
  
@@ -740,7 +740,7 @@ index 56b57c9086..9fd6979d07 100644
    GST_DEBUG_OBJECT (self, "Set features to: "
        "separate_colour_plane_flag = %d, "
        "colour_plane_id = %d, "
-@@ -3586,6 +3956,19 @@ out:
+@@ -3570,6 +3940,19 @@ out:
        self->features.weighted_pred_flag,
        self->features.weighted_bipred_flag,
        self->features.transquant_bypass_enabled_flag);
@@ -760,7 +760,7 @@ index 56b57c9086..9fd6979d07 100644
  }
  
  /* We need to decide the profile and entrypoint before call this.
-@@ -3830,8 +4213,6 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+@@ -3814,8 +4197,6 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
        base->width, base->height, self->ctu_width, self->ctu_height,
        GST_TIME_ARGS (base->frame_duration));
  
@@ -769,7 +769,7 @@ index 56b57c9086..9fd6979d07 100644
    if (!_h265_ensure_rate_control (self))
      return FALSE;
  
-@@ -3845,6 +4226,9 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+@@ -3829,6 +4210,9 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
  
    _h265_calculate_coded_size (self);
  
@@ -779,7 +779,7 @@ index 56b57c9086..9fd6979d07 100644
    if (!_h265_init_packed_headers (self))
      return FALSE;
  
-@@ -4094,6 +4478,12 @@ gst_va_h265_enc_set_property (GObject * object, guint prop_id,
+@@ -4078,6 +4462,12 @@ gst_va_h265_enc_set_property (GObject * object, guint prop_id,
        g_atomic_int_set (&GST_VA_BASE_ENC (self)->reconf, TRUE);
        already_effect = TRUE;
        break;
@@ -792,7 +792,7 @@ index 56b57c9086..9fd6979d07 100644
      case PROP_RATE_CONTROL:
        self->prop.rc_ctrl = g_value_get_enum (value);
        g_atomic_int_set (&GST_VA_BASE_ENC (self)->reconf, TRUE);
-@@ -4177,6 +4567,12 @@ gst_va_h265_enc_get_property (GObject * object, guint prop_id,
+@@ -4161,6 +4551,12 @@ gst_va_h265_enc_get_property (GObject * object, guint prop_id,
      case PROP_TARGET_USAGE:
        g_value_set_uint (value, self->prop.target_usage);
        break;
@@ -805,7 +805,7 @@ index 56b57c9086..9fd6979d07 100644
      case PROP_RATE_CONTROL:
        g_value_set_enum (value, self->prop.rc_ctrl);
        break;
-@@ -4474,6 +4870,24 @@ gst_va_h265_enc_class_init (gpointer g_klass, gpointer class_data)
+@@ -4458,6 +4854,24 @@ gst_va_h265_enc_class_init (gpointer g_klass, gpointer class_data)
        "The desired max CPB size in Kb (0: auto-calculate)", 0, 2000 * 1024, 0,
        param_flags);
  

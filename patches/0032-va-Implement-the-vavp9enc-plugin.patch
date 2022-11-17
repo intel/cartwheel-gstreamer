@@ -1,7 +1,7 @@
-From 10793016a4313cc6bd2e7e8cc2181241cac8cdc5 Mon Sep 17 00:00:00 2001
+From 95a550d2d7d25b784274ac658375e247ac3a67f8 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
-Subject: [PATCH 11/18] va: Implement the vavp9enc plugin.
+Subject: [PATCH 12/20] va: Implement the vavp9enc plugin.
 
 Also implement the VP9 bitwriter.
 ---
