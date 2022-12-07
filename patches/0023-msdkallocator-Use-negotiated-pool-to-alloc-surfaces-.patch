@@ -1,4 +1,4 @@
-From 0f2429ea4f15169f078e516ca605679222db7a15 Mon Sep 17 00:00:00 2001
+From 4eb12a954876b80e28a89953a7c1202caeb44241 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 23 Aug 2022 10:48:50 +0800
 Subject: [PATCH 23/26] msdkallocator: Use negotiated pool to alloc surfaces in
@@ -105,7 +105,7 @@ index e9f0125bae..83bdd26014 100644
 -      format = VA_RT_FORMAT_RGB32_10;
 -#endif
 +  msdk_resp = g_slice_new0 (GstMsdkAllocResponse);
-
+ 
 -#if ((MFX_VERSION >= 1027) && VA_CHECK_VERSION(1, 2, 0))
 -    if (format == VA_RT_FORMAT_YUV422 && va_fourcc == VA_FOURCC_Y210)
 -      format = VA_RT_FORMAT_YUV422_10;
@@ -119,7 +119,7 @@ index e9f0125bae..83bdd26014 100644
 +    GstVideoInfo info;
 +    GstCaps *caps;
 +    GstVideoAlignment align;
-
+ 
 -#if ((MFX_VERSION >= 1031) && VA_CHECK_VERSION(1, 2, 0))
 -    if (format == VA_RT_FORMAT_YUV420 && va_fourcc == VA_FOURCC_P016)
 -      format = VA_RT_FORMAT_YUV420_12;
@@ -132,12 +132,12 @@ index e9f0125bae..83bdd26014 100644
 +    gst_msdk_set_video_alignment
 +        (&info, req->Info.Width, req->Info.Height, &align);
 +    gst_video_info_align (&info, &align);
-
+ 
 -    if (format == VA_RT_FORMAT_YUV444 && va_fourcc == VA_FOURCC_Y416)
 -      format = VA_RT_FORMAT_YUV444_12;
 -#endif
 +    caps = gst_video_info_to_caps (&info);
-
+ 
 -#if (MFX_VERSION >= 2004)
 -    if (format == VA_RT_FORMAT_YUV444 && (va_fourcc == VA_FOURCC_RGBP
 -            || va_fourcc == VA_FOURCC_BGRP))
@@ -177,7 +177,7 @@ index e9f0125bae..83bdd26014 100644
 +    gst_buffer_pool_config_add_option (config,
 +        GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
 +    gst_buffer_pool_config_set_va_alignment (config, &align);
-
+ 
 -        status = gst_msdk_get_mfx_status_from_va_status (va_status);
 +    gst_buffer_pool_set_config (pool, config);
 +    gst_buffer_pool_set_active (pool, TRUE);
@@ -196,7 +196,7 @@ index e9f0125bae..83bdd26014 100644
 -        }
 +    for (i = 0; i < surfaces_num; i++) {
 +      GstBuffer *buf;
-
+ 
 -        msdk_mids[i].desc = va_desc;
 +      if (gst_buffer_pool_acquire_buffer (pool, &buf, NULL) != GST_FLOW_OK) {
 +        GST_ERROR ("Failed to allocate buffer");
@@ -204,7 +204,7 @@ index e9f0125bae..83bdd26014 100644
 +        gst_object_unref (pool);
 +        goto error_alloc;
        }
-
+ 
 -      /* Don't use image for DMABuf */
 -      msdk_mids[i].image.image_id = VA_INVALID_ID;
 -      msdk_mids[i].image.buf = VA_INVALID_ID;
@@ -228,11 +228,11 @@ index e9f0125bae..83bdd26014 100644
       */
      VAContextID context_id = req->AllocId;
 @@ -223,6 +158,7 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
-
+ 
      for (i = 0; i < surfaces_num; i++) {
        VABufferID coded_buf;
 +      GstMsdkMemoryID msdk_mid;
-
+ 
        va_status = vaCreateBuffer (gst_msdk_context_get_handle (context),
            context_id, VAEncCodedBufferType, codedbuf_size, 1, NULL, &coded_buf);
 @@ -233,15 +169,14 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
@@ -244,13 +244,13 @@ index e9f0125bae..83bdd26014 100644
 -      msdk_mids[i].fourcc = fourcc;
 +      msdk_mid.surface = coded_buf;
 +      msdk_mid.fourcc = fourcc;
-
+ 
        /* Don't use image for P208 */
 -      msdk_mids[i].image.image_id = VA_INVALID_ID;
 -      msdk_mids[i].image.buf = VA_INVALID_ID;
 +      msdk_mid.image.image_id = VA_INVALID_ID;
 +      msdk_mid.image.buf = VA_INVALID_ID;
-
+ 
 -      mids[i] = (mfxMemId *) & msdk_mids[i];
 +      mids[i] = (mfxMemId *) & msdk_mid;
      }

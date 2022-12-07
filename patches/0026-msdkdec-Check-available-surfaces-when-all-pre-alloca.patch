@@ -1,4 +1,4 @@
-From cdc668f7c943ea33bcfb993985b81d747a936397 Mon Sep 17 00:00:00 2001
+From ff4658723bf356e2ae4c3526a34f5b7d38a5b86a Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 23 Aug 2022 14:20:35 +0800
 Subject: [PATCH 26/26] msdkdec: Check available surfaces when all
@@ -9,10 +9,10 @@ Subject: [PATCH 26/26] msdkdec: Check available surfaces when all
  1 file changed, 38 insertions(+), 5 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index bc8274f028..e823a0b629 100644
+index 55d34b2cdc..8cfbe84bff 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-@@ -152,8 +152,9 @@ free_surface (GstMsdkSurface * s)
+@@ -155,8 +155,9 @@ free_surface (GstMsdkSurface * s)
    g_slice_free (GstMsdkSurface, s);
  }
  
@@ -24,7 +24,7 @@ index bc8274f028..e823a0b629 100644
  {
    GList *l;
    GstMsdkSurface *surface;
-@@ -161,13 +162,27 @@ gst_msdkdec_free_unlocked_msdk_surfaces (GstMsdkDec * thiz)
+@@ -164,13 +165,27 @@ gst_msdkdec_free_unlocked_msdk_surfaces (GstMsdkDec * thiz)
    for (l = thiz->locked_msdk_surfaces; l;) {
      GList *next = l->next;
      surface = l->data;
@@ -53,7 +53,7 @@ index bc8274f028..e823a0b629 100644
  }
  
  static GstMsdkSurface *
-@@ -179,10 +194,28 @@ allocate_output_surface (GstMsdkDec * thiz)
+@@ -182,10 +197,28 @@ allocate_output_surface (GstMsdkDec * thiz)
    GstMemory *mem = NULL;
    mfxFrameSurface1 *mfx_surface = NULL;
  #endif
@@ -83,7 +83,7 @@ index bc8274f028..e823a0b629 100644
  #ifndef _WIN32
    if ((gst_buffer_pool_acquire_buffer (thiz->alloc_pool, &out_buffer, NULL))
        != GST_FLOW_OK) {
-@@ -1105,7 +1138,7 @@ release_msdk_surfaces (GstMsdkDec * thiz)
+@@ -1120,7 +1153,7 @@ release_msdk_surfaces (GstMsdkDec * thiz)
    GList *l;
    GstMsdkSurface *surface;
    gint locked = 0;

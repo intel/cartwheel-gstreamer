@@ -1,4 +1,4 @@
-From 79d51dd275168316a164d8740bb9b0270053b113 Mon Sep 17 00:00:00 2001
+From 45ec197e74a2a28d97e49f3570fb72fc0ccbe278 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Wed, 8 Jun 2022 17:13:47 +0800
 Subject: [PATCH 20/26] msdkdec: Enable va caps at srcpad
@@ -6,14 +6,14 @@ Subject: [PATCH 20/26] msdkdec: Enable va caps at srcpad
 Set caps with VA memory at src pad with a higher priority, then comes
 dmabuf caps.
 ---
- .../gst-plugins-bad/sys/msdk/gstmsdkav1dec.c  | 11 +++++--
- .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 31 +++++++++++++------
- .../gst-plugins-bad/sys/msdk/gstmsdkh264dec.c | 11 +++++--
- .../gst-plugins-bad/sys/msdk/gstmsdkh265dec.c | 11 +++++--
- .../sys/msdk/gstmsdkmjpegdec.c                | 11 +++++--
- .../sys/msdk/gstmsdkmpeg2dec.c                | 14 +++++++++
+ .../gst-plugins-bad/sys/msdk/gstmsdkav1dec.c  | 11 ++++--
+ .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 34 +++++++++++++------
+ .../gst-plugins-bad/sys/msdk/gstmsdkh264dec.c | 11 ++++--
+ .../gst-plugins-bad/sys/msdk/gstmsdkh265dec.c | 11 ++++--
+ .../sys/msdk/gstmsdkmjpegdec.c                | 11 ++++--
+ .../sys/msdk/gstmsdkmpeg2dec.c                | 14 ++++++++
  .../gst-plugins-bad/sys/msdk/gstmsdkvp9dec.c  | 12 +++++--
- 7 files changed, 82 insertions(+), 19 deletions(-)
+ 7 files changed, 83 insertions(+), 21 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkav1dec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkav1dec.c
 index 5e3ab9e08b..46cb9f18f2 100644
@@ -45,7 +45,7 @@ index 5e3ab9e08b..46cb9f18f2 100644
  #define gst_msdkav1dec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkAV1Dec, gst_msdkav1dec, GST_TYPE_MSDKDEC);
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index ba9c444c21..ce2c0d5f8e 100644
+index bc7fb52884..dbeb9490cd 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -41,6 +41,10 @@
@@ -59,7 +59,7 @@ index ba9c444c21..ce2c0d5f8e 100644
  GST_DEBUG_CATEGORY_EXTERN (gst_msdkdec_debug);
  #define GST_CAT_DEFAULT gst_msdkdec_debug
  
-@@ -564,16 +568,20 @@ _gst_caps_has_feature (const GstCaps * caps, const gchar * feature)
+@@ -567,26 +571,28 @@ _gst_caps_has_feature (const GstCaps * caps, const gchar * feature)
  }
  
  static gboolean
@@ -85,8 +85,9 @@ index ba9c444c21..ce2c0d5f8e 100644
    if (!out_caps)
      goto done;
  
-@@ -581,9 +589,8 @@ srcpad_can_dmabuf (GstMsdkDec * thiz)
-       || out_caps == caps)
+-  if (gst_caps_is_any (out_caps) || gst_caps_is_empty (out_caps)
+-      || out_caps == caps)
++  if (gst_caps_is_any (out_caps) || gst_caps_is_empty (out_caps))
      goto done;
  
 -  if (_gst_caps_has_feature (out_caps, GST_CAPS_FEATURE_MEMORY_DMABUF))
@@ -96,7 +97,7 @@ index ba9c444c21..ce2c0d5f8e 100644
  done:
    if (caps)
      gst_caps_unref (caps);
-@@ -745,10 +752,16 @@ gst_msdkdec_set_src_caps (GstMsdkDec * thiz, gboolean need_allocation)
+@@ -748,10 +754,16 @@ gst_msdkdec_set_src_caps (GstMsdkDec * thiz, gboolean need_allocation)
      gst_msdk_set_video_alignment (vinfo, alloc_w, alloc_h, &align);
    gst_video_info_align (vinfo, &align);
    output_state->caps = gst_video_info_to_caps (vinfo);
@@ -180,7 +181,7 @@ index 6d515167ff..c3c9fe0e3c 100644
 @@ -67,11 +67,18 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
          "width = (int) [ 1, MAX ], height = (int) [ 1, MAX ], parsed = true ")
      );
-
+ 
 +#ifndef _WIN32
 +#define VA_SRC_CAPS_STR \
 +    "; "  GST_MSDK_CAPS_MAKE_WITH_VA_FEATURE ("{ NV12 }")
@@ -195,7 +196,7 @@ index 6d515167ff..c3c9fe0e3c 100644
 -    );
 +    GST_STATIC_CAPS (GST_MSDK_CAPS_STR ("{ NV12, YUY2 }", "{ NV12, YUY2 }")
 +        VA_SRC_CAPS_STR));
-
+ 
  #define gst_msdkmjpegdec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkMJPEGDec, gst_msdkmjpegdec, GST_TYPE_MSDKDEC);
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkmpeg2dec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkmpeg2dec.c
@@ -205,7 +206,7 @@ index 4d2f9267f8..688a1957b3 100644
 @@ -57,6 +57,13 @@
  GST_DEBUG_CATEGORY_EXTERN (gst_msdkmpeg2dec_debug);
  #define GST_CAT_DEFAULT gst_msdkmpeg2dec_debug
-
+ 
 +#ifndef _WIN32
 +#define VA_SRC_CAPS_STR \
 +    "; " GST_MSDK_CAPS_MAKE_WITH_VA_FEATURE ("{ NV12 }")
@@ -219,7 +220,7 @@ index 4d2f9267f8..688a1957b3 100644
 @@ -65,6 +72,12 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
          "mpegversion = (int) 2, " "systemstream = (boolean) false")
      );
-
+ 
 +static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
 +    GST_PAD_SRC,
 +    GST_PAD_ALWAYS,
@@ -228,14 +229,14 @@ index 4d2f9267f8..688a1957b3 100644
 +
  #define gst_msdkmpeg2dec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkMPEG2Dec, gst_msdkmpeg2dec, GST_TYPE_MSDKDEC);
-
+ 
 @@ -151,6 +164,7 @@ gst_msdkmpeg2dec_class_init (GstMsdkMPEG2DecClass * klass)
    gst_msdkdec_prop_install_output_oder_property (gobject_class);
-
+ 
    gst_element_class_add_static_pad_template (element_class, &sink_factory);
 +  gst_element_class_add_static_pad_template (element_class, &src_factory);
  }
-
+ 
  static void
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvp9dec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvp9dec.c
 index 847d6529e7..3056a7dd5b 100644
@@ -243,7 +244,7 @@ index 847d6529e7..3056a7dd5b 100644
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvp9dec.c
 @@ -58,6 +58,14 @@ GST_DEBUG_CATEGORY_EXTERN (gst_msdkvp9dec_debug);
  #define GST_CAT_DEFAULT gst_msdkvp9dec_debug
-
+ 
  #define COMMON_FORMAT "{ NV12, P010_10LE, VUYA, Y410, P012_LE, Y412_LE }"
 +#define SUPPORTED_VA_FORMAT "{ NV12 }"
 +
@@ -253,7 +254,7 @@ index 847d6529e7..3056a7dd5b 100644
 +#else
 +#define VA_SRC_CAPS_STR ""
 +#endif
-
+ 
  static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
      GST_PAD_SINK,
 @@ -68,8 +76,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
@@ -264,7 +265,7 @@ index 847d6529e7..3056a7dd5b 100644
 -    );
 +    GST_STATIC_CAPS (GST_MSDK_CAPS_STR (COMMON_FORMAT, COMMON_FORMAT)
 +        VA_SRC_CAPS_STR));
-
+ 
  #define gst_msdkvp9dec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkVP9Dec, gst_msdkvp9dec, GST_TYPE_MSDKDEC);
 -- 

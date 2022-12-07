@@ -1,4 +1,4 @@
-From 3dd6aca5c9c57cd4c60501feeda65949d79bfdd2 Mon Sep 17 00:00:00 2001
+From 458278723941dbe75e7ca57c8ac6b3a0cda6428e Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 22 Aug 2022 18:33:35 +0800
 Subject: [PATCH 22/26] msdkdec: Add a function to directly allocate output
@@ -69,7 +69,7 @@ index b1a2d29a9e..e9f0125bae 100644
  mfxStatus
  gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index ce2c0d5f8e..4a8157804d 100644
+index dbeb9490cd..ad83aa3ae3 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -42,6 +42,7 @@
@@ -80,7 +80,7 @@ index ce2c0d5f8e..4a8157804d 100644
  #include <gst/va/gstvaallocator.h>
  #endif
  
-@@ -64,6 +65,8 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
+@@ -67,6 +68,8 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
  
  #define MFX_TIME_IS_VALID(time) ((time) != MFX_TIMESTAMP_UNKNOWN)
  
@@ -89,7 +89,7 @@ index ce2c0d5f8e..4a8157804d 100644
  #define gst_msdkdec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkDec, gst_msdkdec, GST_TYPE_VIDEO_DECODER);
  
-@@ -286,6 +289,76 @@ failed_unref_buffer:
+@@ -289,6 +292,76 @@ failed_unref_buffer:
    return NULL;
  }
  
