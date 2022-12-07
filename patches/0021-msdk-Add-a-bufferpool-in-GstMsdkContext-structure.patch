@@ -1,4 +1,4 @@
-From 5f9883b596d8a1dedced5ebdb5bbc07eabb0c203 Mon Sep 17 00:00:00 2001
+From fae49ea80c943db9f4d1879a8fbca5d72035b03d Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 22 Aug 2022 17:44:35 +0800
 Subject: [PATCH 21/26] msdk: Add a bufferpool in GstMsdkContext structure
