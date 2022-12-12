@@ -1,0 +1,40 @@
+From 11b22a622b0f2075963a68383b0a5a44c79999ed Mon Sep 17 00:00:00 2001
+From: Tong Wu <tong1.wu@intel.com>
+Date: Thu, 17 Nov 2022 10:41:10 +0800
+Subject: [PATCH 6/8] msdkallocator_d3d: add gst_msdk_frame_free callback
+ function
+
+---
+ .../sys/msdk/gstmsdkallocator_d3d.c              | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c
+index 0172ebdbec..2b873ac662 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c
+@@ -181,6 +181,22 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
+ mfxStatus
+ gst_msdk_frame_free (mfxHDL pthis, mfxFrameAllocResponse * resp)
+ {
++  GstMsdkContext *context = (GstMsdkContext *) pthis;
++  GstMsdkAllocResponse *cached = NULL;
++
++  cached = gst_msdk_context_get_cached_alloc_responses (context, resp);
++
++  if (cached) {
++    if (!g_atomic_int_dec_and_test (&cached->refcount))
++      return MFX_ERR_NONE;
++  } else
++    return MFX_ERR_NONE;
++
++  if (!gst_msdk_context_remove_alloc_response (context, resp))
++    return MFX_ERR_NONE;
++
++  g_slice_free1 (resp->NumFrameActual * sizeof (mfxMemId), resp->mids);
++
+   return MFX_ERR_NONE;
+ }
+ 
+-- 
+2.35.1.windows.2
+
