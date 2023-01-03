@@ -1,18 +1,18 @@
-From 95a550d2d7d25b784274ac658375e247ac3a67f8 Mon Sep 17 00:00:00 2001
+From 9aa943dbbd353c45729e207d0f3c04e8e7cc5ae4 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
-Subject: [PATCH 12/20] va: Implement the vavp9enc plugin.
+Subject: [PATCH 03/11] va: Implement the vavp9enc plugin.
 
 Also implement the VP9 bitwriter.
 ---
  .../gst/codecparsers/gstvp9bitwriter.c        |  171 +
  .../gst/codecparsers/gstvp9bitwriter.h        |   59 +
  .../gst-libs/gst/codecparsers/meson.build     |    1 +
- .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3175 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3179 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvavp9enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +-
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
- 7 files changed, 3450 insertions(+), 1 deletion(-)
+ 7 files changed, 3454 insertions(+), 1 deletion(-)
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstvp9bitwriter.c
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstvp9bitwriter.h
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
@@ -274,10 +274,10 @@ index c06c2992f5..b462628604 100644
    'codecparsers-prelude.h',
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 new file mode 100644
-index 0000000000..b7a8126a00
+index 0000000000..4d35455edb
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -0,0 +1,3175 @@
+@@ -0,0 +1,3179 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -1758,6 +1758,10 @@ index 0000000000..b7a8126a00
 +    case VA_RT_FORMAT_YUV422_10:
 +      *depth = 10;
 +      *chrome = 2;
++      break;
++    case VA_RT_FORMAT_YUV444_10:
++      *depth = 10;
++      *chrome = 3;
 +      break;
 +    default:
 +      chroma = 0;
