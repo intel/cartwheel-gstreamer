@@ -1,4 +1,4 @@
-From 9aa943dbbd353c45729e207d0f3c04e8e7cc5ae4 Mon Sep 17 00:00:00 2001
+From cf3a1761b93ecd6216fc68a7385a3ba4637a3bb8 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
 Subject: [PATCH 03/11] va: Implement the vavp9enc plugin.
@@ -8,11 +8,11 @@ Also implement the VP9 bitwriter.
  .../gst/codecparsers/gstvp9bitwriter.c        |  171 +
  .../gst/codecparsers/gstvp9bitwriter.h        |   59 +
  .../gst-libs/gst/codecparsers/meson.build     |    1 +
- .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3179 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3180 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvavp9enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +-
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
- 7 files changed, 3454 insertions(+), 1 deletion(-)
+ 7 files changed, 3455 insertions(+), 1 deletion(-)
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstvp9bitwriter.c
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstvp9bitwriter.h
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
@@ -274,10 +274,10 @@ index c06c2992f5..b462628604 100644
    'codecparsers-prelude.h',
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 new file mode 100644
-index 0000000000..4d35455edb
+index 0000000000..4c8ec74dc0
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -0,0 +1,3179 @@
+@@ -0,0 +1,3180 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -1936,16 +1936,17 @@ index 0000000000..4d35455edb
 +
 +    /* Only I/P mode is needed */
 +    if (self->gop.max_level < 2 || self->gop.gf_group_size < 3) {
-+      list1 = 3;
-+      list0 = 0;
++      list0 = 3;
++      list1 = 0;
 +    } else {
 +      list0 = 2;
 +      list1 = 1;
 +    }
 +  }
 +
-+  /* Check the ref num again after adjust. */
-+  if (self->gop.num_ref_frames == 0) {
++  if (self->gop.keyframe_interval == 1 || self->gop.num_ref_frames == 0) {
++    /* Disable gf group and reference for key frame only stream. */
++    self->gop.num_ref_frames = 0;
 +    list0 = 0;
 +    list1 = 0;
 +    self->gop.keyframe_interval = 1;
