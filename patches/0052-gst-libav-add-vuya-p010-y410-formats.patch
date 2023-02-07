@@ -1,0 +1,46 @@
+From cb5dea34acf702ea492b970ad78ce3e39dee014f Mon Sep 17 00:00:00 2001
+From: "U. Artie Eoff" <ullysses.a.eoff@intel.com>
+Date: Tue, 7 Feb 2023 14:33:02 -0500
+Subject: [PATCH] gst-libav: add vuya, p010, y410 formats
+
+Signed-off-by: U. Artie Eoff <ullysses.a.eoff@intel.com>
+---
+ subprojects/gst-libav/ext/libav/gstavcodecmap.c | 7 +++++++
+ subprojects/gst-libav/ext/libav/gstavvidcmp.c   | 3 ++-
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/subprojects/gst-libav/ext/libav/gstavcodecmap.c b/subprojects/gst-libav/ext/libav/gstavcodecmap.c
+index 6610593bb615..64d07b91be1c 100644
+--- a/subprojects/gst-libav/ext/libav/gstavcodecmap.c
++++ b/subprojects/gst-libav/ext/libav/gstavcodecmap.c
+@@ -2900,6 +2900,13 @@ static const PixToFmt pixtofmttable[] = {
+   {GST_VIDEO_FORMAT_I422_12BE, AV_PIX_FMT_YUV422P12BE},
+   {GST_VIDEO_FORMAT_Y444_12LE, AV_PIX_FMT_YUV444P12LE},
+   {GST_VIDEO_FORMAT_Y444_12BE, AV_PIX_FMT_YUV444P12BE},
++  {GST_VIDEO_FORMAT_P010_10LE, AV_PIX_FMT_P010LE},
++#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(57,34,100)
++  {GST_VIDEO_FORMAT_VUYA, AV_PIX_FMT_VUYX},
++#endif
++#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(57,36,100)
++  {GST_VIDEO_FORMAT_Y410, AV_PIX_FMT_XV30LE},
++#endif
+ };
+ 
+ GstVideoFormat
+diff --git a/subprojects/gst-libav/ext/libav/gstavvidcmp.c b/subprojects/gst-libav/ext/libav/gstavvidcmp.c
+index 08e934515755..569efc683699 100644
+--- a/subprojects/gst-libav/ext/libav/gstavvidcmp.c
++++ b/subprojects/gst-libav/ext/libav/gstavvidcmp.c
+@@ -72,7 +72,8 @@
+ 
+ #define GST_FFMPEGVIDCMP_FORMATS "{ " \
+   "ARGB, BGRA, ABGR, RGBA, xRGB, BGRx, xBGR, RGBx, RGB16, " \
+-  "GRAY8, NV12, NV21, YUY2, UYVY, I420, Y42B, Y444" \
++  "GRAY8, NV12, NV21, YUY2, UYVY, I420, Y42B, Y444, VUYA, " \
++  "P010_10LE, Y410" \
+   " }"
+ 
+ /* *INDENT-OFF* */
+-- 
+2.38.1
+
