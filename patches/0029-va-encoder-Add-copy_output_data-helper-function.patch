@@ -1,7 +1,7 @@
-From 2fbac4cf85ef29fd6877312d24444cd7ec0fb386 Mon Sep 17 00:00:00 2001
+From c5d4a71442157caab7ab7c4e413b3db23e6fe914 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 10 Nov 2022 20:36:05 +0800
-Subject: [PATCH 11/20] va: encoder: Add copy_output_data() helper function.
+Subject: [PATCH 02/13] va: encoder: Add copy_output_data() helper function.
 
 ---
  .../gst-plugins-bad/sys/va/gstvabaseenc.c     | 47 +++++++++++++++++++
@@ -9,10 +9,10 @@ Subject: [PATCH 11/20] va: encoder: Add copy_output_data() helper function.
  2 files changed, 51 insertions(+), 1 deletion(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index 50da32941b..50029189a3 100644
+index 8c4bd5904d..621518dc11 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-@@ -373,6 +373,53 @@ error:
+@@ -375,6 +375,53 @@ error:
    return NULL;
  }
  

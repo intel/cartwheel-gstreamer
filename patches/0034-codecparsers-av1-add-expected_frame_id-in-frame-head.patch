@@ -1,7 +1,7 @@
-From fce4b646dce0e5afcfcac515e1869639a6f530ec Mon Sep 17 00:00:00 2001
+From b95e50870a43f1249b0cbbe51893a15c9bf8209b Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:25:50 +0800
-Subject: [PATCH 14/20] codecparsers: av1: add expected_frame_id in frame
+Subject: [PATCH 07/13] codecparsers: av1: add expected_frame_id in frame
  header.
 
 We need it to ease the bit code writing of AV1 frame header.
