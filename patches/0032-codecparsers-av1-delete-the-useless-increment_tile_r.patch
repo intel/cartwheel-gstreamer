@@ -1,33 +1,21 @@
-From 446727abecd6b3985373205a991231a2e1120cbd Mon Sep 17 00:00:00 2001
+From fae4e6dd2584befa0ffef9b1d93dbebc82ca5367 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 16:27:01 +0800
-Subject: [PATCH 13/20] codecparsers: av1: delete the useless
+Subject: [PATCH 05/13] codecparsers: av1: delete the useless
  increment_tile_rows_log2 in tile info.
 
+increment_tile_rows_log2 is only used as the bool flag for parsing tiling log2
+number for each while loop, we should not store it in GstAV1FrameHeaderOBU.
 ---
- subprojects/gst-plugins-bad/ext/codec2json/gstav12json.c      | 2 --
  .../gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.c  | 4 ++--
  .../gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h  | 2 --
- 3 files changed, 2 insertions(+), 6 deletions(-)
+ 2 files changed, 2 insertions(+), 4 deletions(-)
 
-diff --git a/subprojects/gst-plugins-bad/ext/codec2json/gstav12json.c b/subprojects/gst-plugins-bad/ext/codec2json/gstav12json.c
-index 5bc8907eb525..3827a5916b8a 100644
---- a/subprojects/gst-plugins-bad/ext/codec2json/gstav12json.c
-+++ b/subprojects/gst-plugins-bad/ext/codec2json/gstav12json.c
-@@ -498,8 +498,6 @@ gst_av1_2_json_frame_header (GstAV12json * self,
-   tile_info = json_object_new ();
-   json_object_set_int_member (tile_info, "uniform tile spacing flag",
-       frame_header->tile_info.uniform_tile_spacing_flag);
--  json_object_set_int_member (tile_info, "increment tile rows log2",
--      frame_header->tile_info.increment_tile_rows_log2);
-   width_in_sbs_minus_1 = json_array_new ();
-   height_in_sbs_minus_1 = json_array_new ();
-   for (i = 0; i < GST_AV1_MAX_TILE_COLS; i++) {
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.c b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.c
-index 8e9a206f27fc..786cde78e924 100644
+index e31462c125..4d3bc63d97 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.c
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.c
-@@ -2259,11 +2259,11 @@ gst_av1_parse_tile_info (GstAV1Parser * parser, GstBitReader * br,
+@@ -2260,11 +2260,11 @@ gst_av1_parse_tile_info (GstAV1Parser * parser, GstBitReader * br,
      min_log2_tile_rows = MAX (min_log2_tiles - parser->state.tile_cols_log2, 0);
      parser->state.tile_rows_log2 = min_log2_tile_rows;
      while (parser->state.tile_rows_log2 < max_log2_tile_rows) {
@@ -42,7 +30,7 @@ index 8e9a206f27fc..786cde78e924 100644
        else
          break;
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h
-index a5f1c761f6fc..2c7106dd3e18 100644
+index a5f1c761f6..2c7106dd3e 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.h
 @@ -1188,7 +1188,6 @@ struct _GstAV1SegmenationParams {
@@ -62,5 +50,5 @@ index a5f1c761f6fc..2c7106dd3e18 100644
    gint height_in_sbs_minus_1[GST_AV1_MAX_TILE_ROWS];
    gint tile_size_bytes_minus_1;
 -- 
-2.38.1
+2.25.1
 

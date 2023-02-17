@@ -1,7 +1,7 @@
-From 5292cc8408ebac181d8255fb64c9fe88b76eb9ac Mon Sep 17 00:00:00 2001
+From eed178a998afc556fc1ed8aacb443c759f1f7c3f Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:33:13 +0800
-Subject: [PATCH 16/20] codecparsers: Implement the AV1 bit code writer.
+Subject: [PATCH 09/13] codecparsers: Implement the AV1 bit code writer.
 
 ---
  .../gst/codecparsers/gstav1bitwriter.c        | 2507 +++++++++++++++++

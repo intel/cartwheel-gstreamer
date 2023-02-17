@@ -1,7 +1,7 @@
-From df76f0d0a4c5549821e132571cb9e889fc1c8406 Mon Sep 17 00:00:00 2001
+From b41c79164c05d74221059d265154dcc33c861b83 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:39:30 +0800
-Subject: [PATCH 17/20] tests: Add the av1 bit code writer test case.
+Subject: [PATCH 10/13] tests: Add the av1 bit code writer test case.
 
 ---
  .../tests/check/libs/av1bitwriter.c           | 646 ++++++++++++++++++
@@ -662,7 +662,7 @@ index 0000000000..33f95ccffc
 +
 +GST_CHECK_MAIN (av1bitwriter);
 diff --git a/subprojects/gst-plugins-bad/tests/check/meson.build b/subprojects/gst-plugins-bad/tests/check/meson.build
-index 59b76cd86e..b3b7c48364 100644
+index 78d79d905f..c404513330 100644
 --- a/subprojects/gst-plugins-bad/tests/check/meson.build
 +++ b/subprojects/gst-plugins-bad/tests/check/meson.build
 @@ -91,6 +91,7 @@ base_tests = [

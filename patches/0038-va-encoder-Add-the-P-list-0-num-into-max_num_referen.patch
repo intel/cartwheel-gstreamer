@@ -1,7 +1,7 @@
-From dd8a613564558cc90bf0c1ec2f445de4913bee28 Mon Sep 17 00:00:00 2001
+From f9b73316e9582832f0f793d2c66af0792f82b6bf Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:38:48 +0800
-Subject: [PATCH 18/20] va: encoder: Add the P list 0 num into
+Subject: [PATCH 11/13] va: encoder: Add the P list 0 num into
  max_num_reference query.
 
 The driver may report different reference frame number for P and B
@@ -19,7 +19,7 @@ to list 1.
  5 files changed, 28 insertions(+), 14 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index 9e08df713e..9850d90296 100644
+index 9e08df713e..a715cc2799 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 @@ -635,7 +635,7 @@ gst_va_encoder_get_slice_structure (GstVaEncoder * self,
@@ -66,7 +66,7 @@ index 9e08df713e..9850d90296 100644
 +    if (listb_1)
 +      *listb_1 = (attrib.value >> 16) & 0xffff;
 +    if (listp_0)
-+      *listp_0 = *listb_0;
++      *listp_0 = attrib.value & 0xffff;
 +  }
  
    return TRUE;
@@ -88,7 +88,7 @@ index 290fb3531a..d233693be1 100644
                                                                 VAProfile profile,
                                                                 VAEntrypoint entrypoint);
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index e142d9d9a1..6c4318f822 100644
+index be6a48f136..9df1e21f41 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 @@ -983,7 +983,7 @@ _generate_gop_structure (GstVaH264Enc * self)
@@ -101,10 +101,10 @@ index e142d9d9a1..6c4318f822 100644
      list0 = 1;
      list1 = 0;
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index e465d2f6a5..d6d5efc8eb 100644
+index 8e031510ea..0c4ef7798e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -3777,7 +3777,7 @@ _h265_generate_gop_structure (GstVaH265Enc * self)
+@@ -3803,7 +3803,7 @@ _h265_generate_gop_structure (GstVaH265Enc * self)
    }
  
    if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,
@@ -114,10 +114,10 @@ index e465d2f6a5..d6d5efc8eb 100644
      list0 = 1;
      list1 = 0;
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-index b7a8126a00..6e4c3ed2fb 100644
+index 4c8ec74dc0..cda716d229 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -1625,7 +1625,7 @@ _vp9_generate_gop_structure (GstVaVp9Enc * self)
+@@ -1629,7 +1629,7 @@ _vp9_generate_gop_structure (GstVaVp9Enc * self)
  
    /* VP9 does not define reference list1 in spec. */
    if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,

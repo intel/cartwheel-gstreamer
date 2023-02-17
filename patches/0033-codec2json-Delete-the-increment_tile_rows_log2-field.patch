@@ -1,0 +1,27 @@
+From da2030ccdcdf19d1046092f68ad980a9bd7733db Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Wed, 1 Feb 2023 09:38:24 +0800
+Subject: [PATCH 06/13] codec2json: Delete the increment_tile_rows_log2 field
+ in AV1.
+
+We already deleted this field in the codec parser lib.
+---
+ subprojects/gst-plugins-bad/ext/codec2json/gstav12json.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/ext/codec2json/gstav12json.c b/subprojects/gst-plugins-bad/ext/codec2json/gstav12json.c
+index 5bc8907eb5..3827a5916b 100644
+--- a/subprojects/gst-plugins-bad/ext/codec2json/gstav12json.c
++++ b/subprojects/gst-plugins-bad/ext/codec2json/gstav12json.c
+@@ -498,8 +498,6 @@ gst_av1_2_json_frame_header (GstAV12json * self,
+   tile_info = json_object_new ();
+   json_object_set_int_member (tile_info, "uniform tile spacing flag",
+       frame_header->tile_info.uniform_tile_spacing_flag);
+-  json_object_set_int_member (tile_info, "increment tile rows log2",
+-      frame_header->tile_info.increment_tile_rows_log2);
+   width_in_sbs_minus_1 = json_array_new ();
+   height_in_sbs_minus_1 = json_array_new ();
+   for (i = 0; i < GST_AV1_MAX_TILE_COLS; i++) {
+-- 
+2.25.1
+
