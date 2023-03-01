@@ -1,17 +1,17 @@
-From 7b253423798b597226a3f42bc6435ba31964faaa Mon Sep 17 00:00:00 2001
+From a8f71f35892fad503b361327c805a4cfb1164a7e Mon Sep 17 00:00:00 2001
 From: Tong Wu <tong1.wu@intel.com>
 Date: Thu, 17 Nov 2022 10:29:55 +0800
-Subject: [PATCH 4/8] msdkdec: add thiz->ds_has_known_allocator for d3d11
+Subject: [PATCH] msdkdec: add thiz->ds_has_known_allocator for d3d11
 
 ---
  subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c | 4 ++++
  1 file changed, 4 insertions(+)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 5aa6b2d7ac..2242336b41 100644
+index a6e72bc1087c..e49762b6d63e 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-@@ -1868,6 +1868,10 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+@@ -1874,6 +1874,10 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
              GST_IS_VA_DMABUF_ALLOCATOR (allocator)))
        thiz->ds_has_known_allocator = FALSE;
    }
@@ -23,5 +23,5 @@ index 5aa6b2d7ac..2242336b41 100644
  
    /* If downstream supports video meta and video alignment, or downstream
 -- 
-2.35.1.windows.2
+2.38.1
 

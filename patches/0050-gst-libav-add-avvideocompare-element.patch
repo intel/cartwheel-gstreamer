@@ -1,4 +1,4 @@
-From 37836e39787b69b44d66cef6283bed239aa7f52d Mon Sep 17 00:00:00 2001
+From 2b8344c4fae87fea39339674cbb756ea29c833a3 Mon Sep 17 00:00:00 2001
 From: "U. Artie Eoff" <ullysses.a.eoff@intel.com>
 Date: Tue, 8 Nov 2022 17:31:36 -0500
 Subject: [PATCH] gst-libav: add avvideocompare element

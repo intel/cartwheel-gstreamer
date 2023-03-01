@@ -1,4 +1,4 @@
-From cb5dea34acf702ea492b970ad78ce3e39dee014f Mon Sep 17 00:00:00 2001
+From 3c435bd2d420ab15e7442f97d36f1a2148a19485 Mon Sep 17 00:00:00 2001
 From: "U. Artie Eoff" <ullysses.a.eoff@intel.com>
 Date: Tue, 7 Feb 2023 14:33:02 -0500
 Subject: [PATCH] gst-libav: add vuya, p010, y410 formats
@@ -28,7 +28,7 @@ index 6610593bb615..64d07b91be1c 100644
  
  GstVideoFormat
 diff --git a/subprojects/gst-libav/ext/libav/gstavvidcmp.c b/subprojects/gst-libav/ext/libav/gstavvidcmp.c
-index 08e934515755..569efc683699 100644
+index 61a866a68df1..1decf8a4e761 100644
 --- a/subprojects/gst-libav/ext/libav/gstavvidcmp.c
 +++ b/subprojects/gst-libav/ext/libav/gstavvidcmp.c
 @@ -72,7 +72,8 @@
