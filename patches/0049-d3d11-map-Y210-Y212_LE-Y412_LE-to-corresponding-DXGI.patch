@@ -1,4 +1,4 @@
-From dd43ec92e1a7de11978e221860b4957aae19c93b Mon Sep 17 00:00:00 2001
+From 2fe9ff9113d1630a165764e27b54e61f0380b691 Mon Sep 17 00:00:00 2001
 From: Tong Wu <tong1.wu@intel.com>
 Date: Wed, 28 Dec 2022 10:11:51 +0800
 Subject: [PATCH] d3d11: map Y210 Y212_LE Y412_LE to corresponding DXGI formats
@@ -13,7 +13,7 @@ GST_VIDEO_FORMAT_Y412_LE to DXGI_FORMAT_416
  3 files changed, 11 insertions(+), 11 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11-private.h b/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11-private.h
-index 35182500e9..93de25fb51 100644
+index 35182500e917..93de25fb5146 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11-private.h
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11-private.h
 @@ -130,6 +130,12 @@ static const GstD3D11Format _gst_d3d11_default_format_map[] = {
@@ -30,10 +30,10 @@ index 35182500e9..93de25fb51 100644
    MAKE_FORMAT_MAP_RGBP (BGRP, R8_UNORM, UNKNOWN),
    MAKE_FORMAT_MAP_RGBP (GBR, R8_UNORM, UNKNOWN),
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11device.cpp b/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11device.cpp
-index a97643a635..232b536fe9 100644
+index 2a5c77b9dfa5..c5c6e004b457 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11device.cpp
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11device.cpp
-@@ -503,11 +503,14 @@ gst_d3d11_device_setup_format_table (GstD3D11Device * self)
+@@ -505,11 +505,14 @@ gst_d3d11_device_setup_format_table (GstD3D11Device * self)
          break;
          /* YUV DXGI native formats */
        case GST_VIDEO_FORMAT_VUYA:
@@ -48,7 +48,7 @@ index a97643a635..232b536fe9 100644
        case GST_VIDEO_FORMAT_YUY2:
        {
          gboolean supported = TRUE;
-@@ -650,17 +653,6 @@ gst_d3d11_device_setup_format_table (GstD3D11Device * self)
+@@ -652,17 +655,6 @@ gst_d3d11_device_setup_format_table (GstD3D11Device * self)
    priv->format_table[n_formats].resource_format[0] =
        DXGI_FORMAT_R8G8_B8G8_UNORM;
    n_formats++;
@@ -67,7 +67,7 @@ index a97643a635..232b536fe9 100644
  }
  
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11format.cpp b/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11format.cpp
-index af6ee93c78..899e19695e 100644
+index af6ee93c7894..899e19695ea7 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11format.cpp
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/d3d11/gstd3d11format.cpp
 @@ -152,6 +152,8 @@ gst_d3d11_dxgi_format_get_size (DXGI_FORMAT format, guint width, guint height,
@@ -80,5 +80,5 @@ index af6ee93c78..899e19695e 100644
        offset[0] = 0;
        stride[0] = pitch;
 -- 
-2.35.1.windows.2
+2.38.1
 

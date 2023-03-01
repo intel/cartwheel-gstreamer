@@ -1,4 +1,4 @@
-From a134eb87398fa11b5811981b4b1bb10e9183994a Mon Sep 17 00:00:00 2001
+From 354330ac304742500ece29a01d94bea5e73bf90f Mon Sep 17 00:00:00 2001
 From: "U. Artie Eoff" <ullysses.a.eoff@intel.com>
 Date: Tue, 8 Nov 2022 17:35:31 -0500
 Subject: [PATCH] gst-libav: register avvideocompare with libav plugin

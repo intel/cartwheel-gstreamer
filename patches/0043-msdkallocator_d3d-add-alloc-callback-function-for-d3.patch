@@ -1,7 +1,7 @@
-From 7c001ef4120ab66e9851668d88c7ad2c7eff42d4 Mon Sep 17 00:00:00 2001
+From f3e8d3e603fd1f5603a1fd011710b397b8e79f4c Mon Sep 17 00:00:00 2001
 From: Tong Wu <tong1.wu@intel.com>
 Date: Wed, 26 Oct 2022 10:32:10 +0800
-Subject: [PATCH 3/8] msdkallocator_d3d: add alloc callback function for d3d
+Subject: [PATCH] msdkallocator_d3d: add alloc callback function for d3d
  allocator
 
 ---
@@ -9,7 +9,7 @@ Subject: [PATCH 3/8] msdkallocator_d3d: add alloc callback function for d3d
  1 file changed, 126 insertions(+), 1 deletion(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c
-index d7388237fa..0172ebdbec 100644
+index d7388237fa85..0172ebdbecc3 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c
 @@ -50,7 +50,132 @@ mfxStatus
@@ -147,5 +147,5 @@ index d7388237fa..0172ebdbec 100644
  
  mfxStatus
 -- 
-2.35.1.windows.2
+2.38.1
 

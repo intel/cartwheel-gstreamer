@@ -1,7 +1,7 @@
-From fb5597eec8e5351a1a9692be3b5b1618a5d5b4c6 Mon Sep 17 00:00:00 2001
+From 9f420fb777f21119c8b895e434794e37f65b3f33 Mon Sep 17 00:00:00 2001
 From: Tong Wu <tong1.wu@intel.com>
 Date: Tue, 18 Oct 2022 18:46:52 +0800
-Subject: [PATCH 1/8] msdkdec: add d3d11 caps for srcpad
+Subject: [PATCH] msdkdec: add d3d11 caps for srcpad
 
 Set decoder srcpad with D3D11Memory.
 ---
@@ -14,7 +14,7 @@ Set decoder srcpad with D3D11Memory.
  6 files changed, 58 insertions(+), 5 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkav1dec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkav1dec.c
-index 46cb9f18f2..bce4455021 100644
+index 46cb9f18f279..bce4455021ee 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkav1dec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkav1dec.c
 @@ -61,7 +61,8 @@ GST_DEBUG_CATEGORY_EXTERN (gst_msdkav1dec_debug);
@@ -48,19 +48,19 @@ index 46cb9f18f2..bce4455021 100644
  #define gst_msdkav1dec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkAV1Dec, gst_msdkav1dec, GST_TYPE_MSDKDEC);
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 8cfbe84bff..03bbb143aa 100644
+index 847a1cfbc2ea..87c31faa8058 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-@@ -45,6 +45,8 @@
+@@ -44,6 +44,8 @@
+ 
  #ifndef _WIN32
- #include <gstmsdkallocator_libva.h>
  #include <gst/va/gstvaallocator.h>
 +#else
 +#include <gst/d3d11/gstd3d11.h>
  #endif
  
  GST_DEBUG_CATEGORY_EXTERN (gst_msdkdec_debug);
-@@ -751,6 +753,12 @@ gst_msdkdec_set_src_caps (GstMsdkDec * thiz, gboolean need_allocation)
+@@ -750,6 +752,12 @@ gst_msdkdec_set_src_caps (GstMsdkDec * thiz, gboolean need_allocation)
      gst_caps_set_features (output_state->caps, 0,
          gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_DMABUF, NULL));
    }
@@ -74,7 +74,7 @@ index 8cfbe84bff..03bbb143aa 100644
  
    if (need_allocation) {
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh264dec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh264dec.c
-index 43b6d90aab..f2affd77b2 100644
+index 43b6d90aabe8..f2affd77b2a8 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh264dec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh264dec.c
 @@ -60,7 +60,8 @@ GST_DEBUG_CATEGORY_EXTERN (gst_msdkh264dec_debug);
@@ -108,7 +108,7 @@ index 43b6d90aab..f2affd77b2 100644
  #define gst_msdkh264dec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkH264Dec, gst_msdkh264dec, GST_TYPE_MSDKDEC);
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265dec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265dec.c
-index 8de9deaa64..0ec65173c0 100644
+index 8de9deaa6444..0ec65173c0c3 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265dec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkh265dec.c
 @@ -62,7 +62,8 @@ GST_DEBUG_CATEGORY_EXTERN (gst_msdkh265dec_debug);
@@ -142,7 +142,7 @@ index 8de9deaa64..0ec65173c0 100644
  #define gst_msdkh265dec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkH265Dec, gst_msdkh265dec, GST_TYPE_MSDKDEC);
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkmjpegdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkmjpegdec.c
-index c3c9fe0e3c..43978e4ee2 100644
+index de0d7d372750..7d333d5c6bb9 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkmjpegdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkmjpegdec.c
 @@ -71,14 +71,23 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
@@ -171,7 +171,7 @@ index c3c9fe0e3c..43978e4ee2 100644
  #define gst_msdkmjpegdec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkMJPEGDec, gst_msdkmjpegdec, GST_TYPE_MSDKDEC);
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvp9dec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvp9dec.c
-index 3056a7dd5b..34dbc30b2a 100644
+index 3056a7dd5b27..34dbc30b2a9c 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvp9dec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvp9dec.c
 @@ -64,7 +64,8 @@ GST_DEBUG_CATEGORY_EXTERN (gst_msdkvp9dec_debug);
@@ -205,5 +205,5 @@ index 3056a7dd5b..34dbc30b2a 100644
  #define gst_msdkvp9dec_parent_class parent_class
  G_DEFINE_TYPE (GstMsdkVP9Dec, gst_msdkvp9dec, GST_TYPE_MSDKDEC);
 -- 
-2.35.1.windows.2
+2.38.1
 
