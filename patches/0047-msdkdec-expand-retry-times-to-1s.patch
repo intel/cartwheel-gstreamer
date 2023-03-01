@@ -1,4 +1,4 @@
-From b068d1ec900c99d610c7f19e387174fd48405c2e Mon Sep 17 00:00:00 2001
+From 6af57a31cb81754f92f62acf74c66ed58f20df3b Mon Sep 17 00:00:00 2001
 From: Tong Wu <tong1.wu@intel.com>
 Date: Thu, 24 Nov 2022 11:00:15 +0800
 Subject: [PATCH 7/8] msdkdec: expand retry times to 1s
@@ -11,10 +11,10 @@ fail.
  1 file changed, 6 insertions(+), 5 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 07085e491b..160407d54a 100644
+index d29f7f7ec8..dbda9f1c37 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-@@ -198,9 +198,7 @@ allocate_output_surface (GstMsdkDec * thiz)
+@@ -197,9 +197,7 @@ allocate_output_surface (GstMsdkDec * thiz)
    GstMemory *mem = NULL;
    mfxFrameSurface1 *mfx_surface = NULL;
    gint n = 0;
@@ -25,7 +25,7 @@ index 07085e491b..160407d54a 100644
  #ifdef _WIN32
    GstMapInfo map_info;
  #endif
-@@ -208,7 +206,7 @@ allocate_output_surface (GstMsdkDec * thiz)
+@@ -207,7 +205,7 @@ allocate_output_surface (GstMsdkDec * thiz)
    /* Free un-unsed msdk surfaces firstly, hence the associated mfx
     * surfaces will be moved from used list to available list */
    if (!gst_msdkdec_free_unlocked_msdk_surfaces (thiz, FALSE)) {
@@ -34,7 +34,7 @@ index 07085e491b..160407d54a 100644
        /* It is MediaSDK/oneVPL's requirement that only the pre-allocated
         * surfaces can be used during the whole decoding process.
         * In the case of decoder plus multi-encoders, it is possible
-@@ -216,11 +214,14 @@ allocate_output_surface (GstMsdkDec * thiz)
+@@ -215,11 +213,14 @@ allocate_output_surface (GstMsdkDec * thiz)
         * available for decoder. So here we need to wait until there is at
         * least one surface is free for decoder.
         */
@@ -51,5 +51,5 @@ index 07085e491b..160407d54a 100644
  
    if ((gst_buffer_pool_acquire_buffer (thiz->alloc_pool, &out_buffer, NULL))
 -- 
-2.35.1.windows.2
+2.39.1.windows.1
 

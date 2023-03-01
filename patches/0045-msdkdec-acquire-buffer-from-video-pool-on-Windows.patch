@@ -1,4 +1,4 @@
-From 9684da5be64d83759985f0ea136f63f6c5bf87d1 Mon Sep 17 00:00:00 2001
+From 4a8019aadc3f07288ab0ad76f02514d2743cea2f Mon Sep 17 00:00:00 2001
 From: Tong Wu <tong1.wu@intel.com>
 Date: Thu, 17 Nov 2022 10:37:05 +0800
 Subject: [PATCH 5/8] msdkdec: acquire buffer from video pool on Windows
@@ -10,10 +10,10 @@ acquired from d3d11 video pool.
  1 file changed, 21 insertions(+), 28 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 2242336b41..07085e491b 100644
+index e49762b6d6..d29f7f7ec8 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-@@ -195,14 +195,15 @@ allocate_output_surface (GstMsdkDec * thiz)
+@@ -194,14 +194,15 @@ allocate_output_surface (GstMsdkDec * thiz)
  {
    GstMsdkSurface *msdk_surface = NULL;
    GstBuffer *out_buffer = NULL;
@@ -31,7 +31,7 @@ index 2242336b41..07085e491b 100644
  
    /* Free un-unsed msdk surfaces firstly, hence the associated mfx
     * surfaces will be moved from used list to available list */
-@@ -221,53 +222,45 @@ allocate_output_surface (GstMsdkDec * thiz)
+@@ -220,13 +221,22 @@ allocate_output_surface (GstMsdkDec * thiz)
          break;
      }
    }
@@ -55,9 +55,8 @@ index 2242336b41..07085e491b 100644
 +#endif
    mem = gst_buffer_peek_memory (out_buffer, 0);
    msdk_surface = g_slice_new0 (GstMsdkSurface);
-   msdk_surface->from_qdata = FALSE;
--
-   if ((mfx_surface = gst_mini_object_get_qdata (GST_MINI_OBJECT_CAST (mem),
+ 
+@@ -234,39 +244,22 @@ allocate_output_surface (GstMsdkDec * thiz)
                GST_MSDK_FRAME_SURFACE))) {
      msdk_surface->surface = mfx_surface;
      msdk_surface->from_qdata = TRUE;
@@ -79,6 +78,7 @@ index 2242336b41..07085e491b 100644
 -  if ((gst_buffer_pool_acquire_buffer (thiz->pool, &out_buffer, NULL))
 -      != GST_FLOW_OK) {
 -    GST_ERROR_OBJECT (thiz, "Failed to allocate output buffer");
+-    gst_buffer_pool_set_active (thiz->pool, FALSE);
 +  if (msdk_surface) {
 +    msdk_surface->buf = out_buffer;
 +  } else {
@@ -90,7 +90,7 @@ index 2242336b41..07085e491b 100644
 -      gst_video_decoder_get_output_state (GST_VIDEO_DECODER (thiz));
 -
 -  msdk_surface =
--      gst_msdk_import_sys_mem_to_msdk_surface (out_buffer, output_state->info);
+-      gst_msdk_import_sys_mem_to_msdk_surface (out_buffer, &output_state->info);
 -
 -  gst_video_codec_state_unref (output_state);
 -
@@ -104,5 +104,5 @@ index 2242336b41..07085e491b 100644
      gst_msdk_update_mfx_frame_info_from_mfx_video_param
          (&msdk_surface->surface->Info, &thiz->param);
 -- 
-2.35.1.windows.2
+2.39.1.windows.1
 

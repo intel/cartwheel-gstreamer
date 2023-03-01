@@ -1,4 +1,4 @@
-From fc8f8921a87c6d85c2f2ca1df33d68233da0e5f2 Mon Sep 17 00:00:00 2001
+From 4768f7c7e48e504572c37021235bb8b570d7968e Mon Sep 17 00:00:00 2001
 From: Tong Wu <tong1.wu@intel.com>
 Date: Wed, 19 Oct 2022 15:01:44 +0800
 Subject: [PATCH 2/8] msdkdec: add d3d11 pool during negotiation
@@ -9,10 +9,10 @@ Enable use_video_memory for Windows and add d3d11 pool.
  1 file changed, 27 insertions(+), 14 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 03bbb143aa..5aa6b2d7ac 100644
+index 87c31faa80..a6e72bc108 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-@@ -1034,14 +1034,7 @@ gst_msdkdec_context_prepare (GstMsdkDec * thiz)
+@@ -1036,14 +1036,7 @@ gst_msdkdec_context_prepare (GstMsdkDec * thiz)
      return TRUE;
    }
  
@@ -27,7 +27,7 @@ index 03bbb143aa..5aa6b2d7ac 100644
  
    GST_INFO_OBJECT (thiz, "Found context %" GST_PTR_FORMAT " from neighbour",
        thiz->context);
-@@ -1727,6 +1720,31 @@ gst_msdk_create_va_pool (GstMsdkDec * thiz, GstVideoInfo * info,
+@@ -1733,6 +1726,31 @@ gst_msdk_create_va_pool (GstMsdkDec * thiz, GstVideoInfo * info,
    GST_LOG_OBJECT (thiz, "Creating va pool");
    return pool;
  }
@@ -59,7 +59,7 @@ index 03bbb143aa..5aa6b2d7ac 100644
  #endif
  
  static GstBufferPool *
-@@ -1742,16 +1760,13 @@ gst_msdkdec_create_buffer_pool (GstMsdkDec * thiz, GstVideoInfo * info,
+@@ -1748,16 +1766,13 @@ gst_msdkdec_create_buffer_pool (GstMsdkDec * thiz, GstVideoInfo * info,
    gst_msdk_set_video_alignment (&vinfo, 0, 0, &align);
    gst_video_info_align (&vinfo, &align);
  
@@ -78,7 +78,7 @@ index 03bbb143aa..5aa6b2d7ac 100644
  #endif
    }
  
-@@ -2288,7 +2303,5 @@ gst_msdkdec_init (GstMsdkDec * thiz)
+@@ -2294,7 +2309,5 @@ gst_msdkdec_init (GstMsdkDec * thiz)
    thiz->input_state = NULL;
    thiz->pool = NULL;
    thiz->context = NULL;
@@ -87,5 +87,5 @@ index 03bbb143aa..5aa6b2d7ac 100644
 -#endif
  }
 -- 
-2.35.1.windows.2
+2.39.1.windows.1
 

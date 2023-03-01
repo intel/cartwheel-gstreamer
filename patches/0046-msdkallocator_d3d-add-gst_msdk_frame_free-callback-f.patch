@@ -1,4 +1,4 @@
-From 11b22a622b0f2075963a68383b0a5a44c79999ed Mon Sep 17 00:00:00 2001
+From c70db034927f34edd4e940dfd7c10df274a9558e Mon Sep 17 00:00:00 2001
 From: Tong Wu <tong1.wu@intel.com>
 Date: Thu, 17 Nov 2022 10:41:10 +0800
 Subject: [PATCH 6/8] msdkallocator_d3d: add gst_msdk_frame_free callback
@@ -36,5 +36,5 @@ index 0172ebdbec..2b873ac662 100644
  }
  
 -- 
-2.35.1.windows.2
+2.39.1.windows.1
 
