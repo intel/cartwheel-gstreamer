@@ -1,4 +1,4 @@
-From fae4e6dd2584befa0ffef9b1d93dbebc82ca5367 Mon Sep 17 00:00:00 2001
+From 5a544cb1d55981278f1e38d8a5322085293feff8 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 16:27:01 +0800
 Subject: [PATCH 05/13] codecparsers: av1: delete the useless
@@ -12,7 +12,7 @@ number for each while loop, we should not store it in GstAV1FrameHeaderOBU.
  2 files changed, 2 insertions(+), 4 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.c b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.c
-index e31462c125..4d3bc63d97 100644
+index 4b0e0e72aa..2797cc073a 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.c
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1parser.c
 @@ -2260,11 +2260,11 @@ gst_av1_parse_tile_info (GstAV1Parser * parser, GstBitReader * br,

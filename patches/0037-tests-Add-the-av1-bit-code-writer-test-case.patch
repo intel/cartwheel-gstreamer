@@ -1,4 +1,4 @@
-From b41c79164c05d74221059d265154dcc33c861b83 Mon Sep 17 00:00:00 2001
+From 308c2c7a53f92e7e3a9bd672a3ba82e38487a768 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:39:30 +0800
 Subject: [PATCH 10/13] tests: Add the av1 bit code writer test case.

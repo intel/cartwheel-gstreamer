@@ -1,4 +1,4 @@
-From 8e105b1bf796688b5d4977559151f9ea1791333f Mon Sep 17 00:00:00 2001
+From 38acd12bed3514cd95836a12ccf8f0dfeb4a5a9b Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 1 Feb 2023 21:45:42 +0800
 Subject: [PATCH 03/13] vp9bitwriter: Add the VP9 bit writer helper functions.

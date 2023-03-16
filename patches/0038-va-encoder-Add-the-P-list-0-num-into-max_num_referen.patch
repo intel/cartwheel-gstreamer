@@ -1,4 +1,4 @@
-From f9b73316e9582832f0f793d2c66af0792f82b6bf Mon Sep 17 00:00:00 2001
+From 70b2afe77c1e3bfd3e009f856f624a2fd2afc781 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:38:48 +0800
 Subject: [PATCH 11/13] va: encoder: Add the P list 0 num into
@@ -19,10 +19,10 @@ to list 1.
  5 files changed, 28 insertions(+), 14 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index 9e08df713e..a715cc2799 100644
+index 4a745138eb..372f5ca3dd 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-@@ -635,7 +635,7 @@ gst_va_encoder_get_slice_structure (GstVaEncoder * self,
+@@ -639,7 +639,7 @@ gst_va_encoder_get_slice_structure (GstVaEncoder * self,
  gboolean
  gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
      VAProfile profile, VAEntrypoint entrypoint,
@@ -31,7 +31,7 @@ index 9e08df713e..a715cc2799 100644
  {
    VAStatus status;
    VADisplay dpy;
-@@ -655,18 +655,31 @@ gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
+@@ -659,18 +659,31 @@ gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
    }
  
    if (attrib.value == VA_ATTRIB_NOT_SUPPORTED) {
@@ -88,10 +88,10 @@ index 290fb3531a..d233693be1 100644
                                                                 VAProfile profile,
                                                                 VAEntrypoint entrypoint);
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index be6a48f136..9df1e21f41 100644
+index 200d68544f..cec3a38f63 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-@@ -983,7 +983,7 @@ _generate_gop_structure (GstVaH264Enc * self)
+@@ -984,7 +984,7 @@ _generate_gop_structure (GstVaH264Enc * self)
    }
  
    if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,
@@ -101,7 +101,7 @@ index be6a48f136..9df1e21f41 100644
      list0 = 1;
      list1 = 0;
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index 8e031510ea..0c4ef7798e 100644
+index 240ce6e6b6..019094915d 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -3803,7 +3803,7 @@ _h265_generate_gop_structure (GstVaH265Enc * self)

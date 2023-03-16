@@ -1,4 +1,4 @@
-From 0300e61c761d085d79473ccb1a54c99fb59dd73c Mon Sep 17 00:00:00 2001
+From 70fbb22afe6444854644ea755f7d12b30b74fc79 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
 Subject: [PATCH 04/13] va: Implement the vavp9enc plugin.
@@ -3239,7 +3239,7 @@ index 0000000000..94db2e8e3b
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index b12f9b3e4e..e0d479846e 100644
+index 6315217a1f..8c2be5ef2e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
 @@ -21,6 +21,7 @@ va_sources = [
@@ -3250,17 +3250,17 @@ index b12f9b3e4e..e0d479846e 100644
    'gstvavpp.c',
  ]
  
-@@ -54,7 +55,7 @@ gstva = library('gstva',
-   va_sources,
-   c_args : gst_plugins_bad_args + gstva_cargs,
+@@ -78,7 +79,7 @@ gstva = library('gstva',
+   c_args : gst_plugins_bad_args + extra_args,
+   cpp_args : gst_plugins_bad_args + extra_args,
    include_directories : [configinc],
 -  dependencies : [gstcodecs_dep, gstva_dep, libgudev_dep] + extra_dep,
 +  dependencies : [gstcodecs_dep, gstva_dep, libgudev_dep, libm] + extra_dep,
+   override_options : c_std_arg,
    install : true,
    install_dir : plugins_install_dir,
- )
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index 937fa04e7b..d2e2648118 100644
+index ffa00f4619..83960d30ed 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -42,6 +42,7 @@
@@ -3271,7 +3271,7 @@ index 937fa04e7b..d2e2648118 100644
  #include "gstvavpp.h"
  
  #define GST_CAT_DEFAULT gstva_debug
-@@ -203,6 +204,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -205,6 +206,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
                device->render_device_path);
          }
          break;
