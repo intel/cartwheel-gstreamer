@@ -1,4 +1,4 @@
-From 5452d605fce4c962f0b2b8ab4d175cc734b74497 Mon Sep 17 00:00:00 2001
+From 8e41b99403f3fd5bd4f84c8884502ed557adb973 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:48:50 +0800
 Subject: [PATCH 12/13] va: Implement the vaav1enc plugin.
@@ -4401,10 +4401,10 @@ index 0000000000..4ebb3b5771
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index e0d479846e..0bc61d8f89 100644
+index 8c2be5ef2e..2c7029ab47 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
-@@ -40,6 +40,9 @@ cdata.set10('HAVE_GUDEV', libgudev_dep.found())
+@@ -73,6 +73,9 @@ endif
  if libva_dep.version().version_compare('>= 1.8')
    va_sources += 'gstvaav1dec.c'
  endif
@@ -4412,10 +4412,10 @@ index e0d479846e..0bc61d8f89 100644
 +  va_sources += 'gstvaav1enc.c'
 +endif
  
- driverdir = libva_dep.get_variable('driverdir', default_value: '')
- if driverdir == ''
+ gstva = library('gstva',
+   va_sources,
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index d2e2648118..1de6e4fc86 100644
+index 83960d30ed..381769f57b 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -28,6 +28,7 @@
@@ -4426,7 +4426,7 @@ index d2e2648118..1de6e4fc86 100644
  #include "gstvacaps.h"
  #include "gstvacompositor.h"
  #include "gstvadeinterlace.h"
-@@ -211,6 +212,15 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -213,6 +214,15 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
                device->render_device_path);
          }
          break;

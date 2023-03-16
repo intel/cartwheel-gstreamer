@@ -1,4 +1,4 @@
-From a02193f8a94af32027d175b78b9f3c2c90b45e45 Mon Sep 17 00:00:00 2001
+From 4a63f25d8581a976e1354ca5dbecaf2c8dd1764d Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 10 Nov 2022 17:00:28 +0800
 Subject: [PATCH 01/13] va: encoder: extend prepare_output() virtual function.
@@ -16,10 +16,10 @@ current prepare_output() virtual function.
  4 files changed, 60 insertions(+), 28 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index 2cadb5d497..8c4bd5904d 100644
+index 8f85495dc0..81c2d60781 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-@@ -314,7 +314,7 @@ invalid_buffer:
+@@ -318,7 +318,7 @@ invalid_buffer:
    }
  }
  
@@ -28,7 +28,7 @@ index 2cadb5d497..8c4bd5904d 100644
  gst_va_base_enc_create_output_buffer (GstVaBaseEnc * base,
      GstVaEncodePicture * picture)
  {
-@@ -451,37 +451,38 @@ config_failed:
+@@ -455,37 +455,38 @@ config_failed:
  static GstFlowReturn
  _push_buffer_to_downstream (GstVaBaseEnc * base, GstVideoCodecFrame * frame)
  {
@@ -89,13 +89,13 @@ index 2cadb5d497..8c4bd5904d 100644
  
    return GST_FLOW_ERROR;
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
-index 2db7c760b0..45bb2d9da0 100644
+index 8c9b570ad1..eca2b72415 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
 @@ -87,8 +87,9 @@ struct _GstVaBaseEncClass
-   gboolean (*encode_frame)   (GstVaBaseEnc * encoder,
-                               GstVideoCodecFrame * frame,
-                               gboolean is_last);
+   GstFlowReturn (*encode_frame) (GstVaBaseEnc * encoder,
+                                  GstVideoCodecFrame * frame,
+                                  gboolean is_last);
 -  void     (*prepare_output) (GstVaBaseEnc * encoder,
 -                              GstVideoCodecFrame * frame);
 +  gboolean (*prepare_output) (GstVaBaseEnc * encoder,
@@ -114,10 +114,10 @@ index 2db7c760b0..45bb2d9da0 100644
  void                  gst_va_base_enc_update_property_uint (GstVaBaseEnc * base,
                                                              guint32 * old_val,
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index 5e57d4482e..be6a48f136 100644
+index 55ed703f66..200d68544f 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-@@ -3034,11 +3034,13 @@ gst_va_h264_enc_flush (GstVideoEncoder * venc)
+@@ -3037,11 +3037,13 @@ gst_va_h264_enc_flush (GstVideoEncoder * venc)
    return GST_VIDEO_ENCODER_CLASS (parent_class)->flush (venc);
  }
  
@@ -133,7 +133,7 @@ index 5e57d4482e..be6a48f136 100644
  
    frame_enc = _enc_frame (frame);
  
-@@ -3050,6 +3052,18 @@ gst_va_h264_enc_prepare_output (GstVaBaseEnc * base, GstVideoCodecFrame * frame)
+@@ -3053,6 +3055,18 @@ gst_va_h264_enc_prepare_output (GstVaBaseEnc * base, GstVideoCodecFrame * frame)
        (gint64) self->gop.num_reorder_frames);
    base->output_frame_count++;
    frame->duration = base->frame_duration;
@@ -153,10 +153,10 @@ index 5e57d4482e..be6a48f136 100644
  
  static gint
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index f542158176..8e031510ea 100644
+index da0bebf044..240ce6e6b6 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -4642,11 +4642,13 @@ gst_va_h265_enc_new_frame (GstVaBaseEnc * base, GstVideoCodecFrame * frame)
+@@ -4640,11 +4640,13 @@ gst_va_h265_enc_new_frame (GstVaBaseEnc * base, GstVideoCodecFrame * frame)
    return TRUE;
  }
  
@@ -172,7 +172,7 @@ index f542158176..8e031510ea 100644
  
    frame_enc = _enc_frame (frame);
  
-@@ -4658,6 +4660,18 @@ gst_va_h265_enc_prepare_output (GstVaBaseEnc * base, GstVideoCodecFrame * frame)
+@@ -4656,6 +4658,18 @@ gst_va_h265_enc_prepare_output (GstVaBaseEnc * base, GstVideoCodecFrame * frame)
        (gint64) self->gop.num_reorder_frames);
    base->output_frame_count++;
    frame->duration = base->frame_duration;
