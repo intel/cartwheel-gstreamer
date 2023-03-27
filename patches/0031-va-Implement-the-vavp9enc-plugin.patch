@@ -1,4 +1,4 @@
-From 70fbb22afe6444854644ea755f7d12b30b74fc79 Mon Sep 17 00:00:00 2001
+From ea812cbd95d8abb2b2e28cdf00e79d7b44a4663b Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
 Subject: [PATCH 04/13] va: Implement the vavp9enc plugin.

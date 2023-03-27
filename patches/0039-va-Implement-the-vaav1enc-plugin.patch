@@ -1,23 +1,23 @@
-From 8e41b99403f3fd5bd4f84c8884502ed557adb973 Mon Sep 17 00:00:00 2001
+From 5a4df3c1a60a53330604ae203d67e1888eba71f2 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:48:50 +0800
 Subject: [PATCH 12/13] va: Implement the vaav1enc plugin.
 
 ---
- .../gst-plugins-bad/sys/va/gstvaav1enc.c      | 4342 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvaav1enc.c      | 4445 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvaav1enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +
  subprojects/gst-plugins-bad/sys/va/plugin.c   |   10 +
- 4 files changed, 4389 insertions(+)
+ 4 files changed, 4492 insertions(+)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvaav1enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 new file mode 100644
-index 0000000000..4ce400f8d4
+index 0000000000..eadf0ffbb5
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-@@ -0,0 +1,4342 @@
+@@ -0,0 +1,4445 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -296,7 +296,6 @@ index 0000000000..4ce400f8d4
 +  {
 +    gboolean enable_cdef;
 +    gboolean cdef_channel_strength;
-+    guint8 cdef_bits;
 +    gboolean enable_filter_intra;
 +    gboolean enable_intra_edge_filter;
 +    gboolean enable_interintra_compound;
@@ -1581,7 +1580,7 @@ index 0000000000..4ce400f8d4
 +          all_refs[forward_num].index_in_dpb;
 +
 +      va_frame->ref_frame_idx[GST_AV1_REF_ALTREF2_FRAME] =
-+          va_frame->ref_frame_idx[GST_AV1_REF_GOLDEN_FRAME];
++          va_frame->ref_frame_idx[GST_AV1_REF_ALTREF_FRAME];
 +    } else {
 +      /* Set the ALTREF to the nearest future frame. ALTREF2 and BWDREF
 +         are just set to GOLDEN. */
@@ -1589,9 +1588,9 @@ index 0000000000..4ce400f8d4
 +          all_refs[forward_num].index_in_dpb;
 +
 +      va_frame->ref_frame_idx[GST_AV1_REF_ALTREF2_FRAME] =
-+          va_frame->ref_frame_idx[GST_AV1_REF_GOLDEN_FRAME];
++          va_frame->ref_frame_idx[GST_AV1_REF_ALTREF_FRAME];
 +      va_frame->ref_frame_idx[GST_AV1_REF_BWDREF_FRAME] =
-+          va_frame->ref_frame_idx[GST_AV1_REF_GOLDEN_FRAME];
++          va_frame->ref_frame_idx[GST_AV1_REF_ALTREF_FRAME];
 +    }
 +  } else {
 +    /* If no backward refs, BWDREF, ALTREF and ALTREF2 are set to GOLDEN. */
@@ -1772,7 +1771,6 @@ index 0000000000..4ce400f8d4
 +  self->features.allow_intrabc = FALSE;
 +  self->features.enable_segmentation = FALSE;
 +  self->features.enable_cdef = FALSE;
-+  self->features.cdef_bits = 0;
 +  self->features.interpolation_filter_support = 0;
 +  self->features.interpolation_type = 0;
 +  self->features.obu_size_bytes = 0;
@@ -2277,7 +2275,6 @@ index 0000000000..4ce400f8d4
 +    self->features.allow_intrabc = FALSE;
 +    self->features.enable_cdef = FALSE;
 +    self->features.cdef_channel_strength = FALSE;
-+    self->features.cdef_bits = 0;
 +  } else {
 +    VAConfigAttribValEncAV1 features;
 +
@@ -2316,7 +2313,6 @@ index 0000000000..4ce400f8d4
 +    self->features.enable_cdef = TRUE;
 +    self->features.cdef_channel_strength =
 +        (features.bits.support_cdef_channel_strength != 0);
-+    self->features.cdef_bits = 0;
 +  }
 +
 +  update_property_bool (base, &self->prop.use_128x128_superblock,
@@ -2395,8 +2391,8 @@ index 0000000000..4ce400f8d4
 +
 +    self->partition.tile_size_bytes_minus_1 =
 +        features_ext2.bits.tile_size_bytes_minus1;
-+    self->features.obu_size_bytes =
-+        features_ext2.bits.obu_size_bytes_minus1 + 1;
++    self->features.obu_size_bytes = 4;
++    /* features_ext2.bits.obu_size_bytes_minus1 + 1; */
 +
 +    self->features.tx_mode_support = features_ext2.bits.tx_mode_support;
 +    if (!(self->features.tx_mode_support &
@@ -2772,7 +2768,7 @@ index 0000000000..4ce400f8d4
 +  if (!gst_va_encoder_open (base->encoder, base->profile,
 +          GST_VIDEO_INFO_FORMAT (&base->input_state->info), base->rt_format,
 +          base->width, base->height, base->codedbuf_size, max_ref_frames,
-+          self->rc.rc_ctrl_mode, self->packed_headers)) {
++          self->rc.rc_ctrl_mode, self->packed_headers, NULL)) {
 +    GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
 +    return FALSE;
 +  }
@@ -2960,6 +2956,109 @@ index 0000000000..4ce400f8d4
 +  return TRUE;
 +}
 +
++static guint8
++_av1_calculate_filter_level (guint32 base_qindex, gboolean chroma)
++{
++  /* *INDENT-OFF* */
++  static const guint8 loop_filter_levels_luma[256] = {
++    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
++    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
++    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
++    0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,  1,  1,  2,
++    2,  2,  2,  2,  2,  2,  3,  3,  3,  3,  3,  3,  3,  4,  4,  4,
++    4,  4,  4,  4,  5,  5,  5,  5,  5,  5,  5,  6,  6,  6,  6,  6,
++    6,  7,  7,  7,  8,  8,  8,  8,  9,  9,  9,  9,  10, 10, 10, 10,
++    11, 11, 11, 11, 12, 12, 12, 12, 13, 13, 13, 14, 14, 14, 15, 15,
++    15, 16, 16, 16, 17, 17, 17, 17, 18, 18, 18, 19, 19, 20, 20, 20,
++    21, 21, 21, 22, 22, 22, 23, 23, 24, 24, 24, 25, 25, 25, 26, 26,
++    27, 27, 27, 28, 28, 29, 29, 29, 30, 30, 31, 31, 31, 32, 32, 33,
++    33, 34, 34, 34, 35, 35, 36, 36, 37, 37, 38, 38, 39, 39, 40, 41,
++    41, 42, 42, 43, 44, 45, 45, 46, 47, 48, 49, 50, 51, 52, 53, 55,
++    56, 58, 59, 61, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63,
++    63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63,
++    63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63, 63
++  };
++
++  static const guint8 loop_filter_levels_chroma[256] = {
++    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
++    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
++    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
++    0,  0,  0,  0,  0,  0,  0,  1,  1,  1,  1,  1,  1,  1,  1,  2,
++    2,  2,  2,  2,  2,  2,  2,  2,  2,  3,  3,  3,  3,  3,  3,  3,
++    3,  3,  3,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,
++    5,  5,  5,  5,  5,  5,  5,  5,  6,  6,  6,  6,  6,  6,  6,  6,
++    6,  6,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  8,  8,
++    8,  8,  8,  8,  8,  8,  8,  8,  9,  9,  9,  9,  9,  9,  9,  10,
++    10, 10, 10, 10, 11, 11, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15,
++    16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 28, 30, 31, 31, 31, 31,
++    31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31,
++    31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31,
++    31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31,
++    31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31,
++    31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31, 31
++  };
++  /* *INDENT-ON* */
++  guint8 level = 0;
++
++  if (!chroma) {
++    level = loop_filter_levels_luma[base_qindex];
++  } else {
++    level = loop_filter_levels_chroma[base_qindex];
++  }
++
++  return level;
++}
++
++static void
++_av1_calculate_cdef_param (GstVaAV1Enc * self,
++    VAEncPictureParameterBufferAV1 * pic_param)
++{
++  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
++  guint32 strengths[GST_AV1_CDEF_MAX] = { 36, 50, 0, 24, 8, 17, 4, 9 };
++  guint8 cdef_bits = 3;
++  guint cdef_damping;
++  guint i;
++
++  /* Adjust the CDEF parameter for CQP mode. In bitrate control mode, the
++     driver will update the CDEF value for each frame automatically. */
++  if (self->rc.rc_ctrl_mode == VA_RC_CQP) {
++    if (self->rc.base_qindex < 90) {
++      /* Low QP setting. */
++      strengths[0] = 5;
++      strengths[1] = 41;
++      strengths[3] = 6;
++      strengths[5] = 16;
++    } else if (self->rc.base_qindex > 140) {
++      /* High QP setting. */
++      cdef_bits = 2;
++      strengths[1] = 63;
++      if (self->rc.base_qindex > 210) {
++        cdef_bits = 1;
++        strengths[0] = 0;
++      }
++    } else {
++      /* Medium QP setting. */
++      cdef_bits = 2;
++      strengths[1] = 63;
++
++      if (base->width < 1600 && base->height < 1600) {
++        strengths[3] = 1;
++      } else {
++        strengths[3] = 32;
++      }
++    }
++  }
++
++  cdef_damping = (self->rc.base_qindex >> 6) + 3;
++
++  pic_param->cdef_bits = cdef_bits;
++  pic_param->cdef_damping_minus_3 = cdef_damping - 3;
++  for (i = 0; i < GST_AV1_CDEF_MAX; i++) {
++    pic_param->cdef_y_strengths[i] = strengths[i];
++    pic_param->cdef_uv_strengths[i] = strengths[i];
++  }
++}
++
 +static gboolean
 +_av1_fill_frame_param (GstVaAV1Enc * self, GstVaAV1EncFrame * va_frame,
 +    VAEncPictureParameterBufferAV1 * pic_param)
@@ -2972,10 +3071,24 @@ index 0000000000..4ce400f8d4
 +  gboolean allow_intrabc;
 +  guint tx_mode;
 +  guint reference_mode;
++  guint loop_filter_level_y;
++  guint loop_filter_level_uv;
 +
 +  g_assert (!(va_frame->type & FRAME_TYPE_REPEAT));
 +
 +  /* *INDENT-OFF* */
++  if (self->rc.rc_ctrl_mode == VA_RC_CQP) {
++    loop_filter_level_y =
++        _av1_calculate_filter_level (self->rc.base_qindex, FALSE);
++    loop_filter_level_uv =
++        _av1_calculate_filter_level (self->rc.base_qindex, TRUE);
++  } else {
++    /* In bitrate control mode, the driver will set the loop filter
++       level for each frame, we do not care here. */
++    loop_filter_level_y = 0xff;
++    loop_filter_level_uv = 0xff;
++  }
++
 +  tx_mode = (self->features.tx_mode_support & GST_AV1_TX_MODE_SELECT) ?
 +      GST_AV1_TX_MODE_SELECT : GST_AV1_TX_MODE_LARGEST;
 +
@@ -3039,9 +3152,9 @@ index 0000000000..4ce400f8d4
 +    .seg_id_block_size = 0,
 +    .num_tile_groups_minus1 = self->partition.tile_groups - 1,
 +    .temporal_id = va_frame->temporal_id,
-+    .filter_level = { 0, 0 },
-+    .filter_level_u = 0,
-+    .filter_level_v = 0,
++    .filter_level = { loop_filter_level_y, loop_filter_level_y },
++    .filter_level_u = loop_filter_level_uv,
++    .filter_level_v = loop_filter_level_uv,
 +    .loop_filter_flags.bits = {
 +      .sharpness_level = 0,
 +      .mode_ref_delta_enabled = 0,
@@ -3086,8 +3199,9 @@ index 0000000000..4ce400f8d4
 +    .width_in_sbs_minus_1 = { 0 },
 +    .height_in_sbs_minus_1 = { 0 },
 +    .context_update_tile_id = 0,
++    /* CDEF parameter will be set later. */
 +    .cdef_damping_minus_3 = 0,
-+    .cdef_bits = self->features.cdef_bits,
++    .cdef_bits = 0,
 +    .cdef_y_strengths = { 0, },
 +    .cdef_uv_strengths = { 0, },
 +    .loop_restoration_flags.bits = {
@@ -3110,6 +3224,8 @@ index 0000000000..4ce400f8d4
 +    .skip_frames_reduced_size = 0,
 +  };
 +  /* *INDENT-ON* */
++
++  _av1_calculate_cdef_param (self, pic_param);
 +
 +  for (i = 0; i < self->partition.num_tile_cols - 1; i++)
 +    pic_param->width_in_sbs_minus_1[i] = self->partition.tile_width_sb - 1;
@@ -3144,33 +3260,11 @@ index 0000000000..4ce400f8d4
 +    }
 +
 +    g_assert (va_frame->ref_frame_idx[GST_AV1_REF_GOLDEN_FRAME] != -1);
-+    pic_param->ref_frame_ctrl_l0.fields.search_idx0 = GST_AV1_REF_GOLDEN_FRAME;
-+    if (va_frame->ref_frame_idx[GST_AV1_REF_LAST_FRAME] != -1 &&
-+        va_frame->ref_frame_idx[GST_AV1_REF_LAST_FRAME] !=
-+        va_frame->ref_frame_idx[GST_AV1_REF_GOLDEN_FRAME])
-+      pic_param->ref_frame_ctrl_l0.fields.search_idx1 = GST_AV1_REF_LAST_FRAME;
-+    if (va_frame->ref_frame_idx[GST_AV1_REF_LAST2_FRAME] != -1 &&
-+        va_frame->ref_frame_idx[GST_AV1_REF_LAST2_FRAME] !=
-+        va_frame->ref_frame_idx[GST_AV1_REF_GOLDEN_FRAME])
-+      pic_param->ref_frame_ctrl_l0.fields.search_idx2 = GST_AV1_REF_LAST2_FRAME;
-+    if (va_frame->ref_frame_idx[GST_AV1_REF_LAST3_FRAME] != -1 &&
-+        va_frame->ref_frame_idx[GST_AV1_REF_LAST3_FRAME] !=
-+        va_frame->ref_frame_idx[GST_AV1_REF_GOLDEN_FRAME])
-+      pic_param->ref_frame_ctrl_l0.fields.search_idx3 = GST_AV1_REF_LAST3_FRAME;
++    pic_param->ref_frame_ctrl_l0.fields.search_idx0 = GST_AV1_REF_LAST_FRAME;
 +
 +    if (va_frame->bidir_ref) {
 +      if (va_frame->ref_frame_idx[GST_AV1_REF_ALTREF_FRAME] != -1)
 +        pic_param->ref_frame_ctrl_l1.fields.search_idx0 =
-+            GST_AV1_REF_ALTREF_FRAME;
-+      if (va_frame->ref_frame_idx[GST_AV1_REF_ALTREF2_FRAME] != -1 &&
-+          va_frame->ref_frame_idx[GST_AV1_REF_ALTREF2_FRAME] !=
-+          va_frame->ref_frame_idx[GST_AV1_REF_GOLDEN_FRAME])
-+        pic_param->ref_frame_ctrl_l1.fields.search_idx1 =
-+            GST_AV1_REF_ALTREF2_FRAME;
-+      if (va_frame->ref_frame_idx[GST_AV1_REF_BWDREF_FRAME] != -1 &&
-+          va_frame->ref_frame_idx[GST_AV1_REF_BWDREF_FRAME] !=
-+          va_frame->ref_frame_idx[GST_AV1_REF_GOLDEN_FRAME])
-+        pic_param->ref_frame_ctrl_l1.fields.search_idx2 =
 +            GST_AV1_REF_BWDREF_FRAME;
 +    }
 +  } else {
@@ -3383,7 +3477,7 @@ index 0000000000..4ce400f8d4
 +    .cdef_params = {
 +      .cdef_damping = pic_param->cdef_damping_minus_3 + 3,
 +      .cdef_bits = pic_param->cdef_bits,
-+      /* Only set to 0. */
++      /* Set to later. */
 +      .cdef_y_pri_strength = { },
 +      .cdef_y_sec_strength = { },
 +      .cdef_uv_pri_strength = { },
@@ -3414,6 +3508,17 @@ index 0000000000..4ce400f8d4
 +    },
 +  };
 +  /* *INDENT-ON* */
++
++  for (i = 0; i < GST_AV1_CDEF_MAX; i++) {
++    frame_hdr->cdef_params.cdef_y_pri_strength[i] =
++        pic_param->cdef_y_strengths[i] / 4;
++    frame_hdr->cdef_params.cdef_y_sec_strength[i] =
++        pic_param->cdef_y_strengths[i] % 4;
++    frame_hdr->cdef_params.cdef_uv_pri_strength[i] =
++        pic_param->cdef_uv_strengths[i] / 4;
++    frame_hdr->cdef_params.cdef_uv_sec_strength[i] =
++        pic_param->cdef_uv_strengths[i] % 4;
++  }
 +
 +  _av1_set_skip_mode_frame (self, va_frame, frame_hdr);
 +
@@ -3492,7 +3597,7 @@ index 0000000000..4ce400f8d4
 +    guint segmentation_offset = 0;
 +    guint loopfilter_offset = 0;
 +    guint cdef_offset = 0;
-+    guint cdef_size_in_bits;
++    guint cdef_size_in_bits = 0;
 +
 +    /* For rate control modes, the driver needs to adjust the values of
 +       qindex, loop filter, etc. The accroding fields of frame header are
@@ -3500,8 +3605,9 @@ index 0000000000..4ce400f8d4
 +       also change and need rewrite. */
 +    if (gst_av1_bit_writer_frame_header_obu_with_offsets (&frame_hdr,
 +            &self->sequence_hdr, va_frame->temporal_id, va_frame->spatial_id,
-+            self->features.obu_size_bytes, &qindex_offset, &segmentation_offset,
-+            &loopfilter_offset, &cdef_offset, packed_frame_hdr, &frame_hdr_size)
++            TRUE, self->features.obu_size_bytes, &qindex_offset,
++            &segmentation_offset, &loopfilter_offset, &cdef_offset,
++            &cdef_size_in_bits, packed_frame_hdr, &frame_hdr_size)
 +        != GST_AV1_BIT_WRITER_OK) {
 +      GST_ERROR_OBJECT (self, "Failed to write frame header.");
 +      return FALSE;
@@ -3509,12 +3615,9 @@ index 0000000000..4ce400f8d4
 +
 +    /* Fix all the offsets based on the packed frame header */
 +    pic_param.bit_offset_qindex = qindex_offset;
-+    if (pic_param.segments.seg_flags.bits.segmentation_enabled)
-+      pic_param.bit_offset_segmentation = segmentation_offset;
++    pic_param.bit_offset_segmentation = segmentation_offset;
 +    pic_param.bit_offset_loopfilter_params = loopfilter_offset;
 +    pic_param.bit_offset_cdef_params = cdef_offset;
-+    cdef_size_in_bits = 2 + 2 + (1 << frame_hdr.cdef_params.cdef_bits) *
-+        (4 + 2 + (self->sequence_hdr.num_planes > 1 ? (4 + 2) : 0));
 +    pic_param.size_in_bits_cdef_params = cdef_size_in_bits;
 +    pic_param.byte_offset_frame_hdr_obu_size = size_offset + 1 +
 +        /* OBU extension header */

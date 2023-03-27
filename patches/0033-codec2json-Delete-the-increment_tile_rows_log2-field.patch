@@ -1,4 +1,4 @@
-From 32b4b6e0b83504e840102b03dfba2f6a567ef0cd Mon Sep 17 00:00:00 2001
+From 09596c3fd031559ea1ca1fc43d53530e3d813d5f Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 1 Feb 2023 09:38:24 +0800
 Subject: [PATCH 06/13] codec2json: Delete the increment_tile_rows_log2 field
