@@ -1,4 +1,4 @@
-From 70b2afe77c1e3bfd3e009f856f624a2fd2afc781 Mon Sep 17 00:00:00 2001
+From 57d3dd185029e2d8617ae6919ae35dca429a1d0c Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:38:48 +0800
 Subject: [PATCH 11/13] va: encoder: Add the P list 0 num into
@@ -19,7 +19,7 @@ to list 1.
  5 files changed, 28 insertions(+), 14 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index 4a745138eb..372f5ca3dd 100644
+index c4c8bdef03..0b980f0ad7 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 @@ -639,7 +639,7 @@ gst_va_encoder_get_slice_structure (GstVaEncoder * self,
@@ -72,10 +72,10 @@ index 4a745138eb..372f5ca3dd 100644
    return TRUE;
  }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
-index 290fb3531a..d233693be1 100644
+index 8d2be78a3a..44c618431f 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
-@@ -70,8 +70,9 @@ gint32                gst_va_encoder_get_slice_structure  (GstVaEncoder * self,
+@@ -68,8 +68,9 @@ gint32                gst_va_encoder_get_slice_structure  (GstVaEncoder * self,
  gboolean              gst_va_encoder_get_max_num_reference (GstVaEncoder * self,
                                                              VAProfile profile,
                                                              VAEntrypoint entrypoint,

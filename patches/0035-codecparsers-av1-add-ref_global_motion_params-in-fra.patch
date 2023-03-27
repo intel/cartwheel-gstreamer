@@ -1,4 +1,4 @@
-From bc48718e00e61f1c4f10db824dddaf251ecba30d Mon Sep 17 00:00:00 2001
+From 87e563dce99592da2dbf3baf5e8486ac335039d9 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 11:17:25 +0800
 Subject: [PATCH 08/13] codecparsers: av1: add ref_global_motion_params in

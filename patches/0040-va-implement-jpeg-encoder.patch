@@ -1,4 +1,4 @@
-From 40e53ca863fd641695a73e31c05da942ddf2fb40 Mon Sep 17 00:00:00 2001
+From e982e9a9321ba278c079a0aa3a9b7b72600c5934 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 3 Nov 2022 20:17:23 +0800
 Subject: [PATCH 13/13] va: implement jpeg encoder.
@@ -8,7 +8,6 @@ And also implement the jpeg bitwriter.
  .../gst/codecparsers/gstjpegbitwriter.c       |  503 ++++++++
  .../gst/codecparsers/gstjpegbitwriter.h       |   76 ++
  .../gst-libs/gst/codecparsers/meson.build     |    1 +
- .../gst-plugins-bad/sys/va/gstvaav1enc.c      |    2 +-
  .../gst-plugins-bad/sys/va/gstvabaseenc.c     |    4 +-
  .../gst-plugins-bad/sys/va/gstvaencoder.c     |    9 +-
  .../gst-plugins-bad/sys/va/gstvaencoder.h     |    3 +-
@@ -21,7 +20,7 @@ And also implement the jpeg bitwriter.
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
  .../tests/check/libs/jpegbitwriter.c          |  263 ++++
  .../gst-plugins-bad/tests/check/meson.build   |    1 +
- 16 files changed, 2015 insertions(+), 8 deletions(-)
+ 15 files changed, 2014 insertions(+), 7 deletions(-)
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.c
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.h
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
@@ -631,24 +630,11 @@ index 94c1a53aa4..b863cfdbb2 100644
  ])
  codecparser_headers = [
    'codecparsers-prelude.h',
-diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-index 4ce400f8d4..86e4adf6eb 100644
---- a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-+++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-@@ -2752,7 +2752,7 @@ gst_va_av1_enc_reconfig (GstVaBaseEnc * base)
-   if (!gst_va_encoder_open (base->encoder, base->profile,
-           GST_VIDEO_INFO_FORMAT (&base->input_state->info), base->rt_format,
-           base->width, base->height, base->codedbuf_size, max_ref_frames,
--          self->rc.rc_ctrl_mode, self->packed_headers)) {
-+          self->rc.rc_ctrl_mode, self->packed_headers, NULL)) {
-     GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
-     return FALSE;
-   }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index 9dfdacc66f..d01cdef249 100644
+index 1008d117cc..f15cb2d612 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-@@ -1144,7 +1144,9 @@ gst_va_base_enc_add_codec_tag (GstVaBaseEnc * base, const gchar * codec_name)
+@@ -1147,7 +1147,9 @@ gst_va_base_enc_add_codec_tag (GstVaBaseEnc * base, const gchar * codec_name)
    const gchar *encoder_name;
    guint bitrate = 0;
  
@@ -660,7 +646,7 @@ index 9dfdacc66f..d01cdef249 100644
      gst_tag_list_add (tags, GST_TAG_MERGE_REPLACE, GST_TAG_NOMINAL_BITRATE,
          bitrate, NULL);
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index 372f5ca3dd..b7f5bebccc 100644
+index 0b980f0ad7..8511c5222c 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 @@ -337,10 +337,10 @@ gboolean
@@ -689,10 +675,10 @@ index 372f5ca3dd..b7f5bebccc 100644
  
    status = vaCreateConfig (dpy, profile, self->entrypoint, attribs, attrib_idx,
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
-index d233693be1..253af2767b 100644
+index 44c618431f..48350f44d5 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
-@@ -54,7 +54,8 @@ gboolean              gst_va_encoder_open                 (GstVaEncoder * self,
+@@ -52,7 +52,8 @@ gboolean              gst_va_encoder_open                 (GstVaEncoder * self,
                                                             gint codedbuf_size,
                                                             guint max_reconstruct_surfaces,
                                                             guint rc_ctrl,
@@ -1900,7 +1886,7 @@ index cda716d229..e90b998028 100644
      return FALSE;
    }
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index 13951f2e88..bc0ec2901c 100644
+index 2c7029ab47..668cd2695a 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
 @@ -16,6 +16,7 @@ va_sources = [

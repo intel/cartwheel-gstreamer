@@ -1,4 +1,4 @@
-From 918507ce74de4149f2b6efa8ccb93325bc7c77de Mon Sep 17 00:00:00 2001
+From fd86ce8918c5f9c6ab54db9aa39c473d5ad3b616 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 10 Nov 2022 20:36:05 +0800
 Subject: [PATCH 02/13] va: encoder: Add copy_output_data() helper function.
@@ -9,7 +9,7 @@ Subject: [PATCH 02/13] va: encoder: Add copy_output_data() helper function.
  2 files changed, 51 insertions(+), 1 deletion(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index 81c2d60781..9dfdacc66f 100644
+index aebfaf86b3..1008d117cc 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 @@ -379,6 +379,53 @@ error:
@@ -67,7 +67,7 @@ index 81c2d60781..9dfdacc66f 100644
  _allocator_from_caps (GstVaBaseEnc * base, GstCaps * caps)
  {
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
-index 45bb2d9da0..3f27bd2c36 100644
+index eca2b72415..0007a13e29 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
 @@ -135,7 +135,10 @@ void                  gst_va_base_enc_add_codec_tag       (GstVaBaseEnc * base,

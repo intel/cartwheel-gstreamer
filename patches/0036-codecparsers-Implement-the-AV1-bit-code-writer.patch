@@ -1,22 +1,22 @@
-From 49fa26fd61d27ba2658859ce085230faab973e92 Mon Sep 17 00:00:00 2001
+From b35c77502ec99124680d0aa060bb8a7e75c96997 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:33:13 +0800
 Subject: [PATCH 09/13] codecparsers: Implement the AV1 bit code writer.
 
 ---
- .../gst/codecparsers/gstav1bitwriter.c        | 2507 +++++++++++++++++
- .../gst/codecparsers/gstav1bitwriter.h        |   86 +
+ .../gst/codecparsers/gstav1bitwriter.c        | 2469 +++++++++++++++++
+ .../gst/codecparsers/gstav1bitwriter.h        |   88 +
  .../gst-libs/gst/codecparsers/meson.build     |    1 +
- 3 files changed, 2594 insertions(+)
+ 3 files changed, 2558 insertions(+)
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1bitwriter.c
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1bitwriter.h
 
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1bitwriter.c b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1bitwriter.c
 new file mode 100644
-index 0000000000..9f04155861
+index 0000000000..4fe133f44e
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1bitwriter.c
-@@ -0,0 +1,2507 @@
+@@ -0,0 +1,2469 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -75,22 +75,37 @@ index 0000000000..9f04155861
 +  const guint kMaximumLeb128Size = 8;
 +  const guint leb_size = _av1_uleb_size_in_bytes (value);
 +  const guint64 kMaximumLeb128Value = 0xffffffff /* 4294967295U */ ;
++  guint i;
 +
-+  g_assert (coded_size == leb_size);
++  g_assert (coded_size >= leb_size);
 +
-+  if (value > kMaximumLeb128Value || leb_size > kMaximumLeb128Size ||
-+      leb_size > available || !coded_value) {
++  if (value > kMaximumLeb128Value || coded_size > kMaximumLeb128Size ||
++      coded_size > available || !coded_value) {
 +    return FALSE;
 +  }
 +
-+  for (guint i = 0; i < leb_size; ++i) {
-+    guint8 byte = value & 0x7f;
-+    value >>= 7;
++  if (leb_size == coded_size) {
++    for (i = 0; i < leb_size; i++) {
++      guint8 byte = value & 0x7f;
++      value >>= 7;
 +
-+    if (value != 0)
-+      byte |= 0x80;             // Signal that more bytes follow.
++      if (value != 0)
++        byte |= 0x80;           // Signal that more bytes follow.
 +
-+    *(coded_value + i) = byte;
++      *(coded_value + i) = byte;
++    }
++  } else {
++    memset (coded_value, 0, coded_size);
++
++    i = 0;
++    do {
++      *(coded_value + i) = value & 0x7fU;
++      value >>= 7;
++      i++;
++    } while (value);
++
++    for (i = 0; i < coded_size - 1; i++)
++      *(coded_value + i) |= 0x80;
 +  }
 +
 +  return TRUE;
@@ -737,33 +752,45 @@ index 0000000000..9f04155861
 +  return FALSE;
 +}
 +
-+static gboolean
++/* Return the actual size field size. */
++static guint
 +_av1_bit_writer_add_size_field (guint8 * data, guint * size, guint header_size,
-+    guint payload_size, gboolean * space)
++    guint payload_size, guint size_field_size, gboolean * space)
 +{
-+  guint size_field_size;
++  guint size_field_sz;
++
++  size_field_sz = _av1_uleb_size_in_bytes (payload_size);
++  g_assert (size_field_sz > 0);
++
++  if (size_field_size > 0) {
++    if (size_field_sz > size_field_size) {
++      GST_WARNING ("the fixed size field size is too small");
++      goto error;
++    }
++
++    size_field_sz = size_field_size;
++  }
 +
 +  /* Move and write the data size field */
-+  size_field_size = _av1_uleb_size_in_bytes (payload_size);
-+  if (header_size + payload_size + size_field_size > *size) {
++  if (header_size + payload_size + size_field_sz > *size) {
 +    *space = FALSE;
 +    goto error;
 +  }
 +  *space = TRUE;
 +
-+  memmove (data + header_size + size_field_size,
++  memmove (data + header_size + size_field_sz,
 +      data + header_size, payload_size);
 +
 +  if (!_av1_encode_uleb (payload_size, sizeof (payload_size),
-+          data + header_size, size_field_size))
++          data + header_size, size_field_sz))
 +    goto error;
 +
-+  *size = header_size + payload_size + size_field_size;
-+  return TRUE;
++  *size = header_size + payload_size + size_field_sz;
++  return size_field_sz;
 +
 +error:
 +  GST_WARNING ("failed to write the size field");
-+  return FALSE;
++  return 0;
 +}
 +
 +/**
@@ -829,7 +856,7 @@ index 0000000000..9f04155861
 +
 +  if (size_field) {
 +    if (!_av1_bit_writer_add_size_field (data, size,
-+            header_size, payload_size, &have_space))
++            header_size, payload_size, 0, &have_space))
 +      goto error;
 +  } else {
 +    *size = header_size + payload_size;
@@ -1310,10 +1337,11 @@ index 0000000000..9f04155861
 +static gboolean
 +_av1_bit_writer_cdef_params (const GstAV1FrameHeaderOBU * frame_header,
 +    const GstAV1SequenceHeaderOBU * seq_header, guint * cdef_offset,
-+    GstBitWriter * bw, gboolean * space)
++    guint * cdef_size, GstBitWriter * bw, gboolean * space)
 +{
 +  gboolean have_space = TRUE;
 +  const GstAV1CDEFParams *cdef_params = &frame_header->cdef_params;
++  guint cdef_start;
 +  guint i;
 +
 +  GST_DEBUG ("writing cdef params");
@@ -1322,8 +1350,9 @@ index 0000000000..9f04155861
 +      || !seq_header->enable_cdef)
 +    goto success;
 +
++  cdef_start = gst_bit_writer_get_size (bw);
 +  if (cdef_offset)
-+    *cdef_offset = gst_bit_writer_get_size (bw);
++    *cdef_offset = cdef_start;
 +
 +  WRITE_BITS (bw, cdef_params->cdef_damping - 3, 2);
 +  WRITE_BITS (bw, cdef_params->cdef_bits, 2);
@@ -1335,17 +1364,10 @@ index 0000000000..9f04155861
 +
 +    cdef_y_sec_strength = cdef_params->cdef_y_sec_strength[i];
 +
-+    /* In 5.9.19:
-+       if ( cdef_y_sec_strength[i] == 3 ) cdef_y_sec_strength[i] += 1
-+       so in fact 3 is not a valid value for cdef_y_sec_strength */
-+    if (cdef_y_sec_strength == 3) {
++    if (cdef_y_sec_strength >= 4) {
 +      GST_WARNING ("cdef_y_sec_strength is not valid");
 +      goto error;
 +    }
-+
-+    if (cdef_y_sec_strength == 4)
-+      cdef_y_sec_strength -= 1;
-+
 +    WRITE_BITS (bw, cdef_y_sec_strength, 2);
 +
 +    if (seq_header->num_planes > 1) {
@@ -1355,20 +1377,16 @@ index 0000000000..9f04155861
 +
 +      cdef_uv_sec_strength = cdef_params->cdef_uv_sec_strength[i];
 +
-+      /* In 5.9.19:
-+         if ( cdef_uv_sec_strength[i] == 3 ) cdef_uv_sec_strength[i] += 1
-+         so in fact 3 is not a valid value for cdef_uv_sec_strength */
-+      if (cdef_uv_sec_strength == 3) {
++      if (cdef_uv_sec_strength >= 4) {
 +        GST_WARNING ("cdef_uv_sec_strength is not valid");
 +        goto error;
 +      }
-+
-+      if (cdef_uv_sec_strength == 4)
-+        cdef_uv_sec_strength -= 1;
-+
 +      WRITE_BITS (bw, cdef_uv_sec_strength, 2);
 +    }
 +  }
++
++  if (cdef_size)
++    *cdef_size = gst_bit_writer_get_size (bw) - cdef_start;
 +
 +success:
 +  *space = TRUE;
@@ -1705,7 +1723,7 @@ index 0000000000..9f04155861
 +    frame_header, const GstAV1SequenceHeaderOBU * seq_header,
 +    guint8 temporal_id, guint8 spatial_id, guint * qindex_offset,
 +    guint * segmentation_offset, guint * loopfilter_offset,
-+    guint * cdef_offset, GstBitWriter * bw, gboolean * space)
++    guint * cdef_offset, guint * cdef_size, GstBitWriter * bw, gboolean * space)
 +{
 +  gboolean have_space = TRUE;
 +  guint i;
@@ -1932,7 +1950,7 @@ index 0000000000..9f04155861
 +    goto error;
 +
 +  if (!_av1_bit_writer_cdef_params (frame_header, seq_header,
-+          cdef_offset, bw, space))
++          cdef_offset, cdef_size, bw, space))
 +    goto error;
 +
 +  if (!_av1_bit_writer_loop_restoration_params (frame_header, seq_header,
@@ -2000,85 +2018,9 @@ index 0000000000..9f04155861
 +    const GstAV1SequenceHeaderOBU * seq_hdr, guint8 temporal_id,
 +    guint8 spatial_id, gboolean size_field, guint8 * data, guint * size)
 +{
-+  gboolean have_space = TRUE;
-+  GstBitWriter bw;
-+  guint header_size;
-+  guint payload_size;
-+
-+  g_return_val_if_fail (frame_hdr != NULL, GST_AV1_BIT_WRITER_ERROR);
-+  g_return_val_if_fail (seq_hdr != NULL, GST_AV1_BIT_WRITER_ERROR);
-+  g_return_val_if_fail (temporal_id < GST_AV1_MAX_NUM_TEMPORAL_LAYERS,
-+      GST_AV1_BIT_WRITER_ERROR);
-+  g_return_val_if_fail (spatial_id < GST_AV1_MAX_NUM_SPATIAL_LAYERS,
-+      GST_AV1_BIT_WRITER_ERROR);
-+  g_return_val_if_fail (data != NULL, GST_AV1_BIT_WRITER_ERROR);
-+  g_return_val_if_fail (size != NULL, GST_AV1_BIT_WRITER_ERROR);
-+  g_return_val_if_fail (*size > 0, GST_AV1_BIT_WRITER_ERROR);
-+
-+  gst_bit_writer_init_with_data (&bw, data, *size, FALSE);
-+
-+  /* obu_forbidden_bit */
-+  WRITE_BITS (&bw, 0, 1);
-+  /* obu_type */
-+  WRITE_BITS (&bw, GST_AV1_OBU_FRAME_HEADER, 4);
-+  /* obu_extention_flag */
-+  if (temporal_id > 0 || spatial_id > 0) {
-+    WRITE_BITS (&bw, 1, 1);
-+  } else {
-+    WRITE_BITS (&bw, 0, 1);
-+  }
-+  /* obu_has_size_field */
-+  if (size_field) {
-+    WRITE_BITS (&bw, 1, 1);
-+  } else {
-+    WRITE_BITS (&bw, 0, 1);
-+  }
-+  /* obu_reserved_1bit */
-+  WRITE_BITS (&bw, 0, 1);
-+
-+  header_size = 1;
-+  /* 5.3.3 OBU extension header */
-+  if (temporal_id > 0 || spatial_id > 0) {
-+    WRITE_BITS (&bw, temporal_id, 3);
-+    WRITE_BITS (&bw, spatial_id, 2);
-+    /* obu_extension_header_reserved_3bits */
-+    WRITE_BITS (&bw, 0, 3);
-+    header_size = 2;
-+  }
-+
-+  if (!_av1_bit_writer_uncompressed_frame_header (frame_hdr, seq_hdr,
-+          temporal_id, spatial_id, NULL, NULL, NULL, NULL, &bw, &have_space))
-+    goto error;
-+
-+  /* Add trailings. */
-+  WRITE_BITS (&bw, 1, 1);
-+  if (!gst_bit_writer_align_bytes (&bw, 0)) {
-+    have_space = FALSE;
-+    goto error;
-+  }
-+
-+  payload_size = gst_bit_writer_get_size (&bw);
-+  g_assert (payload_size % 8 == 0);
-+  payload_size /= 8;
-+  payload_size -= header_size;
-+
-+  gst_bit_writer_reset (&bw);
-+
-+  if (size_field) {
-+    if (!_av1_bit_writer_add_size_field (data, size,
-+            header_size, payload_size, &have_space))
-+      goto error;
-+  } else {
-+    *size = header_size + payload_size;
-+  }
-+
-+  return GST_AV1_BIT_WRITER_OK;
-+
-+error:
-+  gst_bit_writer_reset (&bw);
-+  *size = 0;
-+  return have_space ? GST_AV1_BIT_WRITER_INVALID_DATA :
-+      GST_AV1_BIT_WRITER_NO_MORE_SPACE;
++  return gst_av1_bit_writer_frame_header_obu_with_offsets (frame_hdr, seq_hdr,
++      temporal_id, spatial_id, size_field, 0, NULL, NULL, NULL, NULL, NULL,
++      data, size);
 +}
 +
 +/**
@@ -2087,11 +2029,13 @@ index 0000000000..9f04155861
 + * @seq_hdr: the sequence header of #GstAV1SequenceHeaderOBU to refer
 + * @temporal_id: specifies the temporal level of the data contained in the OBU.
 + * @spatial_id: specifies the spatial level of the data contained in the OBU.
-+ * @size_field_bytes: specifies the reserved size field size in bytes.
++ * @size_field: whether the OBU header contains the OBU size.
++ * @size_field_size: >0 means a fixed OBU header size field.
 + * @qindex_offset: (out): return the qindex fields offset in bits.
 + * @segmentation_offset: (out): return the segmentation fields offset in bits.
-+ * @loopfilter_offset: (out): return the loopfilter fields offset in bits.
-+ * @cdef_offset: (out): return the cdeffields offset in bits.
++ * @lf_offset: (out): return the loopfilter fields offset in bits.
++ * @cdef_offset: (out): return the cdef fields offset in bits.
++ * @cdef_size: (out): return the cdef fields size in bits.
 + * @data: (out): the bit stream generated by the frame header
 + * @size: (inout): the size in bytes of the input and output
 + *
@@ -2110,13 +2054,14 @@ index 0000000000..9f04155861
 +GstAV1BitWriterResult
 +gst_av1_bit_writer_frame_header_obu_with_offsets (const GstAV1FrameHeaderOBU *
 +    frame_hdr, const GstAV1SequenceHeaderOBU * seq_hdr, guint8 temporal_id,
-+    guint8 spatial_id, guint size_field_bytes, guint * qindex_offset,
-+    guint * segmentation_offset, guint * loopfilter_offset,
-+    guint * cdef_offset, guint8 * data, guint * size)
++    guint8 spatial_id, gboolean size_field, guint size_field_size,
++    guint * qindex_offset, guint * segmentation_offset, guint * lf_offset,
++    guint * cdef_offset, guint * cdef_size, guint8 * data, guint * size)
 +{
 +  gboolean have_space = TRUE;
 +  GstBitWriter bw;
 +  guint payload_size;
++  guint header_size;
 +
 +  g_return_val_if_fail (frame_hdr != NULL, GST_AV1_BIT_WRITER_ERROR);
 +  g_return_val_if_fail (seq_hdr != NULL, GST_AV1_BIT_WRITER_ERROR);
@@ -2141,7 +2086,7 @@ index 0000000000..9f04155861
 +  }
 +
 +  /* obu_has_size_field */
-+  if (size_field_bytes > 0) {
++  if (size_field > 0) {
 +    WRITE_BITS (&bw, 1, 1);
 +  } else {
 +    WRITE_BITS (&bw, 0, 1);
@@ -2149,23 +2094,22 @@ index 0000000000..9f04155861
 +  /* obu_reserved_1bit */
 +  WRITE_BITS (&bw, 0, 1);
 +
++  header_size = 1;
++
 +  /* 5.3.3 OBU extension header */
 +  if (temporal_id > 0 || spatial_id > 0) {
 +    WRITE_BITS (&bw, temporal_id, 3);
 +    WRITE_BITS (&bw, spatial_id, 2);
 +    /* obu_extension_header_reserved_3bits */
 +    WRITE_BITS (&bw, 0, 3);
++    header_size = 2;
 +  }
 +
-+  /* Write the fixed size field size */
-+  while (size_field_bytes > 0) {
-+    WRITE_BITS (&bw, 0, 8);
-+    size_field_bytes--;
-+  }
++  /* Write size field later */
 +
 +  if (!_av1_bit_writer_uncompressed_frame_header (frame_hdr, seq_hdr,
 +          temporal_id, spatial_id, qindex_offset, segmentation_offset,
-+          loopfilter_offset, cdef_offset, &bw, &have_space))
++          lf_offset, cdef_offset, cdef_size, &bw, &have_space))
 +    goto error;
 +
 +  /* Add trailings. */
@@ -2178,10 +2122,28 @@ index 0000000000..9f04155861
 +  payload_size = gst_bit_writer_get_size (&bw);
 +  g_assert (payload_size % 8 == 0);
 +  payload_size /= 8;
++  payload_size -= header_size;
 +
 +  gst_bit_writer_reset (&bw);
 +
-+  *size = payload_size;
++  if (size_field) {
++    size_field_size = _av1_bit_writer_add_size_field (data, size,
++        header_size, payload_size, size_field_size, &have_space);
++    if (!size_field_size)
++      goto error;
++  } else {
++    *size = header_size + payload_size;
++    size_field_size = 0;
++  }
++
++  if (qindex_offset)
++    *qindex_offset = *qindex_offset + size_field_size * 8;
++  if (segmentation_offset)
++    *segmentation_offset = *segmentation_offset + size_field_size * 8;
++  if (lf_offset)
++    *lf_offset = *lf_offset + size_field_size * 8;
++  if (cdef_offset)
++    *cdef_offset = *cdef_offset + size_field_size * 8;
 +
 +  return GST_AV1_BIT_WRITER_OK;
 +
@@ -2236,7 +2198,7 @@ index 0000000000..9f04155861
 +
 +  /* header_size is 1 and payload_size is 0 */
 +  if (size_field) {
-+    if (!_av1_bit_writer_add_size_field (data, size, 1, 0, &have_space))
++    if (!_av1_bit_writer_add_size_field (data, size, 1, 0, 0, &have_space))
 +      goto error;
 +  } else {
 +    *size = 1 + 0;
@@ -2510,7 +2472,7 @@ index 0000000000..9f04155861
 +
 +  if (size_field) {
 +    if (!_av1_bit_writer_add_size_field (data, size,
-+            header_size, payload_size, &have_space))
++            header_size, payload_size, 0, &have_space))
 +      goto error;
 +  } else {
 +    *size = header_size + payload_size;
@@ -2526,10 +2488,10 @@ index 0000000000..9f04155861
 +}
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1bitwriter.h b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1bitwriter.h
 new file mode 100644
-index 0000000000..5cfb67b1e0
+index 0000000000..b77eafd57a
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstav1bitwriter.h
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,88 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -2595,11 +2557,13 @@ index 0000000000..5cfb67b1e0
 +                                                                           const GstAV1SequenceHeaderOBU * seq_hdr,
 +                                                                           guint8 temporal_id,
 +                                                                           guint8 spatial_id,
-+                                                                           guint size_field_bytes,
++                                                                           gboolean size_field,
++                                                                           guint size_field_size,
 +                                                                           guint * qindex_offset,
 +                                                                           guint * segmentation_offset,
-+                                                                           guint * loopfilter_offset,
++                                                                           guint * lf_offset,
 +                                                                           guint * cdef_offset,
++                                                                           guint * cdef_size,
 +                                                                           guint8 * data,
 +                                                                           guint * size);
 +GST_CODEC_PARSERS_API

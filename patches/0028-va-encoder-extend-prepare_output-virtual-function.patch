@@ -1,4 +1,4 @@
-From 4a63f25d8581a976e1354ca5dbecaf2c8dd1764d Mon Sep 17 00:00:00 2001
+From 5357fb7d310f31cb9c0d53bfc93c5d4182d657e7 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 10 Nov 2022 17:00:28 +0800
 Subject: [PATCH 01/13] va: encoder: extend prepare_output() virtual function.
@@ -16,7 +16,7 @@ current prepare_output() virtual function.
  4 files changed, 60 insertions(+), 28 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index 8f85495dc0..81c2d60781 100644
+index 75c38060ad..aebfaf86b3 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 @@ -318,7 +318,7 @@ invalid_buffer:
