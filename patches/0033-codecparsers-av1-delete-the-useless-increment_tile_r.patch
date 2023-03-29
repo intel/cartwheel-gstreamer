@@ -1,7 +1,7 @@
-From 841ea5455b168d6ceded9207ffcc7c719197a6b6 Mon Sep 17 00:00:00 2001
+From 8ab968d11930b99505e1e63b9ff8d0b4f75265b2 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 16:27:01 +0800
-Subject: [PATCH 05/13] codecparsers: av1: delete the useless
+Subject: [PATCH 06/13] codecparsers: av1: delete the useless
  increment_tile_rows_log2 in tile info.
 
 increment_tile_rows_log2 is only used as the bool flag for parsing tiling log2
