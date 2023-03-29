@@ -1,23 +1,23 @@
-From ea812cbd95d8abb2b2e28cdf00e79d7b44a4663b Mon Sep 17 00:00:00 2001
+From 5a5c285ece7a553459d29992c581f7e6cb9c2170 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
 Subject: [PATCH 04/13] va: Implement the vavp9enc plugin.
 
 ---
- .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3180 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3185 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvavp9enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +-
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
- 4 files changed, 3224 insertions(+), 1 deletion(-)
+ 4 files changed, 3229 insertions(+), 1 deletion(-)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 new file mode 100644
-index 0000000000..4c8ec74dc0
+index 0000000000..1e1379b4ca
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -0,0 +1,3180 @@
+@@ -0,0 +1,3185 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -338,14 +338,14 @@ index 0000000000..4c8ec74dc0
 +  guint type = frame_type;
 +
 +  if (type & FRAME_TYPE_REPEAT)
-+    return "Repeat ";
++    return "Repeat";
 +
 +  switch (type) {
 +    case GST_VP9_KEY_FRAME:
-+      frame_type_name = "Key    ";
++      frame_type_name = "Key";
 +      break;
 +    case GST_VP9_INTER_FRAME:
-+      frame_type_name = "Inter  ";
++      frame_type_name = "Inter";
 +      break;
 +    default:
 +      frame_type_name = "Unknown";
@@ -408,7 +408,7 @@ index 0000000000..4c8ec74dc0
 +      "-------------------------------------\n");
 +  for (i = 0; i < gf_group->output_frame_num; i++) {
 +    g_string_append_printf (str, "| %3d ", i);
-+    g_string_append_printf (str, "| %s ",
++    g_string_append_printf (str, "| %-7s ",
 +        _vp9_get_frame_type_name (gf_group->frame_types[i]));
 +
 +    g_string_append_printf (str, "| %5d | ", gf_group->pyramid_levels[i]);
@@ -2560,14 +2560,19 @@ index 0000000000..4c8ec74dc0
 +
 +  frame_enc = _enc_frame (frame);
 +
++  GST_LOG_OBJECT (base, "Prepare to output: frame system_frame_number: %d,"
++      "frame_num: %d, frame type: %s, flags: 0x%x, super_num is %d",
++      frame->system_frame_number, frame_enc->frame_num,
++      _vp9_get_frame_type_name (frame_enc->type), frame_enc->flags,
++      self->frames_in_super_num);
++
 +  if (frame_enc->flags & FRAME_FLAG_NOT_SHOW &&
-+      ((frame_enc->type & FRAME_TYPE_REPEAT) == 0)) {
++      (frame_enc->flags & FRAME_FLAG_ALREADY_OUTPUTTED) == 0) {
 +    self->frames_in_super[self->frames_in_super_num] = frame;
 +    self->frames_in_super_num++;
 +    g_assert (self->frames_in_super_num <=
 +        GST_VP9_MAX_FRAMES_IN_SUPERFRAME - 1);
 +    g_assert ((frame_enc->flags & FRAME_FLAG_IN_SUPER_FRAME) == 0);
-+    g_assert ((frame_enc->flags & FRAME_FLAG_ALREADY_OUTPUTTED) == 0);
 +
 +    frame_enc->flags |= FRAME_FLAG_IN_SUPER_FRAME;
 +    frame_enc->flags |= FRAME_FLAG_ALREADY_OUTPUTTED;
