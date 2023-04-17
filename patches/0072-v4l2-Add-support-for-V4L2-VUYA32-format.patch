@@ -1,0 +1,60 @@
+From 83c8e1b897d8721e3ad3b0ae22f8a494da067294 Mon Sep 17 00:00:00 2001
+From: James Grant <james.grant@intel.com>
+Date: Mon, 17 Apr 2023 13:58:22 +0100
+Subject: [PATCH] Add support for V4L2 VUYA32 format
+
+---
+ subprojects/gst-plugins-good/sys/v4l2/gstv4l2object.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/subprojects/gst-plugins-good/sys/v4l2/gstv4l2object.c b/subprojects/gst-plugins-good/sys/v4l2/gstv4l2object.c
+index 032fd69bd9..24115ec587 100644
+--- a/subprojects/gst-plugins-good/sys/v4l2/gstv4l2object.c
++++ b/subprojects/gst-plugins-good/sys/v4l2/gstv4l2object.c
+@@ -142,6 +142,7 @@ static const GstV4L2FormatDesc gst_v4l2_formats[] = {
+   {V4L2_PIX_FMT_YUV555, TRUE, GST_V4L2_RAW},
+   {V4L2_PIX_FMT_YUV565, TRUE, GST_V4L2_RAW},
+   {V4L2_PIX_FMT_YUV32, TRUE, GST_V4L2_RAW},
++  {V4L2_PIX_FMT_VUYA32, TRUE, GST_V4L2_RAW},
+   {V4L2_PIX_FMT_YUV410, TRUE, GST_V4L2_RAW},
+   {V4L2_PIX_FMT_YUV420, TRUE, GST_V4L2_RAW},
+   {V4L2_PIX_FMT_YUV420M, TRUE, GST_V4L2_RAW},
+@@ -1031,6 +1032,7 @@ gst_v4l2_object_format_get_rank (const struct v4l2_fmtdesc *fmt)
+     case V4L2_PIX_FMT_YUV555:
+     case V4L2_PIX_FMT_YUV565:
+     case V4L2_PIX_FMT_YUV32:
++    case V4L2_PIX_FMT_VUYA32:
+     case V4L2_PIX_FMT_NV12MT_16X16:
+     case V4L2_PIX_FMT_NV42:
+     case V4L2_PIX_FMT_H264_MVC:
+@@ -1389,6 +1391,9 @@ gst_v4l2_object_v4l2fourcc_to_video_format (guint32 fourcc)
+     case V4L2_PIX_FMT_YVYU:
+       format = GST_VIDEO_FORMAT_YVYU;
+       break;
++    case V4L2_PIX_FMT_VUYA32:
++      format = GST_VIDEO_FORMAT_VUYA;
++      break;
+     case V4L2_PIX_FMT_NV16:
+     case V4L2_PIX_FMT_NV16M:
+       format = GST_VIDEO_FORMAT_NV16;
+@@ -1544,6 +1549,7 @@ gst_v4l2_object_v4l2fourcc_to_bare_struct (guint32 fourcc)
+     case V4L2_PIX_FMT_UYVY:
+     case V4L2_PIX_FMT_YUV422P:
+     case V4L2_PIX_FMT_YVYU:
++    case V4L2_PIX_FMT_VUYA32:
+     case V4L2_PIX_FMT_YUV411P:{
+       GstVideoFormat format;
+       format = gst_v4l2_object_v4l2fourcc_to_video_format (fourcc);
+@@ -1889,6 +1895,9 @@ gst_v4l2_object_get_caps_info (GstV4l2Object * v4l2object, GstCaps * caps,
+         fourcc = V4L2_PIX_FMT_RGB555X;
+         fourcc_nc = V4L2_PIX_FMT_XRGB555X;
+         break;
++      case GST_VIDEO_FORMAT_VUYA:
++        fourcc = V4L2_PIX_FMT_VUYA32;
++      break;
+       default:
+         break;
+     }
+-- 
+2.25.1
+
