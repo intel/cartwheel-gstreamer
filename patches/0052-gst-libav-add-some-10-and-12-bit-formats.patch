@@ -1,36 +1,13 @@
-From db0c8b5c75b382dbbbf04cc8b45db28a85c8c613 Mon Sep 17 00:00:00 2001
+From 348e177bf7b088a913c2096b8ebf3fc2b99cac6c Mon Sep 17 00:00:00 2001
 From: "U. Artie Eoff" <ullysses.a.eoff@intel.com>
 Date: Tue, 7 Feb 2023 14:33:02 -0500
 Subject: [PATCH] gst-libav: add some 10 and 12 bit formats
 
 VUYA, P010, Y410, P012, Y212, Y412
-
 ---
- subprojects/gst-libav/ext/libav/gstavcodecmap.c | 10 ++++++++++
- subprojects/gst-libav/ext/libav/gstavvidcmp.c   |  3 ++-
- 2 files changed, 12 insertions(+), 1 deletion(-)
+ subprojects/gst-libav/ext/libav/gstavvidcmp.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
 
-diff --git a/subprojects/gst-libav/ext/libav/gstavcodecmap.c b/subprojects/gst-libav/ext/libav/gstavcodecmap.c
-index 438cf17f6341..0bc87f675625 100644
---- a/subprojects/gst-libav/ext/libav/gstavcodecmap.c
-+++ b/subprojects/gst-libav/ext/libav/gstavcodecmap.c
-@@ -2911,6 +2911,16 @@ static const PixToFmt pixtofmttable[] = {
-   {GST_VIDEO_FORMAT_I422_12BE, AV_PIX_FMT_YUV422P12BE},
-   {GST_VIDEO_FORMAT_Y444_12LE, AV_PIX_FMT_YUV444P12LE},
-   {GST_VIDEO_FORMAT_Y444_12BE, AV_PIX_FMT_YUV444P12BE},
-+  {GST_VIDEO_FORMAT_P010_10LE, AV_PIX_FMT_P010LE},
-+#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(57,34,100)
-+  {GST_VIDEO_FORMAT_VUYA, AV_PIX_FMT_VUYX},
-+#endif
-+#if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(57,36,100)
-+  {GST_VIDEO_FORMAT_Y410, AV_PIX_FMT_XV30LE},
-+  {GST_VIDEO_FORMAT_P012_LE, AV_PIX_FMT_P012LE},
-+  {GST_VIDEO_FORMAT_Y212_LE, AV_PIX_FMT_Y212LE},
-+  {GST_VIDEO_FORMAT_Y412_LE, AV_PIX_FMT_XV36LE},
-+#endif
- };
- 
- GstVideoFormat
 diff --git a/subprojects/gst-libav/ext/libav/gstavvidcmp.c b/subprojects/gst-libav/ext/libav/gstavvidcmp.c
 index 61a866a68df1..479cd1e5e8e0 100644
 --- a/subprojects/gst-libav/ext/libav/gstavvidcmp.c
