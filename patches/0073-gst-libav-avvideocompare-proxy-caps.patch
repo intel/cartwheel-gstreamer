@@ -1,0 +1,30 @@
+From 04967ccc2221e8f2da835cad3e19372e266c745c Mon Sep 17 00:00:00 2001
+From: "U. Artie Eoff" <ullysses.a.eoff@intel.com>
+Date: Thu, 4 May 2023 21:37:25 -0400
+Subject: [PATCH] gst-libav: avvideocompare proxy caps
+
+Signed-off-by: U. Artie Eoff <ullysses.a.eoff@intel.com>
+---
+ subprojects/gst-libav/ext/libav/gstavvidcmp.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/subprojects/gst-libav/ext/libav/gstavvidcmp.c b/subprojects/gst-libav/ext/libav/gstavvidcmp.c
+index 101b7cde6a66..15319a7f54a2 100644
+--- a/subprojects/gst-libav/ext/libav/gstavvidcmp.c
++++ b/subprojects/gst-libav/ext/libav/gstavvidcmp.c
+@@ -264,10 +264,12 @@ gst_ffmpegvidcmp_init (GstFFMpegVidCmp * self)
+ 
+   self->sinkpad1 =
+       gst_pad_new_from_static_template (&gst_ffmpegvidcmp_sink1_tmpl, "sink_1");
++  GST_PAD_SET_PROXY_CAPS (self->sinkpad1);
+   gst_element_add_pad (GST_ELEMENT (self), self->sinkpad1);
+ 
+   self->sinkpad2 =
+       gst_pad_new_from_static_template (&gst_ffmpegvidcmp_sink2_tmpl, "sink_2");
++  GST_PAD_SET_PROXY_CAPS (self->sinkpad2);
+   gst_element_add_pad (GST_ELEMENT (self), self->sinkpad2);
+ 
+   self->srcpad =
+-- 
+2.38.1
+

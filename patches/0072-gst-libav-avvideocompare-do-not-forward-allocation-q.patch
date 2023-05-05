@@ -1,0 +1,68 @@
+From cf60ab55175a692cc8f7dba495d9dc4ee757e0e7 Mon Sep 17 00:00:00 2001
+From: "U. Artie Eoff" <ullysses.a.eoff@intel.com>
+Date: Thu, 4 May 2023 20:53:08 -0400
+Subject: [PATCH] gst-libav: avvideocompare: do not forward allocation query
+
+---
+ subprojects/gst-libav/ext/libav/gstavvidcmp.c | 38 +++++++++----------
+ 1 file changed, 19 insertions(+), 19 deletions(-)
+
+diff --git a/subprojects/gst-libav/ext/libav/gstavvidcmp.c b/subprojects/gst-libav/ext/libav/gstavvidcmp.c
+index 9fab0238935e..101b7cde6a66 100644
+--- a/subprojects/gst-libav/ext/libav/gstavvidcmp.c
++++ b/subprojects/gst-libav/ext/libav/gstavvidcmp.c
+@@ -280,8 +280,8 @@ gst_ffmpegvidcmp_init (GstFFMpegVidCmp * self)
+       self);
+   gst_collect_pads_set_event_function (self->collect,
+       GST_DEBUG_FUNCPTR (gst_ffmpegvidcmp_sink_event), self);
+-  gst_collect_pads_set_query_function (self->collect,
+-      GST_DEBUG_FUNCPTR (gst_ffmpegvidcmp_sink_query), self);
++//   gst_collect_pads_set_query_function (self->collect,
++//       GST_DEBUG_FUNCPTR (gst_ffmpegvidcmp_sink_query), self);
+ 
+   self->collect_data1 = gst_collect_pads_add_pad (self->collect, self->sinkpad1,
+       sizeof (GstCollectData), NULL, TRUE);
+@@ -444,23 +444,23 @@ gst_ffmpegvidcmp_sink_event (GstCollectPads * pads, GstCollectData * data,
+   return ret;
+ }
+ 
+-static gboolean
+-gst_ffmpegvidcmp_sink_query (GstCollectPads * pads, GstCollectData * data,
+-    GstQuery * query, gpointer user_data)
+-{
+-  GstFFMpegVidCmp *self = GST_FFMPEGVIDCMP (user_data);
+-  GstPad *pad = data->pad;
+-
+-  switch (GST_QUERY_TYPE (query)) {
+-    case GST_QUERY_ALLOCATION:
+-      if (pad == self->sinkpad1)
+-        return gst_pad_peer_query (self->srcpad, query);
+-      break;
+-    default:
+-      break;
+-  }
+-  return gst_collect_pads_query_default (pads, data, query, FALSE);
+-}
++// static gboolean
++// gst_ffmpegvidcmp_sink_query (GstCollectPads * pads, GstCollectData * data,
++//     GstQuery * query, gpointer user_data)
++// {
++//   GstFFMpegVidCmp *self = GST_FFMPEGVIDCMP (user_data);
++//   GstPad *pad = data->pad;
++//
++//   switch (GST_QUERY_TYPE (query)) {
++//     case GST_QUERY_ALLOCATION:
++//       if (pad == self->sinkpad1)
++//         return gst_pad_peer_query (self->srcpad, query);
++//       break;
++//     default:
++//       break;
++//   }
++//   return gst_collect_pads_query_default (pads, data, query, FALSE);
++// }
+ 
+ static GstStateChangeReturn
+ gst_ffmpegvidcmp_change_state (GstElement * element, GstStateChange transition)
+-- 
+2.38.1
+

@@ -1,0 +1,68 @@
+From c2b7ae7cdd919e8b252d6123de40c17aebbf41aa Mon Sep 17 00:00:00 2001
+From: "U. Artie Eoff" <ullysses.a.eoff@intel.com>
+Date: Thu, 4 May 2023 21:51:15 -0400
+Subject: [PATCH] gst-libav: avvideocompare video meta alloc
+
+Signed-off-by: U. Artie Eoff <ullysses.a.eoff@intel.com>
+---
+ subprojects/gst-libav/ext/libav/gstavvidcmp.c | 35 ++++++++++---------
+ 1 file changed, 18 insertions(+), 17 deletions(-)
+
+diff --git a/subprojects/gst-libav/ext/libav/gstavvidcmp.c b/subprojects/gst-libav/ext/libav/gstavvidcmp.c
+index 15319a7f54a2..dbe05df9eddc 100644
+--- a/subprojects/gst-libav/ext/libav/gstavvidcmp.c
++++ b/subprojects/gst-libav/ext/libav/gstavvidcmp.c
+@@ -282,8 +282,8 @@ gst_ffmpegvidcmp_init (GstFFMpegVidCmp * self)
+       self);
+   gst_collect_pads_set_event_function (self->collect,
+       GST_DEBUG_FUNCPTR (gst_ffmpegvidcmp_sink_event), self);
+-//   gst_collect_pads_set_query_function (self->collect,
+-//       GST_DEBUG_FUNCPTR (gst_ffmpegvidcmp_sink_query), self);
++  gst_collect_pads_set_query_function (self->collect,
++      GST_DEBUG_FUNCPTR (gst_ffmpegvidcmp_sink_query), self);
+ 
+   self->collect_data1 = gst_collect_pads_add_pad (self->collect, self->sinkpad1,
+       sizeof (GstCollectData), NULL, TRUE);
+@@ -446,23 +446,24 @@ gst_ffmpegvidcmp_sink_event (GstCollectPads * pads, GstCollectData * data,
+   return ret;
+ }
+ 
+-// static gboolean
+-// gst_ffmpegvidcmp_sink_query (GstCollectPads * pads, GstCollectData * data,
+-//     GstQuery * query, gpointer user_data)
+-// {
+-//   GstFFMpegVidCmp *self = GST_FFMPEGVIDCMP (user_data);
+-//   GstPad *pad = data->pad;
+-//
+-//   switch (GST_QUERY_TYPE (query)) {
+-//     case GST_QUERY_ALLOCATION:
++static gboolean
++gst_ffmpegvidcmp_sink_query (GstCollectPads * pads, GstCollectData * data,
++    GstQuery * query, gpointer user_data)
++{
++  GstFFMpegVidCmp *self = GST_FFMPEGVIDCMP (user_data);
++  GstPad *pad = data->pad;
++
++  switch (GST_QUERY_TYPE (query)) {
++    case GST_QUERY_ALLOCATION:
++      gst_query_add_allocation_meta (query, GST_VIDEO_META_API_TYPE, NULL);
+ //       if (pad == self->sinkpad1)
+ //         return gst_pad_peer_query (self->srcpad, query);
+-//       break;
+-//     default:
+-//       break;
+-//   }
+-//   return gst_collect_pads_query_default (pads, data, query, FALSE);
+-// }
++      break;
++    default:
++      break;
++  }
++  return gst_collect_pads_query_default (pads, data, query, FALSE);
++}
+ 
+ static GstStateChangeReturn
+ gst_ffmpegvidcmp_change_state (GstElement * element, GstStateChange transition)
+-- 
+2.38.1
+
