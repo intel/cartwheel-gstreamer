@@ -1,4 +1,4 @@
-From 5a4df3c1a60a53330604ae203d67e1888eba71f2 Mon Sep 17 00:00:00 2001
+From b3363906e84e5ead4816422f20e1454549bb08e5 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:48:50 +0800
 Subject: [PATCH 12/13] va: Implement the vaav1enc plugin.
@@ -4504,7 +4504,7 @@ index 0000000000..4ebb3b5771
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index 8c2be5ef2e..2c7029ab47 100644
+index 2dcd9985d9..c3b47ae1dd 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
 @@ -73,6 +73,9 @@ endif
@@ -4546,5 +4546,5 @@ index 83960d30ed..381769f57b 100644
          GST_DEBUG ("No encoder implementation for %" GST_FOURCC_FORMAT,
              GST_FOURCC_ARGS (codec));
 -- 
-2.25.1
+2.34.1
 

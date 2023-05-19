@@ -1,4 +1,4 @@
-From 87e563dce99592da2dbf3baf5e8486ac335039d9 Mon Sep 17 00:00:00 2001
+From ddcf96861cc36f04826a6235d74116101a0c657d Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 11:17:25 +0800
 Subject: [PATCH 08/13] codecparsers: av1: add ref_global_motion_params in
@@ -25,5 +25,5 @@ index 465254a060..7d16c30f57 100644
  
    /* Global vars set by frame header */
 -- 
-2.25.1
+2.34.1
 

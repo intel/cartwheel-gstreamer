@@ -1,4 +1,4 @@
-From 13991f65187189e6bae3b23c844a6d6b7c9a6900 Mon Sep 17 00:00:00 2001
+From f101dab136780ea72efb038f1f8d91232b022774 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 1 Feb 2023 21:45:42 +0800
 Subject: [PATCH 03/13] vp9bitwriter: Add the VP9 bit writer helper functions.
@@ -269,5 +269,5 @@ index c06c2992f5..b462628604 100644
  codecparser_headers = [
    'codecparsers-prelude.h',
 -- 
-2.25.1
+2.34.1
 
