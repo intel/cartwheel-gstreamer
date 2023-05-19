@@ -1,4 +1,4 @@
-From e982e9a9321ba278c079a0aa3a9b7b72600c5934 Mon Sep 17 00:00:00 2001
+From 876c65102a499a10d83b7fae5123496365952663 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 3 Nov 2022 20:17:23 +0800
 Subject: [PATCH 13/13] va: implement jpeg encoder.
@@ -689,7 +689,7 @@ index 44c618431f..48350f44d5 100644
  gboolean              gst_va_encoder_get_reconstruct_pool_config (GstVaEncoder * self,
                                                                    GstCaps ** caps,
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index cec3a38f63..60b6b23686 100644
+index af1c071ada..8cfec2699b 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 @@ -1630,7 +1630,7 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
@@ -702,7 +702,7 @@ index cec3a38f63..60b6b23686 100644
      return FALSE;
    }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index 019094915d..470f531f2e 100644
+index d2462250b8..96bef8e274 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -4567,7 +4567,7 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
@@ -1873,7 +1873,7 @@ index 0000000000..7ffd375441
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-index cda716d229..e90b998028 100644
+index efd8a430e8..d65111dcba 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 @@ -2088,7 +2088,7 @@ gst_va_vp9_enc_reconfig (GstVaBaseEnc * base)
@@ -1886,7 +1886,7 @@ index cda716d229..e90b998028 100644
      return FALSE;
    }
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index 2c7029ab47..668cd2695a 100644
+index c3b47ae1dd..454bc6ecb9 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
 @@ -16,6 +16,7 @@ va_sources = [
@@ -2193,10 +2193,10 @@ index 0000000000..ce22e65e7e
 +
 +GST_CHECK_MAIN (jpegbitwriter);
 diff --git a/subprojects/gst-plugins-bad/tests/check/meson.build b/subprojects/gst-plugins-bad/tests/check/meson.build
-index c404513330..fb8830be7e 100644
+index b1ea39bf8b..33d2e32e34 100644
 --- a/subprojects/gst-plugins-bad/tests/check/meson.build
 +++ b/subprojects/gst-plugins-bad/tests/check/meson.build
-@@ -89,6 +89,7 @@ base_tests = [
+@@ -91,6 +91,7 @@ base_tests = [
    [['libs/vp8parser.c'], false, [gstcodecparsers_dep]],
    [['libs/vp9parser.c'], false, [gstcodecparsers_dep]],
    [['libs/av1parser.c'], false, [gstcodecparsers_dep]],
@@ -2205,5 +2205,5 @@ index c404513330..fb8830be7e 100644
    [['libs/h265bitwriter.c'], false, [gstcodecparsers_dep]],
    [['libs/av1bitwriter.c'], false, [gstcodecparsers_dep]],
 -- 
-2.25.1
+2.34.1
 

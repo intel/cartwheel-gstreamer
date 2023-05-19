@@ -1,4 +1,4 @@
-From 8ab968d11930b99505e1e63b9ff8d0b4f75265b2 Mon Sep 17 00:00:00 2001
+From 93a4d0f805a7499bc4e21da01085ebddeed8905c Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 16:27:01 +0800
 Subject: [PATCH 06/13] codecparsers: av1: delete the useless
@@ -50,5 +50,5 @@ index a5f1c761f6..2c7106dd3e 100644
    gint height_in_sbs_minus_1[GST_AV1_MAX_TILE_ROWS];
    gint tile_size_bytes_minus_1;
 -- 
-2.25.1
+2.34.1
 

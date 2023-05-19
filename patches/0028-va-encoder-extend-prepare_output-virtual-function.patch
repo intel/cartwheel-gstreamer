@@ -1,4 +1,4 @@
-From 5357fb7d310f31cb9c0d53bfc93c5d4182d657e7 Mon Sep 17 00:00:00 2001
+From 0d04837c4f5061f4e0b50a7dcce2794b0111560a Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 10 Nov 2022 17:00:28 +0800
 Subject: [PATCH 01/13] va: encoder: extend prepare_output() virtual function.
@@ -114,7 +114,7 @@ index 8c9b570ad1..eca2b72415 100644
  void                  gst_va_base_enc_update_property_uint (GstVaBaseEnc * base,
                                                              guint32 * old_val,
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index 55ed703f66..200d68544f 100644
+index 5865400397..94e786fb1e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 @@ -3037,11 +3037,13 @@ gst_va_h264_enc_flush (GstVideoEncoder * venc)
@@ -153,7 +153,7 @@ index 55ed703f66..200d68544f 100644
  
  static gint
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index da0bebf044..240ce6e6b6 100644
+index d8e57db801..b7c7af052c 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 @@ -4640,11 +4640,13 @@ gst_va_h265_enc_new_frame (GstVaBaseEnc * base, GstVideoCodecFrame * frame)
@@ -192,5 +192,5 @@ index da0bebf044..240ce6e6b6 100644
  
  /* *INDENT-OFF* */
 -- 
-2.25.1
+2.34.1
 

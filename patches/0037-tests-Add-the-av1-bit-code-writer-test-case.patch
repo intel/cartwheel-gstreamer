@@ -1,4 +1,4 @@
-From 06f0c63ca82ef092474a6d3eb691c58e7fca2ab9 Mon Sep 17 00:00:00 2001
+From a0c66ea3f5e9fd66e6c7357ac47e64e3c85a34ec Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:39:30 +0800
 Subject: [PATCH 10/13] tests: Add the av1 bit code writer test case.
@@ -674,17 +674,17 @@ index 0000000000..dcd4a7ada8
 +
 +GST_CHECK_MAIN (av1bitwriter);
 diff --git a/subprojects/gst-plugins-bad/tests/check/meson.build b/subprojects/gst-plugins-bad/tests/check/meson.build
-index 78d79d905f..c404513330 100644
+index f8e96f72f8..b1ea39bf8b 100644
 --- a/subprojects/gst-plugins-bad/tests/check/meson.build
 +++ b/subprojects/gst-plugins-bad/tests/check/meson.build
-@@ -91,6 +91,7 @@ base_tests = [
+@@ -93,6 +93,7 @@ base_tests = [
    [['libs/av1parser.c'], false, [gstcodecparsers_dep]],
    [['libs/h264bitwriter.c'], false, [gstcodecparsers_dep]],
    [['libs/h265bitwriter.c'], false, [gstcodecparsers_dep]],
 +  [['libs/av1bitwriter.c'], false, [gstcodecparsers_dep]],
+   [['libs/vkformat.c'], not gstvulkan_dep.found(), [gstvulkan_dep]],
    [['libs/vkmemory.c'], not gstvulkan_dep.found(), [gstvulkan_dep]],
    [['elements/vkcolorconvert.c'], not gstvulkan_dep.found(), [gstvulkan_dep]],
-   [['libs/vkwindow.c'], not gstvulkan_dep.found(), [gstvulkan_dep]],
 -- 
-2.25.1
+2.34.1
 

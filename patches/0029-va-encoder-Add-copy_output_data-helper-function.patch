@@ -1,4 +1,4 @@
-From fd86ce8918c5f9c6ab54db9aa39c473d5ad3b616 Mon Sep 17 00:00:00 2001
+From 40be12e227ed80d1eec336812106a45edd63acc3 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 10 Nov 2022 20:36:05 +0800
 Subject: [PATCH 02/13] va: encoder: Add copy_output_data() helper function.
@@ -83,5 +83,5 @@ index eca2b72415..0007a13e29 100644
                                                              guint32 * old_val,
                                                              guint32 new_val,
 -- 
-2.25.1
+2.34.1
 

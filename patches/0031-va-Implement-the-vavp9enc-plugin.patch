@@ -1,4 +1,4 @@
-From 5a5c285ece7a553459d29992c581f7e6cb9c2170 Mon Sep 17 00:00:00 2001
+From 54eed5a807f9e5dcfba9058f48faaf9ac7287009 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
 Subject: [PATCH 04/13] va: Implement the vavp9enc plugin.
@@ -3244,7 +3244,7 @@ index 0000000000..94db2e8e3b
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index 6315217a1f..8c2be5ef2e 100644
+index 3e0a3f7060..2dcd9985d9 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
 @@ -21,6 +21,7 @@ va_sources = [
@@ -3291,5 +3291,5 @@ index ffa00f4619..83960d30ed 100644
          GST_DEBUG ("No encoder implementation for %" GST_FOURCC_FORMAT,
              GST_FOURCC_ARGS (codec));
 -- 
-2.25.1
+2.34.1
 
