@@ -1,15 +1,15 @@
-From c76ec4afe4c43c4d5ec8fad93184438fc74dd080 Mon Sep 17 00:00:00 2001
+From 415bd97e4002840491da1f6bc965d94ecd1c4f34 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 22 Feb 2023 18:39:22 +0800
-Subject: [PATCH 04/11] va: Use new dma drm caps in va pool when we setup DMA
- pools.
+Subject: [PATCH 104/127] va: Use new dma drm caps in va pool when we setup DMA
+ pools
 
 ---
  .../gst-libs/gst/va/gstvapool.c               | 66 ++++++++++++++-----
  1 file changed, 50 insertions(+), 16 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
-index 9e1db70b71..0760d10499 100644
+index 9e1db70b71..77e33685cf 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
 @@ -35,6 +35,8 @@
@@ -70,7 +70,7 @@ index 9e1db70b71..0760d10499 100644
 +    if (GST_VIDEO_INFO_FORMAT (&vpool->caps_info_drm.vinfo) ==
 +        GST_VIDEO_FORMAT_ENCODED) {
 +      dma_video_format =
-+          gst_va_video_format_from_va_fourcc (vpool->caps_info_drm.drm_fourcc);
++          gst_va_video_format_from_drm_fourcc (vpool->caps_info_drm.drm_fourcc);
 +      if (dma_video_format == GST_VIDEO_FORMAT_UNKNOWN)
 +        goto wrong_caps;
 +    }

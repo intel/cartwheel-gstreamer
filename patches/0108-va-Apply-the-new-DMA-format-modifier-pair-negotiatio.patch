@@ -1,8 +1,8 @@
-From d762352567b6d530e8af37685d3a62d605181be5 Mon Sep 17 00:00:00 2001
+From 8aa24ed24cc75db19c5bf98aee4a3c7490278e9d Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 22 Feb 2023 19:23:47 +0800
-Subject: [PATCH 08/11] va: Apply the new DMA format:modifier pair negotiation
- in decoder.
+Subject: [PATCH 108/127] va: Apply the new DMA format:modifier pair
+ negotiation in decoder
 
 We will consider the DMA modifier for negotiation, setting caps and
 memory pool allocation.
@@ -10,8 +10,8 @@ memory pool allocation.
  .../gst-plugins-bad/sys/va/gstvaav1dec.c      |   2 +-
  .../gst-plugins-bad/sys/va/gstvabasedec.c     | 116 ++++++++++++++----
  .../gst-plugins-bad/sys/va/gstvabasedec.h     |   3 +-
- .../gst-plugins-bad/sys/va/gstvajpegdec.c     |   2 +-
- 4 files changed, 95 insertions(+), 28 deletions(-)
+ .../gst-plugins-bad/sys/va/gstvajpegdec.c     |  15 ++-
+ 4 files changed, 107 insertions(+), 29 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1dec.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1dec.c
 index 43e7edb7dc..916342c59f 100644
@@ -27,7 +27,7 @@ index 43e7edb7dc..916342c59f 100644
        GST_WARNING_OBJECT (self, "Failed to get format for internal pool");
        return NULL;
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabasedec.c b/subprojects/gst-plugins-bad/sys/va/gstvabasedec.c
-index 5f5990204e..08c7a81a05 100644
+index 5f5990204e..42bdcc622b 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabasedec.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabasedec.c
 @@ -501,7 +501,10 @@ gst_va_base_dec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
@@ -38,7 +38,7 @@ index 5f5990204e..08c7a81a05 100644
 +  if (!caps)
 +    goto wrong_caps;
 +
-+  if (!(caps && gst_va_video_info_from_caps (&info, NULL, caps)))
++  if (!gst_va_video_info_from_caps (&info, NULL, caps))
      goto wrong_caps;
  
    has_videometa = gst_query_find_allocation_meta (query,
@@ -78,7 +78,7 @@ index 5f5990204e..08c7a81a05 100644
 +    if (drm_format) {
 +      fourcc = gst_video_dma_drm_fourcc_from_string
 +          (g_value_get_string (formats), modifier);
-+      return gst_va_video_format_from_va_fourcc (fourcc);
++      return gst_va_video_format_from_drm_fourcc (fourcc);
 +    } else {
 +      return gst_video_format_from_string (g_value_get_string (formats));
 +    }
@@ -94,7 +94,7 @@ index 5f5990204e..08c7a81a05 100644
 +      if (drm_format) {
 +        fourcc = gst_video_dma_drm_fourcc_from_string (g_value_get_string (val),
 +            modifier);
-+        fmt = gst_va_video_format_from_va_fourcc (fourcc);
++        fmt = gst_va_video_format_from_drm_fourcc (fourcc);
 +      } else {
 +        fmt = gst_video_format_from_string (g_value_get_string (val));
 +      }
@@ -109,7 +109,7 @@ index 5f5990204e..08c7a81a05 100644
 +      if (drm_format) {
 +        fourcc = gst_video_dma_drm_fourcc_from_string (g_value_get_string
 +            (first_val), modifier);
-+        return gst_va_video_format_from_va_fourcc (fourcc);
++        return gst_va_video_format_from_drm_fourcc (fourcc);
 +      } else {
 +        return gst_video_format_from_string (g_value_get_string (first_val));
 +      }
@@ -289,17 +289,51 @@ index 35121c4c06..8a1228cf22 100644
                                                             GstVideoCodecFrame * codec_frame);
  gboolean              gst_va_base_dec_process_output      (GstVaBaseDec * base,
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvajpegdec.c b/subprojects/gst-plugins-bad/sys/va/gstvajpegdec.c
-index 6aeca2a619..6a81511532 100644
+index 6aeca2a619..4e0624426e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvajpegdec.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvajpegdec.c
-@@ -386,7 +386,7 @@ gst_va_jpeg_dec_negotiate (GstVideoDecoder * decoder)
+@@ -46,6 +46,7 @@
+ 
+ #include <gst/va/gstvavideoformat.h>
+ 
++#include "gstvacaps.h"
+ #include "gstvabasedec.h"
+ 
+ GST_DEBUG_CATEGORY_STATIC (gst_va_jpegdec_debug);
+@@ -356,6 +357,7 @@ gst_va_jpeg_dec_negotiate (GstVideoDecoder * decoder)
+   GstVaBaseDec *base = GST_VA_BASE_DEC (decoder);
+   GstVaJpegDec *self = GST_VA_JPEG_DEC (decoder);
+   GstVideoFormat format;
++  guint64 modifier;
+   GstCapsFeatures *capsfeatures = NULL;
+ 
+   /* Ignore downstream renegotiation request. */
+@@ -386,7 +388,7 @@ gst_va_jpeg_dec_negotiate (GstVideoDecoder * decoder)
      base->rt_format = VA_RT_FORMAT_RGBP;
  
    gst_va_base_dec_get_preferred_format_and_caps_features (base, &format,
 -      &capsfeatures);
-+      &capsfeatures, NULL);
++      &capsfeatures, &modifier);
    if (format == GST_VIDEO_FORMAT_UNKNOWN)
      return FALSE;
+ 
+@@ -402,7 +404,16 @@ gst_va_jpeg_dec_negotiate (GstVideoDecoder * decoder)
+       gst_video_decoder_set_output_state (decoder, format,
+       base->width, base->height, base->input_state);
+ 
+-  base->output_state->caps = gst_video_info_to_caps (&base->output_state->info);
++  /* set caps feature */
++  if (capsfeatures && gst_caps_features_contains (capsfeatures,
++          GST_CAPS_FEATURE_MEMORY_DMABUF)) {
++    base->output_state->caps =
++        gst_va_video_info_to_dma_caps (&base->output_state->info, modifier);
++  } else {
++    base->output_state->caps =
++        gst_video_info_to_caps (&base->output_state->info);
++  }
++
+   if (capsfeatures)
+     gst_caps_set_features_simple (base->output_state->caps, capsfeatures);
  
 -- 
 2.25.1

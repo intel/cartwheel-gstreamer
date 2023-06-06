@@ -1,0 +1,375 @@
+From a03c4c585a109e6129a111f515385f6c5f45d8a0 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Wed, 22 Feb 2023 16:25:32 +0800
+Subject: [PATCH 102/127] va: Add a helper function to create va surfaces with
+ modifier
+
+---
+ .../gst-libs/gst/va/gstvaallocator.c          | 164 +++++++++++++-----
+ .../gst-libs/gst/va/gstvaallocator.h          |   5 +
+ .../gst-libs/gst/va/vasurfaceimage.c          |  29 +++-
+ .../gst-libs/gst/va/vasurfaceimage.h          |   2 +-
+ 4 files changed, 149 insertions(+), 51 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvaallocator.c b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvaallocator.c
+index f648e80338..922847e69c 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvaallocator.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvaallocator.c
+@@ -40,6 +40,7 @@
+ #ifndef G_OS_WIN32
+ #include <sys/types.h>
+ #include <unistd.h>
++#include <libdrm/drm_fourcc.h>
+ #endif
+ 
+ #include "gstvasurfacecopy.h"
+@@ -541,45 +542,34 @@ gst_va_dmabuf_memory_release (GstMiniObject * mini_object)
+   return FALSE;
+ }
+ 
+-/* Creates an exported VASurfaceID and adds it as @buffer's memories
+- * qdata
+- *
+- * If @info is not NULL, a dummy (non-pooled) buffer is created to
+- * update offsets and strides, and it has to be unrefed immediately.
+- */
+ static gboolean
+-gst_va_dmabuf_allocator_setup_buffer_full (GstAllocator * allocator,
+-    GstBuffer * buffer, GstVideoInfo * info)
++_va_dmabuf_create_and_export_surface (GstVaDisplay * display,
++    guint usage_hint, guint64 modifier, GstVideoInfo * info,
++    VASurfaceID * ret_surface, VADRMPRIMESurfaceDescriptor * ret_desc)
+ {
+-  GstVaBufferSurface *buf;
+-  GstVaDmabufAllocator *self = GST_VA_DMABUF_ALLOCATOR (allocator);
+-  GstVideoFormat format;
+   VADRMPRIMESurfaceDescriptor desc = { 0, };
++  guint32 i, fourcc, rt_format, export_flags;
+   VASurfaceAttribExternalBuffers *extbuf = NULL, ext_buf;
++  GstVideoFormat format;
+   VASurfaceID surface;
+-  guint32 i, fourcc, rt_format, export_flags;
+-  GDestroyNotify buffer_destroy = NULL;
+-  gsize object_offset[4];
+ 
+-  g_return_val_if_fail (GST_IS_VA_DMABUF_ALLOCATOR (allocator), FALSE);
++  _init_debug_category ();
++
++  format = GST_VIDEO_INFO_FORMAT (info);
+ 
+-  format = GST_VIDEO_INFO_FORMAT (&self->info);
+   fourcc = gst_va_fourcc_from_video_format (format);
+   rt_format = gst_va_chroma_from_video_format (format);
+-  if (fourcc == 0 || rt_format == 0) {
+-    GST_ERROR_OBJECT (allocator, "Unsupported format: %s",
+-        gst_video_format_to_string (GST_VIDEO_INFO_FORMAT (&self->info)));
++  if (fourcc == 0 || rt_format == 0)
+     return FALSE;
+-  }
+ 
+   /* HACK(victor): disable tiling for i965 driver for RGB formats */
+-  if (GST_VA_DISPLAY_IS_IMPLEMENTATION (self->display, INTEL_I965)
+-      && GST_VIDEO_INFO_IS_RGB (&self->info)) {
++  if (GST_VA_DISPLAY_IS_IMPLEMENTATION (display, INTEL_I965)
++      && GST_VIDEO_INFO_IS_RGB (info)) {
+     /* *INDENT-OFF* */
+     ext_buf = (VASurfaceAttribExternalBuffers) {
+-      .width = GST_VIDEO_INFO_WIDTH (&self->info),
+-      .height = GST_VIDEO_INFO_HEIGHT (&self->info),
+-      .num_planes = GST_VIDEO_INFO_N_PLANES (&self->info),
++      .width = GST_VIDEO_INFO_WIDTH (info),
++      .height = GST_VIDEO_INFO_HEIGHT (info),
++      .num_planes = GST_VIDEO_INFO_N_PLANES (info),
+       .pixel_format = fourcc,
+     };
+     /* *INDENT-ON* */
+@@ -587,14 +577,13 @@ gst_va_dmabuf_allocator_setup_buffer_full (GstAllocator * allocator,
+     extbuf = &ext_buf;
+   }
+ 
+-  if (!va_create_surfaces (self->display, rt_format, fourcc,
+-          GST_VIDEO_INFO_WIDTH (&self->info),
+-          GST_VIDEO_INFO_HEIGHT (&self->info), self->usage_hint, extbuf,
+-          &surface, 1))
++  if (!va_create_surfaces (display, rt_format, fourcc,
++          GST_VIDEO_INFO_WIDTH (info), GST_VIDEO_INFO_HEIGHT (info),
++          usage_hint, modifier, extbuf, &surface, 1))
+     return FALSE;
+ 
+   /* workaround for missing layered dmabuf formats in i965 */
+-  if (GST_VA_DISPLAY_IS_IMPLEMENTATION (self->display, INTEL_I965)
++  if (GST_VA_DISPLAY_IS_IMPLEMENTATION (display, INTEL_I965)
+       && (fourcc == VA_FOURCC_YUY2 || fourcc == VA_FOURCC_UYVY)) {
+     /* These are not representable as separate planes */
+     export_flags = VA_EXPORT_SURFACE_COMPOSED_LAYERS;
+@@ -606,11 +595,11 @@ gst_va_dmabuf_allocator_setup_buffer_full (GstAllocator * allocator,
+ 
+   export_flags |= VA_EXPORT_SURFACE_READ_WRITE;
+ 
+-  if (!va_export_surface_to_dmabuf (self->display, surface, export_flags,
+-          &desc))
++  if (!va_export_surface_to_dmabuf (display, surface, export_flags, &desc))
+     goto failed;
+ 
+-  g_assert (GST_VIDEO_INFO_N_PLANES (&self->info) == desc.num_layers);
++  if (GST_VIDEO_INFO_N_PLANES (info) != desc.num_layers)
++    goto failed;
+ 
+   if (fourcc != desc.fourcc) {
+     GST_ERROR ("Unsupported fourcc: %" GST_FOURCC_FORMAT,
+@@ -623,6 +612,92 @@ gst_va_dmabuf_allocator_setup_buffer_full (GstAllocator * allocator,
+     goto failed;
+   }
+ 
++  for (i = 0; i < desc.num_objects; i++) {
++    if (modifier != DRM_FORMAT_MOD_INVALID
++        && modifier != desc.objects[i].drm_format_modifier) {
++      if (i == 0) {
++        GST_ERROR ("driver sets modifer of the object to "
++            "0x%016lx, different from we set 0x%016lx",
++            desc.objects[i].drm_format_modifier, modifier);
++      } else {
++        GST_ERROR ("Different objects have different modifier");
++      }
++
++      goto failed;
++    }
++
++    modifier = desc.objects[i].drm_format_modifier;
++  }
++
++  *ret_surface = surface;
++  if (ret_desc)
++    *ret_desc = desc;
++
++  return TRUE;
++
++failed:
++  {
++    va_destroy_surfaces (display, &surface, 1);
++    return FALSE;
++  }
++}
++
++/**
++ * gst_va_dmabuf_get_modifier_for_format:
++ * @display: a #GstVaDisplay
++ * @format: a #GstVideoFormat
++ * @usage_hint: VA usage hint
++ *
++ * Get the underlying modifier for specified @format and @usage_hint.
++ *
++ * Returns: the underlying modifier.
++ *
++ * Since: 1.24
++ */
++guint64
++gst_va_dmabuf_get_modifier_for_format (GstVaDisplay * display,
++    GstVideoFormat format, guint usage_hint)
++{
++  VADRMPRIMESurfaceDescriptor desc = { 0, };
++  VASurfaceID surface;
++  GstVideoInfo info;
++
++  gst_video_info_init (&info);
++  gst_video_info_set_format (&info, format, 64, 64);
++
++  if (!_va_dmabuf_create_and_export_surface (display, usage_hint,
++          DRM_FORMAT_MOD_INVALID, &info, &surface, &desc))
++    return DRM_FORMAT_MOD_INVALID;
++
++  va_destroy_surfaces (display, &surface, 1);
++
++  return desc.objects[0].drm_format_modifier;
++}
++
++/* Creates an exported VASurfaceID and adds it as @buffer's memories
++ * qdata
++ *
++ * If @info is not NULL, a dummy (non-pooled) buffer is created to
++ * update offsets and strides, and it has to be unrefed immediately.
++ */
++static gboolean
++gst_va_dmabuf_allocator_setup_buffer_full (GstAllocator * allocator,
++    GstBuffer * buffer, GstVideoInfo * info)
++{
++  GstVaBufferSurface *buf;
++  GstVaDmabufAllocator *self = GST_VA_DMABUF_ALLOCATOR (allocator);
++  VADRMPRIMESurfaceDescriptor desc = { 0, };
++  VASurfaceID surface;
++  guint32 i;
++  GDestroyNotify buffer_destroy = NULL;
++  gsize object_offset[4];
++
++  g_return_val_if_fail (GST_IS_VA_DMABUF_ALLOCATOR (allocator), FALSE);
++
++  if (!_va_dmabuf_create_and_export_surface (self->display, self->usage_hint,
++          DRM_FORMAT_MOD_INVALID, &self->info, &surface, &desc))
++    return FALSE;
++
+   buf = gst_va_buffer_surface_new (surface);
+   if (G_UNLIKELY (info)) {
+     *info = self->info;
+@@ -692,12 +767,6 @@ gst_va_dmabuf_allocator_setup_buffer_full (GstAllocator * allocator,
+   }
+ 
+   return TRUE;
+-
+-failed:
+-  {
+-    va_destroy_surfaces (self->display, &surface, 1);
+-    return FALSE;
+-  }
+ }
+ 
+ /**
+@@ -1040,7 +1109,8 @@ gst_va_dmabuf_memories_setup (GstVaDisplay * display, GstVideoInfo * info,
+   }
+ 
+   ret = va_create_surfaces (display, rt_format, ext_buf.pixel_format,
+-      ext_buf.width, ext_buf.height, usage_hint, &ext_buf, &surface, 1);
++      ext_buf.width, ext_buf.height, usage_hint, DRM_FORMAT_MOD_INVALID,
++      &ext_buf, &surface, 1);
+   if (!ret)
+     return FALSE;
+ 
+@@ -1236,7 +1306,7 @@ _update_image_info (GstVaAllocator * va_allocator)
+   if (!va_create_surfaces (va_allocator->display, va_allocator->rt_format,
+           va_allocator->fourcc, GST_VIDEO_INFO_WIDTH (&va_allocator->info),
+           GST_VIDEO_INFO_HEIGHT (&va_allocator->info), va_allocator->usage_hint,
+-          NULL, &surface, 1)) {
++          DRM_FORMAT_MOD_INVALID, NULL, &surface, 1)) {
+     GST_ERROR_OBJECT (va_allocator, "Failed to create a test surface");
+     return FALSE;
+   }
+@@ -1599,8 +1669,8 @@ gst_va_allocator_alloc (GstAllocator * allocator)
+ 
+   if (!va_create_surfaces (self->display, self->rt_format, self->fourcc,
+           GST_VIDEO_INFO_WIDTH (&self->info),
+-          GST_VIDEO_INFO_HEIGHT (&self->info), self->usage_hint, NULL,
+-          &surface, 1))
++          GST_VIDEO_INFO_HEIGHT (&self->info),
++          self->usage_hint, DRM_FORMAT_MOD_INVALID, NULL, &surface, 1))
+     return NULL;
+ 
+   mem = g_new (GstVaMemory, 1);
+@@ -2066,8 +2136,8 @@ gst_va_buffer_create_aux_surface (GstBuffer * buffer)
+     display = self->display;
+     if (!va_create_surfaces (self->display, rt_format, fourcc,
+             GST_VIDEO_INFO_WIDTH (&self->info),
+-            GST_VIDEO_INFO_HEIGHT (&self->info), self->usage_hint, NULL,
+-            &surface, 1))
++            GST_VIDEO_INFO_HEIGHT (&self->info),
++            self->usage_hint, DRM_FORMAT_MOD_INVALID, NULL, &surface, 1))
+       return FALSE;
+   } else if (GST_IS_VA_ALLOCATOR (mem->allocator)) {
+     GstVaAllocator *self = GST_VA_ALLOCATOR (mem->allocator);
+@@ -2081,8 +2151,8 @@ gst_va_buffer_create_aux_surface (GstBuffer * buffer)
+     format = GST_VIDEO_INFO_FORMAT (&self->info);
+     if (!va_create_surfaces (self->display, self->rt_format, self->fourcc,
+             GST_VIDEO_INFO_WIDTH (&self->info),
+-            GST_VIDEO_INFO_HEIGHT (&self->info), self->usage_hint, NULL,
+-            &surface, 1))
++            GST_VIDEO_INFO_HEIGHT (&self->info),
++            self->usage_hint, DRM_FORMAT_MOD_INVALID, NULL, &surface, 1))
+       return FALSE;
+   } else {
+     g_assert_not_reached ();
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvaallocator.h b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvaallocator.h
+index f0ee50a773..cf1bcfc8a4 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvaallocator.h
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvaallocator.h
+@@ -65,6 +65,11 @@ gboolean              gst_va_dmabuf_memories_setup        (GstVaDisplay * displa
+                                                            gsize offset[GST_VIDEO_MAX_PLANES],
+                                                            guint usage_hint);
+ 
++GST_VA_API
++guint64               gst_va_dmabuf_get_modifier_for_format (GstVaDisplay * display,
++                                                             GstVideoFormat format,
++                                                             guint usage_hint);
++
+ #define GST_TYPE_VA_ALLOCATOR (gst_va_allocator_get_type())
+ #define GST_VA_ALLOCATOR(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_VA_ALLOCATOR, GstVaAllocator))
+ #define GST_VA_ALLOCATOR_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_VA_ALLOCATOR, GstVaAllocatorClass))
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.c b/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.c
+index d6d8f4985a..0f008bd967 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.c
+@@ -25,6 +25,9 @@
+ #include "vasurfaceimage.h"
+ #include "gstvavideoformat.h"
+ #include <va/va.h>
++#ifndef G_OS_WIN32
++#include <libdrm/drm_fourcc.h>
++#endif
+ 
+ /* XXX: find a better log category */
+ #define GST_CAT_DEFAULT gst_va_display_debug
+@@ -50,13 +53,13 @@ va_destroy_surfaces (GstVaDisplay * display, VASurfaceID * surfaces,
+ 
+ gboolean
+ va_create_surfaces (GstVaDisplay * display, guint rt_format, guint fourcc,
+-    guint width, guint height, gint usage_hint,
++    guint width, guint height, gint usage_hint, guint64 modifier,
+     VASurfaceAttribExternalBuffers * ext_buf, VASurfaceID * surfaces,
+     guint num_surfaces)
+ {
+   VADisplay dpy = gst_va_display_get_va_dpy (display);
+   /* *INDENT-OFF* */
+-  VASurfaceAttrib attrs[5] = {
++  VASurfaceAttrib attrs[6] = {
+     {
+       .type = VASurfaceAttribUsageHint,
+       .flags = VA_SURFACE_ATTRIB_SETTABLE,
+@@ -100,6 +103,26 @@ va_create_surfaces (GstVaDisplay * display, guint rt_format, guint fourcc,
+     /* *INDENT-ON* */
+   }
+ 
++  if (modifier != DRM_FORMAT_MOD_INVALID) {
++#if VA_CHECK_VERSION(1, 12, 0)
++    VADRMFormatModifierList modifier_list;
++
++    modifier_list.num_modifiers = 1;
++    modifier_list.modifiers = &modifier;
++    /* *INDENT-OFF* */
++    attrs[num_attrs++] = (VASurfaceAttrib) {
++      .type = VASurfaceAttribDRMFormatModifiers,
++      .flags = VA_SURFACE_ATTRIB_SETTABLE,
++      .value.type = VAGenericValueTypePointer,
++      .value.value.p = &modifier_list,
++    };
++    /* *INDENT-ON* */
++#else
++    GST_WARNING ("modifier list setting is not supported "
++        "in current libva version.");
++#endif
++  }
++
+   status = vaCreateSurfaces (dpy, rt_format, width, height, surfaces,
+       num_surfaces, attrs, num_attrs);
+   if (status != VA_STATUS_SUCCESS) {
+@@ -120,7 +143,7 @@ va_export_surface_to_dmabuf (GstVaDisplay * display, VASurfaceID surface,
+   status = vaExportSurfaceHandle (dpy, surface,
+       VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2, flags, desc);
+   if (status != VA_STATUS_SUCCESS) {
+-    GST_ERROR ("vaExportSurfaceHandle: %s", vaErrorStr (status));
++    GST_INFO ("vaExportSurfaceHandle: %s", vaErrorStr (status));
+     return FALSE;
+   }
+ 
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.h b/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.h
+index 18f88f757a..9396dea520 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.h
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.h
+@@ -31,7 +31,7 @@ G_BEGIN_DECLS
+ gboolean              va_create_surfaces                  (GstVaDisplay * display,
+                                                            guint rt_format, guint fourcc,
+                                                            guint width, guint height,
+-                                                           gint usage_hint,
++                                                           gint usage_hint, guint64 modifier,
+                                                            VASurfaceAttribExternalBuffers * ext_buf,
+                                                            VASurfaceID * surfaces,
+                                                            guint num_surfaces);
+-- 
+2.25.1
+

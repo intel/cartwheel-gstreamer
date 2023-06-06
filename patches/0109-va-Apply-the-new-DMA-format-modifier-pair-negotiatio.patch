@@ -1,13 +1,13 @@
-From 08d940da1b7d79565b566b6d5c0ebb3d3e1da8dd Mon Sep 17 00:00:00 2001
+From 3bfa2152d872c11087905a91f7729bd6e93c4004 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 22 Feb 2023 19:36:06 +0800
-Subject: [PATCH 09/11] va: Apply the new DMA format:modifier pair negotiation
- in vpp.
+Subject: [PATCH 109/127] va: Apply the new DMA format:modifier pair
+ negotiation in vpp
 
 ---
  .../sys/va/gstvabasetransform.c               |  10 +-
- subprojects/gst-plugins-bad/sys/va/gstvavpp.c | 113 ++++++++++++++----
- 2 files changed, 98 insertions(+), 25 deletions(-)
+ subprojects/gst-plugins-bad/sys/va/gstvavpp.c | 114 +++++++++++++++---
+ 2 files changed, 99 insertions(+), 25 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c b/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
 index b3055bce6f..39d9eb0af0 100644
@@ -55,7 +55,7 @@ index b3055bce6f..39d9eb0af0 100644
        return NULL;
      }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavpp.c b/subprojects/gst-plugins-bad/sys/va/gstvavpp.c
-index c5dc7121ca..2a767407ee 100644
+index c5dc7121ca..5e7a7141ca 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvavpp.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavpp.c
 @@ -65,6 +65,8 @@
@@ -99,7 +99,7 @@ index c5dc7121ca..2a767407ee 100644
 +      return NULL;
 +
 +    fourcc = gst_video_dma_drm_fourcc_from_string (in_format, NULL);
-+    video_format = gst_va_video_format_from_va_fourcc (fourcc);
++    video_format = gst_va_video_format_from_drm_fourcc (fourcc);
 +    if (video_format == GST_VIDEO_FORMAT_UNKNOWN)
 +      return NULL;
 +
@@ -163,7 +163,7 @@ index c5dc7121ca..2a767407ee 100644
 +          if (is_dma) {
 +            fourcc = gst_video_dma_drm_fourcc_from_string
 +                (g_value_get_string (val), &modifier);
-+            fmt = gst_va_video_format_from_va_fourcc (fourcc);
++            fmt = gst_va_video_format_from_drm_fourcc (fourcc);
 +          } else {
 +            fmt = gst_video_format_from_string (g_value_get_string (val));
 +          }
@@ -190,7 +190,7 @@ index c5dc7121ca..2a767407ee 100644
 +      if (is_dma) {
 +        fourcc = gst_video_dma_drm_fourcc_from_string
 +            (g_value_get_string (format), &modifier);
-+        fmt = gst_va_video_format_from_va_fourcc (fourcc);
++        fmt = gst_va_video_format_from_drm_fourcc (fourcc);
 +      } else {
 +        fmt = gst_video_format_from_string (g_value_get_string (format));
 +      }
@@ -208,7 +208,7 @@ index c5dc7121ca..2a767407ee 100644
      }
  
      if (min_loss == 0)
-@@ -1255,8 +1315,20 @@ gst_va_vpp_fixate_format (GstVaVpp * self, GstCaps * caps, GstCaps * result)
+@@ -1255,8 +1315,21 @@ gst_va_vpp_fixate_format (GstVaVpp * self, GstCaps * caps, GstCaps * result)
  
      features = gst_caps_features_copy (gst_caps_get_features (result, best_i));
      out = gst_structure_copy (gst_caps_get_structure (result, best_i));
@@ -221,7 +221,8 @@ index c5dc7121ca..2a767407ee 100644
 +      g_assert (best_modifier != DRM_FORMAT_MOD_INVALID);
 +
 +      drm_fmt_name = gst_video_dma_drm_fourcc_to_string
-+          (gst_va_fourcc_from_video_format (out_info->format), best_modifier);
++          (gst_va_drm_fourcc_from_video_format (out_info->format),
++          best_modifier);
 +      gst_structure_set (out, "drm-format", G_TYPE_STRING, drm_fmt_name, NULL);
 +      g_free (drm_fmt_name);
 +    } else {
@@ -231,7 +232,7 @@ index c5dc7121ca..2a767407ee 100644
      ret = gst_caps_new_full (out, NULL);
      gst_caps_set_features_simple (ret, features);
      return ret;
-@@ -1757,12 +1829,13 @@ transfer_colorimetry_from_input (GstVaVpp * self, GstCaps * in_caps,
+@@ -1757,12 +1830,13 @@ transfer_colorimetry_from_input (GstVaVpp * self, GstCaps * in_caps,
      const GValue *in_colorimetry =
          gst_structure_get_value (in_caps_s, "colorimetry");
  
@@ -247,7 +248,7 @@ index c5dc7121ca..2a767407ee 100644
        GST_WARNING_OBJECT (self, "Failed to convert src pad caps to video info");
        return;
      }
-@@ -1844,7 +1917,7 @@ update_hdr_fields (GstVaVpp * self, GstCaps * result)
+@@ -1844,7 +1918,7 @@ update_hdr_fields (GstVaVpp * self, GstCaps * result)
  
    have_colorimetry = gst_structure_has_field (s, "colorimetry");
    if (!have_colorimetry) {
