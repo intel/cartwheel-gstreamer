@@ -1,22 +1,22 @@
-From 102e5ca2b73c43f4ffe692ec5080f1c75d8f34f3 Mon Sep 17 00:00:00 2001
+From 0d80485af6f3d1567ea259322282beafd3883532 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 22 Feb 2023 19:00:45 +0800
-Subject: [PATCH 06/11] va: Add helper functions to convert GstVideoInfoDmaDrm
- into va video info.
+Subject: [PATCH 106/127] va: Add helper functions to convert
+ GstVideoInfoDmaDrm into va video info
 
 The VA has its internal video format mapping(because different drivers may
 have different interpretation for the same format), so we should convert the
 info in GstVideoInfoDmaDrm into the according video info based on that mapping.
 ---
- .../gst-plugins-bad/sys/va/gstvacaps.c        | 51 +++++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvacaps.c        | 53 +++++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvacaps.h        |  5 ++
- 2 files changed, 56 insertions(+)
+ 2 files changed, 58 insertions(+)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvacaps.c b/subprojects/gst-plugins-bad/sys/va/gstvacaps.c
-index 708f62f65a..54d9271c9c 100644
+index 03b706e37f..253a84a8df 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvacaps.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvacaps.c
-@@ -420,6 +420,57 @@ gst_va_create_raw_caps (GstVaDisplay * display, VAProfile profile,
+@@ -421,6 +421,59 @@ gst_va_create_raw_caps (GstVaDisplay * display, VAProfile profile,
    return caps;
  }
  
@@ -33,15 +33,17 @@ index 708f62f65a..54d9271c9c 100644
 +  if (!gst_video_info_dma_drm_from_caps (&drm_info, caps))
 +    return FALSE;
 +
-+  if (GST_VIDEO_INFO_FORMAT (&drm_info.vinfo) != GST_VIDEO_FORMAT_ENCODED)
++  if (GST_VIDEO_INFO_FORMAT (&drm_info.vinfo) != GST_VIDEO_FORMAT_ENCODED) {
++    *info = drm_info.vinfo;
 +    return TRUE;
++  }
 +
 +  /* The non linear DMA format will be recognized as FORMAT_ENCODED,
 +     but we still need to know its real format to set the info such
 +     as pitch and stride. Because va plugins have its internal mapping
 +     between drm fourcc and video format, we do not use the standard
 +     conversion API here. */
-+  video_format = gst_va_video_format_from_va_fourcc (drm_info.drm_fourcc);
++  video_format = gst_va_video_format_from_drm_fourcc (drm_info.drm_fourcc);
 +  if (video_format == GST_VIDEO_FORMAT_UNKNOWN)
 +    return FALSE;
 +
@@ -65,7 +67,7 @@ index 708f62f65a..54d9271c9c 100644
 +  gst_video_info_dma_drm_init (&drm_info);
 +  drm_info.vinfo = *info;
 +  drm_info.drm_fourcc =
-+      gst_va_fourcc_from_video_format (GST_VIDEO_INFO_FORMAT (info));
++      gst_va_drm_fourcc_from_video_format (GST_VIDEO_INFO_FORMAT (info));
 +  drm_info.drm_modifier = modifier;
 +
 +  return gst_video_info_dma_drm_to_caps (&drm_info);
