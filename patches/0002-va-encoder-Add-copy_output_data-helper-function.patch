@@ -1,7 +1,7 @@
-From 40be12e227ed80d1eec336812106a45edd63acc3 Mon Sep 17 00:00:00 2001
+From 6870fe1441c477b657077eb6531d047207bf0fa1 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 10 Nov 2022 20:36:05 +0800
-Subject: [PATCH 02/13] va: encoder: Add copy_output_data() helper function.
+Subject: [PATCH 02/14] va: encoder: Add copy_output_data() helper function.
 
 ---
  .../gst-plugins-bad/sys/va/gstvabaseenc.c     | 47 +++++++++++++++++++
@@ -83,5 +83,5 @@ index eca2b72415..0007a13e29 100644
                                                              guint32 * old_val,
                                                              guint32 new_val,
 -- 
-2.34.1
+2.25.1
 

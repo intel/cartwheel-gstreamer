@@ -1,23 +1,23 @@
-From b3363906e84e5ead4816422f20e1454549bb08e5 Mon Sep 17 00:00:00 2001
+From be0d542aa026256747cddbce56c8e21cde9aacea Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:48:50 +0800
-Subject: [PATCH 12/13] va: Implement the vaav1enc plugin.
+Subject: [PATCH 13/14] va: Implement the vaav1enc plugin.
 
 ---
- .../gst-plugins-bad/sys/va/gstvaav1enc.c      | 4445 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvaav1enc.c      | 4453 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvaav1enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +
  subprojects/gst-plugins-bad/sys/va/plugin.c   |   10 +
- 4 files changed, 4492 insertions(+)
+ 4 files changed, 4500 insertions(+)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvaav1enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 new file mode 100644
-index 0000000000..eadf0ffbb5
+index 0000000000..14acddbadc
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-@@ -0,0 +1,4445 @@
+@@ -0,0 +1,4453 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -70,12 +70,13 @@ index 0000000000..eadf0ffbb5
 +#include <gst/video/video.h>
 +#include <va/va_drmcommon.h>
 +
-+#include "gstvabaseenc.h"
-+#include "gstvacaps.h"
-+#include "gstvadisplay_priv.h"
-+#include "gstvaencoder.h"
-+#include "gstvaprofile.h"
 +#include "vacompat.h"
++#include "gstvabaseenc.h"
++#include "gstvaencoder.h"
++#include "gstvacaps.h"
++#include "gstvaprofile.h"
++#include "gstvadisplay_priv.h"
++#include "gstvapluginutils.h"
 +
 +GST_DEBUG_CATEGORY_STATIC (gst_va_av1enc_debug);
 +#define GST_CAT_DEFAULT gst_va_av1enc_debug
@@ -145,6 +146,8 @@ index 0000000000..eadf0ffbb5
 +/* The frame not show */
 +#define FRAME_FLAG_NOT_SHOW  0x100
 +
++#define MAX_ORDER_HINT_BITS_MINUS_1 7
++
 +struct _GstVaAV1GFGroup
 +{
 +  /* where this GF group start since key frame. */
@@ -192,10 +195,11 @@ index 0000000000..eadf0ffbb5
 +  /* The index in reference list to update */
 +  gint update_index;
 +  gint order_hint;
-+  /* repeat the current frame */
++  /* The current frame to repeat */
 +  gint8 repeat_index;
-+  gsize repeat_frame_header_size;
-+  guint8 repeat_frame_header[32];
++
++  guint cached_frame_header_size;
++  guint8 cached_frame_header[32];
 +};
 +
 +struct _GstVaAV1Enc
@@ -526,7 +530,7 @@ index 0000000000..eadf0ffbb5
 +  frame->update_index = -1;
 +  frame->order_hint = -1;
 +  frame->repeat_index = -1;
-+  frame->repeat_frame_header_size = 0;
++  frame->cached_frame_header_size = 0;
 +
 +  return frame;
 +}
@@ -2008,12 +2012,14 @@ index 0000000000..eadf0ffbb5
 +    self->gop.gf_group_size = self->gop.keyframe_interval - 1;
 +
 +  if (!gst_va_encoder_get_max_num_reference (base->encoder, base->profile,
-+          GST_VA_BASE_ENC_ENTRYPOINT (base), &listp_0, &list0, &list1)) {
++          GST_VA_BASE_ENC_ENTRYPOINT (base), &list0, &list1)) {
 +    GST_INFO_OBJECT (self, "Failed to get the max num reference");
 +    list0 = 1;
 +    list1 = 0;
 +    listp_0 = list0;
 +  }
++
++  listp_0 = list0;
 +
 +  /* At most, 4 forward refs */
 +  if (list0 > 4)
@@ -2396,11 +2402,11 @@ index 0000000000..eadf0ffbb5
 +
 +    self->features.tx_mode_support = features_ext2.bits.tx_mode_support;
 +    if (!(self->features.tx_mode_support &
-+            (GST_AV1_TX_MODE_LARGEST | GST_AV1_TX_MODE_SELECT))) {
++            (1 << GST_AV1_TX_MODE_LARGEST | 1 << GST_AV1_TX_MODE_SELECT))) {
 +      GST_WARNING_OBJECT (self, "query tx_mode_support get invalid"
 +          " value 0x%x, set to support TX_MODE_LARGEST",
 +          self->features.tx_mode_support);
-+      self->features.tx_mode_support = GST_AV1_TX_MODE_LARGEST;
++      self->features.tx_mode_support = 1 << GST_AV1_TX_MODE_LARGEST;
 +    }
 +
 +    self->partition.max_tile_num = features_ext2.bits.max_tile_num_minus1 + 1;
@@ -2768,7 +2774,7 @@ index 0000000000..eadf0ffbb5
 +  if (!gst_va_encoder_open (base->encoder, base->profile,
 +          GST_VIDEO_INFO_FORMAT (&base->input_state->info), base->rt_format,
 +          base->width, base->height, base->codedbuf_size, max_ref_frames,
-+          self->rc.rc_ctrl_mode, self->packed_headers, NULL)) {
++          self->rc.rc_ctrl_mode, self->packed_headers)) {
 +    GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
 +    return FALSE;
 +  }
@@ -2808,6 +2814,7 @@ index 0000000000..eadf0ffbb5
 +{
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
 +  guint8 seq_profile;
++  guint8 order_hint_bits_minus_1;
 +
 +  if (base->profile == VAProfileAV1Profile0) {
 +    seq_profile = 0;
@@ -2818,6 +2825,10 @@ index 0000000000..eadf0ffbb5
 +    g_assert_not_reached ();
 +    return;
 +  }
++
++  order_hint_bits_minus_1 = _av1_helper_msb (self->gop.keyframe_interval);
++  if (order_hint_bits_minus_1 > MAX_ORDER_HINT_BITS_MINUS_1)
++    order_hint_bits_minus_1 = MAX_ORDER_HINT_BITS_MINUS_1;
 +
 +  /* *INDENT-OFF* */
 +  *sequence = (VAEncSequenceParameterBufferAV1) {
@@ -2848,7 +2859,7 @@ index 0000000000..eadf0ffbb5
 +      .subsampling_x = (self->chrome != 3),
 +      .subsampling_y = (self->chrome != 3 && self->chrome != 2),
 +    },
-+    .order_hint_bits_minus_1 = _av1_helper_msb (self->gop.keyframe_interval + 1),
++    .order_hint_bits_minus_1 = order_hint_bits_minus_1,
 +  };
 +  /* *INDENT-ON* */
 +}
@@ -2948,7 +2959,7 @@ index 0000000000..eadf0ffbb5
 +  *size_offset += size;
 +
 +  if (!gst_va_encoder_add_packed_header (base->encoder, frame->picture,
-+          VAEncPackedHeaderSequence, packed_sps, size * 8, FALSE)) {
++          VAEncPackedHeaderAV1_SPS, packed_sps, size * 8, FALSE)) {
 +    GST_ERROR_OBJECT (self, "Failed to add packed sequence header.");
 +    return FALSE;
 +  }
@@ -3089,8 +3100,14 @@ index 0000000000..eadf0ffbb5
 +    loop_filter_level_uv = 0xff;
 +  }
 +
-+  tx_mode = (self->features.tx_mode_support & GST_AV1_TX_MODE_SELECT) ?
-+      GST_AV1_TX_MODE_SELECT : GST_AV1_TX_MODE_LARGEST;
++  tx_mode = 0;
++  for (i = GST_AV1_TX_MODE_SELECT; i >= GST_AV1_TX_MODE_ONLY_4x4; i--) {
++    if (self->features.tx_mode_support & (1 << i)) {
++      tx_mode = i;
++      break;
++    }
++  }
++  g_assert (tx_mode != 0);
 +
 +  frame_is_intra = (va_frame->type == GST_AV1_INTRA_ONLY_FRAME
 +      || va_frame->type == GST_AV1_KEY_FRAME);
@@ -3129,8 +3146,8 @@ index 0000000000..eadf0ffbb5
 +    .order_hint = va_frame->order_hint,
 +    .refresh_frame_flags = refresh_frame_flags,
 +    /* Set ref_frame_ctrl later if inter frame. */
-+    .ref_frame_ctrl_l0 = { },
-+    .ref_frame_ctrl_l1 = { },
++    .ref_frame_ctrl_l0 = { .value = 0 },
++    .ref_frame_ctrl_l1 = { .value = 0 },
 +    .picture_flags.bits = {
 +      .frame_type = va_frame->type,
 +      /* We do not support error resilient mode now. */
@@ -3212,7 +3229,7 @@ index 0000000000..eadf0ffbb5
 +      .lr_uv_shift = 0,
 +    },
 +    /* TODO: wm setting. */
-+    .wm = { },
++    //.wm = { },
 +    /* Feed all the offsets later. */
 +    .tile_group_obu_hdr_info.bits = {
 +      .obu_extension_flag = 0,
@@ -3414,8 +3431,8 @@ index 0000000000..eadf0ffbb5
 +    .refresh_frame_flags = pic_param->refresh_frame_flags,
 +    .allow_intrabc = pic_param->picture_flags.bits.allow_intrabc,
 +    .frame_refs_short_signaling = 0,
-+    /* Set it later. */
-+    .ref_frame_idx = { },
++    /* Set ref_frame_idx later. */
++    .ref_frame_idx = { 0, },
 +    .allow_high_precision_mv =
 +        pic_param->picture_flags.bits.allow_high_precision_mv,
 +    .is_motion_mode_switchable = 0,
@@ -3441,8 +3458,8 @@ index 0000000000..eadf0ffbb5
 +      .loop_filter_delta_update =
 +          pic_param->loop_filter_flags.bits.mode_ref_delta_update,
 +      /* Set it later. */
-+      .loop_filter_ref_deltas = { },
-+      .loop_filter_mode_deltas = { },
++      .loop_filter_ref_deltas = { 0, },
++      .loop_filter_mode_deltas = { 0, },
 +      .delta_lf_present = pic_param->mode_control_flags.bits.delta_lf_present,
 +      .delta_lf_res = pic_param->mode_control_flags.bits.delta_lf_res,
 +      .delta_lf_multi = pic_param->mode_control_flags.bits.delta_lf_multi,
@@ -3478,14 +3495,13 @@ index 0000000000..eadf0ffbb5
 +      .cdef_damping = pic_param->cdef_damping_minus_3 + 3,
 +      .cdef_bits = pic_param->cdef_bits,
 +      /* Set to later. */
-+      .cdef_y_pri_strength = { },
-+      .cdef_y_sec_strength = { },
-+      .cdef_uv_pri_strength = { },
-+      .cdef_uv_sec_strength = { },
++      .cdef_y_pri_strength = { 0, },
++      .cdef_y_sec_strength = { 0, },
++      .cdef_uv_pri_strength = { 0, },
++      .cdef_uv_sec_strength = { 0, },
 +    },
 +    /* TODO: disable seq->enable_restoration now. */
-+    .loop_restoration_params = {
-+    },
++    .loop_restoration_params = { 0, },
 +    .tx_mode = pic_param->mode_control_flags.bits.tx_mode,
 +    .skip_mode_present = pic_param->mode_control_flags.bits.skip_mode_present,
 +    .reference_select = pic_param->mode_control_flags.bits.reference_mode != 0,
@@ -3632,7 +3648,7 @@ index 0000000000..eadf0ffbb5
 +  }
 +
 +  if (!gst_va_encoder_add_packed_header (base->encoder, va_frame->picture,
-+          VAEncPackedHeaderPicture, packed_frame_hdr, frame_hdr_size * 8,
++          VAEncPackedHeaderAV1_PPS, packed_frame_hdr, frame_hdr_size * 8,
 +          FALSE)) {
 +    GST_ERROR_OBJECT (self, "Failed to add the packed frame header");
 +    return FALSE;
@@ -3654,61 +3670,49 @@ index 0000000000..eadf0ffbb5
 +}
 +
 +static void
-+_av1_add_repeat_frame_header (GstVaAV1Enc * self, GstVaAV1EncFrame * va_frame)
++_av1_add_td (GstVaAV1Enc * self, GstVaAV1EncFrame * va_frame)
 +{
-+  GstAV1FrameHeaderOBU frame_hdr = { };
 +  guint td_data_size;
-+  guint frame_hdr_data_size;
 +
-+  memset (va_frame->repeat_frame_header, 0,
-+      sizeof (va_frame->repeat_frame_header));
++  td_data_size = sizeof (va_frame->cached_frame_header) -
++      va_frame->cached_frame_header_size;
 +
-+  /* Repeat frame always shows a frame and so begins with a TD. */
-+  td_data_size = sizeof (va_frame->repeat_frame_header);
 +  if (gst_av1_bit_writer_temporal_delimiter_obu (TRUE,
-+          va_frame->repeat_frame_header,
++          va_frame->cached_frame_header + va_frame->cached_frame_header_size,
 +          &td_data_size) != GST_AV1_BIT_WRITER_OK) {
 +    GST_ERROR_OBJECT (self, "Failed to write temporal delimiter.");
++    /* The only possible failure is not enough buffer size,
++       user should ensure that. */
 +    g_assert_not_reached ();
 +  }
 +
++  va_frame->cached_frame_header_size += td_data_size;
++}
++
++static void
++_av1_add_repeat_frame_header (GstVaAV1Enc * self, GstVaAV1EncFrame * va_frame)
++{
++  GstAV1FrameHeaderOBU frame_hdr = { 0, };
++  guint frame_hdr_data_size;
++
++  /* Repeat frame always shows a frame and so begins with a TD. */
++  _av1_add_td (self, va_frame);
++
 +  frame_hdr.show_existing_frame = 1;
 +  frame_hdr.frame_to_show_map_idx = va_frame->repeat_index;
-+  frame_hdr_data_size = sizeof (va_frame->repeat_frame_header) - td_data_size;
++
++  frame_hdr_data_size = sizeof (va_frame->cached_frame_header) -
++      va_frame->cached_frame_header_size;
++
 +  if (gst_av1_bit_writer_frame_header_obu (&frame_hdr, &self->sequence_hdr,
 +          va_frame->temporal_id, va_frame->spatial_id, TRUE,
-+          va_frame->repeat_frame_header + td_data_size, &frame_hdr_data_size)
-+      != GST_AV1_BIT_WRITER_OK) {
++          va_frame->cached_frame_header + va_frame->cached_frame_header_size,
++          &frame_hdr_data_size) != GST_AV1_BIT_WRITER_OK) {
 +    GST_ERROR_OBJECT (self, "Failed to write repeat frame header.");
 +    g_assert_not_reached ();
 +  }
 +
-+  va_frame->repeat_frame_header_size = td_data_size + frame_hdr_data_size;
-+}
-+
-+static gboolean
-+_av1_add_td (GstVaAV1Enc * self, GstVaAV1EncFrame * frame, guint * size_offset)
-+{
-+  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
-+  guint8 td_data[16] = { };
-+  guint td_data_size = sizeof (td_data);
-+
-+  if (gst_av1_bit_writer_temporal_delimiter_obu (TRUE, td_data,
-+          &td_data_size) != GST_AV1_BIT_WRITER_OK) {
-+    GST_ERROR_OBJECT (self, "Failed to write temporal delimiter.");
-+    g_assert_not_reached ();
-+    return FALSE;
-+  }
-+
-+  *size_offset += td_data_size;
-+
-+  if (!gst_va_encoder_add_packed_header (base->encoder, frame->picture,
-+          VAEncPackedHeaderRawData, td_data, td_data_size * 8, FALSE)) {
-+    GST_ERROR_OBJECT (self, "Failed to add the temporal delimiter.");
-+    return FALSE;
-+  }
-+
-+  return TRUE;
++  va_frame->cached_frame_header_size += frame_hdr_data_size;
 +}
 +
 +static GstFlowReturn
@@ -3727,6 +3731,10 @@ index 0000000000..eadf0ffbb5
 +    return GST_FLOW_ERROR;
 +  }
 +
++  memset (va_frame->cached_frame_header, 0,
++      sizeof (va_frame->cached_frame_header));
++  va_frame->cached_frame_header_size = 0;
++
 +  if (va_frame->type & FRAME_TYPE_REPEAT) {
 +    g_assert (va_frame->flags & FRAME_FLAG_ALREADY_ENCODED);
 +    _av1_add_repeat_frame_header (self, va_frame);
@@ -3739,10 +3747,8 @@ index 0000000000..eadf0ffbb5
 +
 +    _av1_find_ref_to_update (base, gst_frame);
 +
-+    if (!(va_frame->flags & FRAME_FLAG_NOT_SHOW)) {
-+      if (!_av1_add_td (self, va_frame, &size_offset))
-+        return FALSE;
-+    }
++    if (!(va_frame->flags & FRAME_FLAG_NOT_SHOW))
++      _av1_add_td (self, va_frame);
 +
 +    /* Repeat the sequence for each key. */
 +    if (va_frame->frame_num == 0) {
@@ -3821,16 +3827,16 @@ index 0000000000..eadf0ffbb5
 +    g_assert (frame_enc->type & FRAME_TYPE_REPEAT);
 +
 +    buf = gst_video_encoder_allocate_output_buffer
-+        (GST_VIDEO_ENCODER_CAST (base), frame_enc->repeat_frame_header_size);
++        (GST_VIDEO_ENCODER_CAST (base), frame_enc->cached_frame_header_size);
 +    if (!buf) {
 +      GST_ERROR_OBJECT (base, "Failed to create output buffer");
 +      return FALSE;
 +    }
 +
-+    sz = gst_buffer_fill (buf, 0, frame_enc->repeat_frame_header,
-+        frame_enc->repeat_frame_header_size);
++    sz = gst_buffer_fill (buf, 0, frame_enc->cached_frame_header,
++        frame_enc->cached_frame_header_size);
 +
-+    if (sz != frame_enc->repeat_frame_header_size) {
++    if (sz != frame_enc->cached_frame_header_size) {
 +      GST_ERROR_OBJECT (base, "Failed to write output buffer for repeat frame");
 +      gst_clear_buffer (&buf);
 +      return FALSE;
@@ -3838,7 +3844,10 @@ index 0000000000..eadf0ffbb5
 +
 +    *complete = TRUE;
 +  } else {
-+    buf = gst_va_base_enc_create_output_buffer (base, frame_enc->picture);
++    buf = gst_va_base_enc_create_output_buffer (base, frame_enc->picture,
++        (frame_enc->cached_frame_header_size > 0 ?
++            frame_enc->cached_frame_header : NULL),
++        frame_enc->cached_frame_header_size);
 +    if (!buf) {
 +      GST_ERROR_OBJECT (base, "Failed to create output buffer");
 +      return FALSE;
@@ -4137,8 +4146,7 @@ index 0000000000..eadf0ffbb5
 +      GST_DEBUG_FUNCPTR (gst_va_av1_enc_prepare_output);
 +
 +  {
-+    display =
-+        gst_va_display_drm_new_from_path (va_enc_class->render_device_path);
++    display = gst_va_display_platform_new (va_enc_class->render_device_path);
 +    encoder = gst_va_encoder_new (display, va_enc_class->codec,
 +        va_enc_class->entrypoint);
 +    if (gst_va_encoder_get_rate_control_enum (encoder,
@@ -4518,7 +4526,7 @@ index 2dcd9985d9..c3b47ae1dd 100644
  gstva = library('gstva',
    va_sources,
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index 83960d30ed..381769f57b 100644
+index 43e83b02de..f1fd314c2c 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -28,6 +28,7 @@
@@ -4529,7 +4537,7 @@ index 83960d30ed..381769f57b 100644
  #include "gstvacaps.h"
  #include "gstvacompositor.h"
  #include "gstvadeinterlace.h"
-@@ -213,6 +214,15 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -211,6 +212,15 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
                device->render_device_path);
          }
          break;
@@ -4546,5 +4554,5 @@ index 83960d30ed..381769f57b 100644
          GST_DEBUG ("No encoder implementation for %" GST_FOURCC_FORMAT,
              GST_FOURCC_ARGS (codec));
 -- 
-2.34.1
+2.25.1
 
