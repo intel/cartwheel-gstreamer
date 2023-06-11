@@ -1,7 +1,7 @@
-From 93a4d0f805a7499bc4e21da01085ebddeed8905c Mon Sep 17 00:00:00 2001
+From f5fa88f51213b30f0405cb9f1cae3b553289e978 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 16:27:01 +0800
-Subject: [PATCH 06/13] codecparsers: av1: delete the useless
+Subject: [PATCH 06/14] codecparsers: av1: delete the useless
  increment_tile_rows_log2 in tile info.
 
 increment_tile_rows_log2 is only used as the bool flag for parsing tiling log2
@@ -50,5 +50,5 @@ index a5f1c761f6..2c7106dd3e 100644
    gint height_in_sbs_minus_1[GST_AV1_MAX_TILE_ROWS];
    gint tile_size_bytes_minus_1;
 -- 
-2.34.1
+2.25.1
 

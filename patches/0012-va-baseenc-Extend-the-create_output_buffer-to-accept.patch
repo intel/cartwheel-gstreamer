@@ -1,0 +1,110 @@
+From 5696a104600e0d66656cdbec25f68def4c0b3b99 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Sun, 11 Jun 2023 20:17:19 +0800
+Subject: [PATCH 12/14] va: baseenc: Extend the create_output_buffer() to
+ accept prefix data
+
+---
+ subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c | 11 +++++++++--
+ subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h |  4 +++-
+ subprojects/gst-plugins-bad/sys/va/gstvah264enc.c |  3 ++-
+ subprojects/gst-plugins-bad/sys/va/gstvah265enc.c |  3 ++-
+ subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c  |  3 ++-
+ 5 files changed, 18 insertions(+), 6 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
+index 1008d117cc..362ea205ce 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
+@@ -320,7 +320,8 @@ invalid_buffer:
+ 
+ GstBuffer *
+ gst_va_base_enc_create_output_buffer (GstVaBaseEnc * base,
+-    GstVaEncodePicture * picture)
++    GstVaEncodePicture * picture, const guint8 * prefix_data,
++    guint prefix_data_len)
+ {
+   guint coded_size;
+   goffset offset;
+@@ -349,7 +350,7 @@ gst_va_base_enc_create_output_buffer (GstVaBaseEnc * base,
+     coded_size += seg->size;
+ 
+   buf = gst_video_encoder_allocate_output_buffer (GST_VIDEO_ENCODER_CAST (base),
+-      coded_size);
++      coded_size + prefix_data_len);
+   if (!buf) {
+     va_unmap_buffer (base->display, picture->coded_buffer);
+     GST_ERROR_OBJECT (base, "Failed to allocate output buffer, size %d",
+@@ -358,6 +359,12 @@ gst_va_base_enc_create_output_buffer (GstVaBaseEnc * base,
+   }
+ 
+   offset = 0;
++  if (prefix_data) {
++    g_assert (prefix_data_len > 0);
++    gst_buffer_fill (buf, offset, prefix_data, prefix_data_len);
++    offset += prefix_data_len;
++  }
++
+   for (seg = seg_list; seg; seg = seg->next) {
+     gsize write_size;
+ 
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
+index 0007a13e29..05b72ec023 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
++++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
+@@ -134,7 +134,9 @@ void                  gst_va_base_enc_add_codec_tag       (GstVaBaseEnc * base,
+                                                            const gchar * codec_name);
+ void                  gst_va_base_enc_reset_state         (GstVaBaseEnc * base);
+ GstBuffer *           gst_va_base_enc_create_output_buffer (GstVaBaseEnc * base,
+-                                                            GstVaEncodePicture * picture);
++                                                            GstVaEncodePicture * picture,
++                                                            const guint8 * prefix_data,
++                                                            guint prefix_data_len);
+ gint                  gst_va_base_enc_copy_output_data    (GstVaBaseEnc * base,
+                                                            GstVaEncodePicture * picture,
+                                                            guint8 * data,
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
+index 94e786fb1e..7db58e7430 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
+@@ -3056,7 +3056,8 @@ gst_va_h264_enc_prepare_output (GstVaBaseEnc * base,
+   base->output_frame_count++;
+   frame->duration = base->frame_duration;
+ 
+-  buf = gst_va_base_enc_create_output_buffer (base, frame_enc->picture);
++  buf = gst_va_base_enc_create_output_buffer (base,
++      frame_enc->picture, NULL, 0);
+   if (!buf) {
+     GST_ERROR_OBJECT (base, "Failed to create output buffer");
+     return FALSE;
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
+index 0357d41249..8dbc0f576d 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
+@@ -4623,7 +4623,8 @@ gst_va_h265_enc_prepare_output (GstVaBaseEnc * base,
+   base->output_frame_count++;
+   frame->duration = base->frame_duration;
+ 
+-  buf = gst_va_base_enc_create_output_buffer (base, frame_enc->picture);
++  buf = gst_va_base_enc_create_output_buffer (base,
++      frame_enc->picture, NULL, 0);
+   if (!buf) {
+     GST_ERROR_OBJECT (base, "Failed to create output buffer");
+     return FALSE;
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
+index 1e1379b4ca..a392954011 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
+@@ -2599,7 +2599,8 @@ gst_va_vp9_enc_prepare_output (GstVaBaseEnc * base,
+     if (self->frames_in_super_num > 0) {
+       buf = _vp9_create_super_frame_output_buffer (self, frame);
+     } else {
+-      buf = gst_va_base_enc_create_output_buffer (base, frame_enc->picture);
++      buf = gst_va_base_enc_create_output_buffer (base,
++          frame_enc->picture, NULL, 0);
+     }
+     if (!buf) {
+       GST_ERROR_OBJECT (base, "Failed to create output buffer%s",
+-- 
+2.25.1
+

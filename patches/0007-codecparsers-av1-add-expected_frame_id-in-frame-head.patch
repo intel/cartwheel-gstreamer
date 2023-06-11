@@ -1,7 +1,7 @@
-From f89aa278600849eb48b0596d5654b3a84e1a94e6 Mon Sep 17 00:00:00 2001
+From d48cd613a82c6ba450d0f5969235bc2af25e2a3e Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:25:50 +0800
-Subject: [PATCH 07/13] codecparsers: av1: add expected_frame_id in frame
+Subject: [PATCH 07/14] codecparsers: av1: add expected_frame_id in frame
  header.
 
 We need it to ease the bit code writing of AV1 frame header.
@@ -22,5 +22,5 @@ index 2c7106dd3e..465254a060 100644
    gboolean is_motion_mode_switchable;
    gboolean use_ref_frame_mvs;
 -- 
-2.34.1
+2.25.1
 

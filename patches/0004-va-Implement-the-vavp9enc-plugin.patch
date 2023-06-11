@@ -1,7 +1,7 @@
-From 54eed5a807f9e5dcfba9058f48faaf9ac7287009 Mon Sep 17 00:00:00 2001
+From 63c077cc0a71d0a260de93d25dfe6603e022707f Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
-Subject: [PATCH 04/13] va: Implement the vavp9enc plugin.
+Subject: [PATCH 04/14] va: Implement the vavp9enc plugin.
 
 ---
  .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3185 +++++++++++++++++
@@ -3265,7 +3265,7 @@ index 3e0a3f7060..2dcd9985d9 100644
    install : true,
    install_dir : plugins_install_dir,
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index ffa00f4619..83960d30ed 100644
+index 0b186377d1..43e83b02de 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -42,6 +42,7 @@
@@ -3276,7 +3276,7 @@ index ffa00f4619..83960d30ed 100644
  #include "gstvavpp.h"
  
  #define GST_CAT_DEFAULT gstva_debug
-@@ -205,6 +206,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -203,6 +204,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
                device->render_device_path);
          }
          break;
@@ -3291,5 +3291,5 @@ index ffa00f4619..83960d30ed 100644
          GST_DEBUG ("No encoder implementation for %" GST_FOURCC_FORMAT,
              GST_FOURCC_ARGS (codec));
 -- 
-2.34.1
+2.25.1
 
