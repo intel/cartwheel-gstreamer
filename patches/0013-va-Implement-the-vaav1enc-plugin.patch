@@ -1,7 +1,7 @@
-From be0d542aa026256747cddbce56c8e21cde9aacea Mon Sep 17 00:00:00 2001
+From a2de84b2ad8af4f565d468c94dc9bd830ba55a8a Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:48:50 +0800
-Subject: [PATCH 13/14] va: Implement the vaav1enc plugin.
+Subject: [PATCH 1/2] va: Implement the vaav1enc plugin.
 
 ---
  .../gst-plugins-bad/sys/va/gstvaav1enc.c      | 4453 +++++++++++++++++
@@ -14,7 +14,7 @@ Subject: [PATCH 13/14] va: Implement the vaav1enc plugin.
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 new file mode 100644
-index 0000000000..14acddbadc
+index 0000000000..075943b096
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 @@ -0,0 +1,4453 @@
@@ -3075,7 +3075,7 @@ index 0000000000..14acddbadc
 +    VAEncPictureParameterBufferAV1 * pic_param)
 +{
 +  GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
-+  guint i;
++  gint i;
 +  uint8_t primary_ref_frame = GST_AV1_PRIMARY_REF_NONE;
 +  uint8_t refresh_frame_flags = 0xff;
 +  gboolean frame_is_intra;
