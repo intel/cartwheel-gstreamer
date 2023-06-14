@@ -1,14 +1,14 @@
-From 61a5e4055d3442060630b651f451e1895a31250a Mon Sep 17 00:00:00 2001
+From 32fd3a881da4af3cb2308ae118b0743be995f352 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 2 Jun 2023 23:18:35 +0800
-Subject: [PATCH 127/127] doc: Update the caps for glupload related plugins
+Subject: [PATCH 114/122] doc: Update the caps for glupload related plugins
 
 ---
  .../docs/plugins/gst_plugins_cache.json              | 12 ++++++------
  1 file changed, 6 insertions(+), 6 deletions(-)
 
 diff --git a/subprojects/gst-plugins-base/docs/plugins/gst_plugins_cache.json b/subprojects/gst-plugins-base/docs/plugins/gst_plugins_cache.json
-index 07ab2828c0..851e01566d 100644
+index 75e281b7a3..35c999666c 100644
 --- a/subprojects/gst-plugins-base/docs/plugins/gst_plugins_cache.json
 +++ b/subprojects/gst-plugins-base/docs/plugins/gst_plugins_cache.json
 @@ -4935,7 +4935,7 @@

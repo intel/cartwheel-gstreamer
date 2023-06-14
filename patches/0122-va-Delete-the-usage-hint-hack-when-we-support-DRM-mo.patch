@@ -1,7 +1,7 @@
-From e35eb1d35f6a2829235d5e666f92221534d7cb31 Mon Sep 17 00:00:00 2001
+From f3839113986754038940441d453dc401d10fae14 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Sat, 3 Jun 2023 21:56:09 +0800
-Subject: [PATCH 110/127] va: Delete the usage hint hack when we support DRM
+Subject: [PATCH 122/122] va: Delete the usage hint hack when we support DRM
  modifier
 
 ---
@@ -9,7 +9,7 @@ Subject: [PATCH 110/127] va: Delete the usage hint hack when we support DRM
  1 file changed, 4 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c b/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
-index 39d9eb0af0..bd5f000a5f 100644
+index 3337b07176..2fceadcabc 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
 @@ -390,10 +390,6 @@ gst_va_base_transform_decide_allocation (GstBaseTransform * trans,

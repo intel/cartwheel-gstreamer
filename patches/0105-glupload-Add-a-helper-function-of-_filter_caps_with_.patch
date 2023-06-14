@@ -1,7 +1,7 @@
-From fdecca3cbe7f335e30c7a528fd4199a152ec9267 Mon Sep 17 00:00:00 2001
+From aaa396ccc26ecbc912e33ad23ffb36f1240a0acd Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 1 Jun 2023 18:34:31 +0800
-Subject: [PATCH 118/127] glupload: Add a helper function of
+Subject: [PATCH 105/122] glupload: Add a helper function of
  _filter_caps_with_features()
 
 We sometimes need to filter some special feature for the next step.

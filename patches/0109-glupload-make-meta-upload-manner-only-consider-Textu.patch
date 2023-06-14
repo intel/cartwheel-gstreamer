@@ -1,7 +1,7 @@
-From 7f91c73d91b10908a9d7bd6f7c85853d8e12ba45 Mon Sep 17 00:00:00 2001
+From 786e763afe88bd4ee53d3a05cabd304c5222fa70 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 25 May 2023 11:11:40 +0800
-Subject: [PATCH 122/127] glupload: make meta upload manner only consider
+Subject: [PATCH 109/122] glupload: make meta upload manner only consider
  TextureUploadMeta feature
 
 The current _upload_meta_upload_transform_caps() only simply apply
@@ -27,10 +27,10 @@ So we should let it only transforms which it can recognize.
  1 file changed, 12 insertions(+), 2 deletions(-)
 
 diff --git a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
-index d159baec5e..e1bebe005b 100644
+index a40dbe5b05..569bf5d4c3 100644
 --- a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
 +++ b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
-@@ -1842,14 +1842,24 @@ _upload_meta_upload_transform_caps (gpointer impl, GstGLContext * context,
+@@ -1841,14 +1841,24 @@ _upload_meta_upload_transform_caps (gpointer impl, GstGLContext * context,
    GstCapsFeatures *passthrough =
        gst_caps_features_from_string
        (GST_CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION);

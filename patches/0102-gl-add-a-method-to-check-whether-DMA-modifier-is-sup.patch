@@ -1,7 +1,7 @@
-From 375f333bdadb6ccc3f922de4b1da4c43e27ad34f Mon Sep 17 00:00:00 2001
+From ad18eb6f9b176d5644ffd84c9db8ba9daad8f957 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 19 May 2023 16:20:56 +0800
-Subject: [PATCH 115/127] gl: add a method to check whether DMA modifier is
+Subject: [PATCH 102/122] gl: add a method to check whether DMA modifier is
  supported in EGL
 
 ---
@@ -10,10 +10,10 @@ Subject: [PATCH 115/127] gl: add a method to check whether DMA modifier is
  2 files changed, 22 insertions(+)
 
 diff --git a/subprojects/gst-plugins-base/gst-libs/gst/gl/egl/gstglcontext_egl.c b/subprojects/gst-plugins-base/gst-libs/gst/gl/egl/gstglcontext_egl.c
-index 28400c6734..8baf33f47d 100644
+index 85797a136e..37ed90e5a7 100644
 --- a/subprojects/gst-plugins-base/gst-libs/gst/gl/egl/gstglcontext_egl.c
 +++ b/subprojects/gst-plugins-base/gst-libs/gst/gl/egl/gstglcontext_egl.c
-@@ -1826,3 +1826,23 @@ beach:
+@@ -1762,3 +1762,23 @@ beach:
  #endif
    return FALSE;
  }

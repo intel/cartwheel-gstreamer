@@ -1,8 +1,8 @@
-From 0203e838801fcdb400517e141d07b068620c7590 Mon Sep 17 00:00:00 2001
+From 2e42ab5cd9f1b80683d045273604897b83d3189b Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?V=C3=ADctor=20Manuel=20J=C3=A1quez=20Leal?=
  <vjaquez@igalia.com>
 Date: Wed, 19 Apr 2023 12:46:10 +0200
-Subject: [PATCH 114/127] video: add GST_VIDEO_DMA_DRM_CAPS_MAKE
+Subject: [PATCH 101/122] video: add GST_VIDEO_DMA_DRM_CAPS_MAKE
 
 It is requried this macro because it doesn't define format field, neither
 drm-format which is suppossed to be generated in run-time.
@@ -12,7 +12,7 @@ drm-format which is suppossed to be generated in run-time.
  2 files changed, 20 insertions(+)
 
 diff --git a/girs/GstVideo-1.0.gir b/girs/GstVideo-1.0.gir
-index d20a9642d8..8cf98f3cdd 100644
+index 9fe96dd02c..056c3d46d0 100644
 --- a/girs/GstVideo-1.0.gir
 +++ b/girs/GstVideo-1.0.gir
 @@ -2812,6 +2812,12 @@ return to upstream/caller (indicating either GST_FLOW_ERROR or GST_FLOW_OK).</do

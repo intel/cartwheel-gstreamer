@@ -1,7 +1,7 @@
-From b4164a4fb4be56da4308d32901fd2a9903a05d0f Mon Sep 17 00:00:00 2001
+From 9e661eafda6ce1583831370f4c52da82650d4672 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 25 May 2023 13:18:14 +0800
-Subject: [PATCH 123/127] glupload: make gl memory upload manner only consider
+Subject: [PATCH 110/122] glupload: make gl memory upload manner only consider
  memory:GLMemory feature
 
 The current _gl_memory_upload_transform_caps() only simply apply
@@ -31,7 +31,7 @@ feature.
  1 file changed, 48 insertions(+), 24 deletions(-)
 
 diff --git a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
-index e1bebe005b..6eb36b3ecc 100644
+index 569bf5d4c3..24cad3ff5f 100644
 --- a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
 +++ b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
 @@ -345,16 +345,24 @@ _gl_memory_upload_transform_caps (gpointer impl, GstGLContext * context,

@@ -1,27 +1,26 @@
-From 415bd97e4002840491da1f6bc965d94ecd1c4f34 Mon Sep 17 00:00:00 2001
+From 37c1ba9698ac40b9f2cc4b1ab27c80cd27660e31 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 22 Feb 2023 18:39:22 +0800
-Subject: [PATCH 104/127] va: Use new dma drm caps in va pool when we setup DMA
+Subject: [PATCH 118/122] va: Use new dma drm caps in va pool when we setup DMA
  pools
 
 ---
- .../gst-libs/gst/va/gstvapool.c               | 66 ++++++++++++++-----
- 1 file changed, 50 insertions(+), 16 deletions(-)
+ .../gst-libs/gst/va/gstvapool.c               | 75 +++++++++++++------
+ 1 file changed, 53 insertions(+), 22 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
-index 9e1db70b71..77e33685cf 100644
+index f5b77234bc..371dbd8588 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
-@@ -35,6 +35,8 @@
+@@ -35,6 +35,7 @@
  #endif
  
  #include "gstvapool.h"
 +#include "gstvavideoformat.h"
-+
- #ifndef G_OS_WIN32
- #include <libdrm/drm_fourcc.h>
- #endif
-@@ -58,7 +60,12 @@ struct _GstVaPool
+ 
+ GST_DEBUG_CATEGORY_STATIC (gst_va_pool_debug);
+ #define GST_CAT_DEFAULT gst_va_pool_debug
+@@ -55,7 +56,12 @@ struct _GstVaPool
    GstBufferPool parent;
  
    GstVideoInfo alloc_info;
@@ -35,17 +34,17 @@ index 9e1db70b71..77e33685cf 100644
    GstAllocator *allocator;
    gboolean force_videometa;
    gboolean add_videometa;
-@@ -119,7 +126,8 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
+@@ -116,7 +122,8 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
    GstCaps *caps;
    GstVaPool *vpool = GST_VA_POOL (pool);
    GstVideoAlignment video_align = { 0, };
 -  GstVideoInfo caps_info, alloc_info;
-+  GstVideoInfo orginal_alloc_info, alloc_info;
-+  GstVideoFormat dma_video_format = GST_VIDEO_FORMAT_UNKNOWN;
++  GstVideoInfo orginal_alloc_info;
++  GstVideoInfoDmaDrm alloc_info_drm;
    gint width, height;
    guint i, min_buffers, max_buffers;
    guint32 usage_hint;
-@@ -133,12 +141,33 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
+@@ -130,12 +137,31 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
    if (!caps)
      goto no_caps;
  
@@ -55,25 +54,23 @@ index 9e1db70b71..77e33685cf 100644
    if (!gst_buffer_pool_config_get_allocator (config, &allocator, NULL))
      goto wrong_config;
  
-+  if (gst_video_is_dma_drm_caps (caps) &&
-+      !GST_IS_VA_DMABUF_ALLOCATOR (allocator))
++  if ((gst_video_is_dma_drm_caps (caps) &&
++          !GST_IS_VA_DMABUF_ALLOCATOR (allocator)) ||
++      (!gst_video_is_dma_drm_caps (caps) &&
++          GST_IS_VA_DMABUF_ALLOCATOR (allocator)))
 +    goto wrong_config;
 +
 +  gst_video_info_dma_drm_init (&vpool->caps_info_drm);
 +  if (gst_video_is_dma_drm_caps (caps)) {
++    GstVideoInfo info;
++
 +    if (!gst_video_info_dma_drm_from_caps (&vpool->caps_info_drm, caps))
 +      goto wrong_caps;
 +
-+    /* The non linear DMA format will be recognized as FORMAT_ENCODED,
-+       but we still need to know its real format to set the info such
-+       as pitch and stride. */
-+    if (GST_VIDEO_INFO_FORMAT (&vpool->caps_info_drm.vinfo) ==
-+        GST_VIDEO_FORMAT_ENCODED) {
-+      dma_video_format =
-+          gst_va_video_format_from_drm_fourcc (vpool->caps_info_drm.drm_fourcc);
-+      if (dma_video_format == GST_VIDEO_FORMAT_UNKNOWN)
-+        goto wrong_caps;
-+    }
++    if (!gst_va_video_info_from_dma_info (&info, &vpool->caps_info_drm))
++      goto wrong_caps;
++
++    vpool->caps_info_drm.vinfo = info;
 +  } else {
 +    if (!gst_video_info_from_caps (&vpool->caps_info, caps))
 +      goto wrong_caps;
@@ -82,7 +79,7 @@ index 9e1db70b71..77e33685cf 100644
    if (!(allocator && (GST_IS_VA_DMABUF_ALLOCATOR (allocator)
                || GST_IS_VA_ALLOCATOR (allocator))))
      goto wrong_config;
-@@ -147,8 +176,8 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
+@@ -144,8 +170,8 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
            &use_derived))
      goto wrong_config;
  
@@ -93,48 +90,66 @@ index 9e1db70b71..77e33685cf 100644
  
    GST_LOG_OBJECT (vpool, "%dx%d | %" GST_PTR_FORMAT, width, height, caps);
  
-@@ -171,13 +200,19 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
+@@ -168,31 +194,36 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
    }
  
    /* update allocation info with aligned size */
 -  alloc_info = caps_info;
 -  GST_VIDEO_INFO_WIDTH (&alloc_info) = width;
 -  GST_VIDEO_INFO_HEIGHT (&alloc_info) = height;
-+  alloc_info = vpool->caps_info;
-+  if (dma_video_format != GST_VIDEO_FORMAT_UNKNOWN) {
-+    gst_video_info_set_format (&alloc_info, dma_video_format, width, height);
-+  } else {
-+    GST_VIDEO_INFO_WIDTH (&alloc_info) = width;
-+    GST_VIDEO_INFO_HEIGHT (&alloc_info) = height;
-+  }
++  alloc_info_drm = vpool->caps_info_drm;
++  g_assert (GST_VIDEO_INFO_FORMAT (&alloc_info_drm.vinfo) !=
++      GST_VIDEO_FORMAT_UNKNOWN
++      && GST_VIDEO_INFO_FORMAT (&alloc_info_drm.vinfo) !=
++      GST_VIDEO_FORMAT_ENCODED);
++  GST_VIDEO_INFO_WIDTH (&alloc_info_drm.vinfo) = width;
++  GST_VIDEO_INFO_HEIGHT (&alloc_info_drm.vinfo) = height;
 +
-+  orginal_alloc_info = alloc_info;
++  orginal_alloc_info = alloc_info_drm.vinfo;
  
    if (GST_IS_VA_DMABUF_ALLOCATOR (allocator)) {
-     if (!gst_va_dmabuf_allocator_set_format (allocator, &alloc_info,
--            usage_hint, DRM_FORMAT_MOD_INVALID))
-+            usage_hint, vpool->caps_info_drm.drm_modifier))
+-    if (!gst_va_dmabuf_allocator_set_format (allocator, &alloc_info,
++    if (!gst_va_dmabuf_allocator_set_format (allocator, &alloc_info_drm,
+             usage_hint))
        goto failed_allocator;
    } else if (GST_IS_VA_ALLOCATOR (allocator)) {
-     if (!gst_va_allocator_set_format (allocator, &alloc_info, usage_hint,
-@@ -188,13 +223,12 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
+-    if (!gst_va_allocator_set_format (allocator, &alloc_info, usage_hint,
+-            use_derived))
++    if (!gst_va_allocator_set_format (allocator, &alloc_info_drm.vinfo,
++            usage_hint, use_derived))
+       goto failed_allocator;
+   }
+ 
    gst_object_replace ((GstObject **) & vpool->allocator,
        GST_OBJECT (allocator));
  
 -  vpool->caps_info = caps_info;
-   vpool->alloc_info = alloc_info;
+-  vpool->alloc_info = alloc_info;
++  vpool->alloc_info = alloc_info_drm.vinfo;
  
 -  for (i = 0; i < GST_VIDEO_INFO_N_PLANES (&caps_info); i++) {
 -    if (GST_VIDEO_INFO_PLANE_STRIDE (&caps_info, i) !=
+-        GST_VIDEO_INFO_PLANE_STRIDE (&alloc_info, i) ||
+-        GST_VIDEO_INFO_PLANE_OFFSET (&caps_info, i) !=
+-        GST_VIDEO_INFO_PLANE_OFFSET (&alloc_info, i)) {
 +  for (i = 0; i < GST_VIDEO_INFO_N_PLANES (&orginal_alloc_info); i++) {
 +    if (GST_VIDEO_INFO_PLANE_STRIDE (&orginal_alloc_info, i) !=
-         GST_VIDEO_INFO_PLANE_STRIDE (&alloc_info, i) ||
--        GST_VIDEO_INFO_PLANE_OFFSET (&caps_info, i) !=
++        GST_VIDEO_INFO_PLANE_STRIDE (&alloc_info_drm.vinfo, i) ||
 +        GST_VIDEO_INFO_PLANE_OFFSET (&orginal_alloc_info, i) !=
-         GST_VIDEO_INFO_PLANE_OFFSET (&alloc_info, i)) {
++        GST_VIDEO_INFO_PLANE_OFFSET (&alloc_info_drm.vinfo, i)) {
        GST_INFO_OBJECT (vpool, "Video meta is required in buffer.");
        vpool->force_videometa = TRUE;
-@@ -284,7 +318,7 @@ gst_va_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
+       break;
+@@ -200,7 +231,7 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
+   }
+ 
+   gst_buffer_pool_config_set_params (config, caps,
+-      GST_VIDEO_INFO_SIZE (&alloc_info), min_buffers, max_buffers);
++      GST_VIDEO_INFO_SIZE (&alloc_info_drm.vinfo), min_buffers, max_buffers);
+ 
+   return GST_BUFFER_POOL_CLASS (parent_class)->set_config (pool, config);
+ 
+@@ -281,7 +312,7 @@ gst_va_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
            GST_VIDEO_INFO_FORMAT (&vpool->caps_info),
            GST_VIDEO_INFO_WIDTH (&vpool->caps_info),
            GST_VIDEO_INFO_HEIGHT (&vpool->caps_info),

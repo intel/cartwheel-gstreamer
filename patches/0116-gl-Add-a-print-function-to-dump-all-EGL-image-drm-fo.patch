@@ -1,7 +1,7 @@
-From 9c0cdf86c670858d490c4029652a9136917a7d80 Mon Sep 17 00:00:00 2001
+From 2d5edc1357bceaa322eb0409df8cdd1b9252f844 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Sat, 3 Jun 2023 18:31:08 +0800
-Subject: [PATCH 113/127] gl: Add a print function to dump all EGL image drm
+Subject: [PATCH 116/122] gl: Add a print function to dump all EGL image drm
  format
 
 ---
@@ -9,7 +9,7 @@ Subject: [PATCH 113/127] gl: Add a print function to dump all EGL image drm
  1 file changed, 64 insertions(+)
 
 diff --git a/subprojects/gst-plugins-base/gst-libs/gst/gl/egl/gstglcontext_egl.c b/subprojects/gst-plugins-base/gst-libs/gst/gl/egl/gstglcontext_egl.c
-index 85797a136e..28400c6734 100644
+index 37ed90e5a7..8baf33f47d 100644
 --- a/subprojects/gst-plugins-base/gst-libs/gst/gl/egl/gstglcontext_egl.c
 +++ b/subprojects/gst-plugins-base/gst-libs/gst/gl/egl/gstglcontext_egl.c
 @@ -1523,6 +1523,68 @@ failure:

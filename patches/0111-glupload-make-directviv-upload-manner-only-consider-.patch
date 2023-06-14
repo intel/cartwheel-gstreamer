@@ -1,9 +1,10 @@
-From b2da3ade9226f1df0f0e4bac2129bccd8d9b24bf Mon Sep 17 00:00:00 2001
+From cc35dd1e1304d4d040ae7c0604c03992bbd96d93 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
-Date: Thu, 25 May 2023 10:41:21 +0800
-Subject: [PATCH 121/127] glupload: make raw manner only consider system memory
+Date: Thu, 25 May 2023 14:15:33 +0800
+Subject: [PATCH 111/122] glupload: make directviv upload manner only consider
+ system memory
 
-The current _raw_data_upload_transform_caps() only simply apply
+The current _directviv_upload_transform_caps() only simply apply
 "memory:GLMemory" to all input caps to transform the output caps.
 This is not precise and may cause problem. For example, if the
 input caps include:
@@ -21,22 +22,22 @@ it will be changed as
 For GLMemory kind caps, no drm-format should appear.
 
 So we should let it only transforms which it can recognize.
-We also should recognize the system memory caps in _accept() early, if
-the input is not system memory, we just return early.
+
+And in _directviv_upload_accept(), we should only accept the system
+memory as input caps.
 ---
  .../gst-libs/gst/gl/gstglupload.c             | 24 +++++++++++++++++--
  1 file changed, 22 insertions(+), 2 deletions(-)
 
 diff --git a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
-index 72a11a4f07..d159baec5e 100644
+index 24cad3ff5f..cc37fe99e9 100644
 --- a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
 +++ b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
-@@ -2141,11 +2141,21 @@ _raw_data_upload_transform_caps (gpointer impl, GstGLContext * context,
+@@ -2382,10 +2382,20 @@ _directviv_upload_transform_caps (gpointer impl, GstGLContext * context,
  
    if (direction == GST_PAD_SINK) {
-     GstGLTextureTarget target_mask = 0;
-+    GstCapsFeatures *filter_features;
      GstCaps *tmp;
++    GstCapsFeatures *filter_features;
  
 -    ret =
 -        _set_caps_features_with_passthrough (caps,
@@ -53,11 +54,11 @@ index 72a11a4f07..d159baec5e 100644
          GST_CAPS_FEATURE_MEMORY_GL_MEMORY, passthrough);
 +    gst_caps_unref (tmp);
  
-     target_mask |= 1 << GST_GL_TEXTURE_TARGET_2D;
-     target_mask |= 1 << GST_GL_TEXTURE_TARGET_RECTANGLE;
-@@ -2179,6 +2189,16 @@ _raw_data_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
-   struct RawUpload *raw = impl;
-   GstCapsFeatures *features;
+     gst_caps_set_simple (ret, "format", G_TYPE_STRING, "RGBA", NULL);
+     tmp = _caps_intersect_texture_target (ret, 1 << GST_GL_TEXTURE_TARGET_2D);
+@@ -2430,6 +2440,16 @@ _directviv_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
+   if (!directviv->TexDirectInvalidateVIV || !directviv->TexDirectVIVMap)
+     return FALSE;
  
 +  features =
 +      gst_caps_features_from_string (GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY);

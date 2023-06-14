@@ -1,7 +1,7 @@
-From 266ee31831d741c6cd1f495a65cde4928fe471a2 Mon Sep 17 00:00:00 2001
+From 5bdb7d1150aa2f0bfdc2e18c6ffb08aa86b0ead8 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 1 Jun 2023 18:52:28 +0800
-Subject: [PATCH 126/127] glupload: Delete the flag of
+Subject: [PATCH 113/122] glupload: Delete the flag of
  METHOD_FLAG_CAN_ACCEPT_RAW for DMABuf
 
 When this flag is enabled, the transform_caps() simply set passthrough
@@ -14,10 +14,10 @@ need for this flag.
  1 file changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
-index 709af330e1..8608e83e4d 100644
+index 2eae25ec65..80c4ccac03 100644
 --- a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
 +++ b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
-@@ -1659,7 +1659,7 @@ _dma_buf_upload_free (gpointer impl)
+@@ -1658,7 +1658,7 @@ _dma_buf_upload_free (gpointer impl)
  
  static const UploadMethod _dma_buf_upload = {
    "Dmabuf",
@@ -26,7 +26,7 @@ index 709af330e1..8608e83e4d 100644
    &_dma_buf_upload_caps,
    &_dma_buf_upload_new,
    &_dma_buf_upload_transform_caps,
-@@ -1804,7 +1804,7 @@ _direct_dma_buf_upload_transform_caps (gpointer impl, GstGLContext * context,
+@@ -1803,7 +1803,7 @@ _direct_dma_buf_upload_transform_caps (gpointer impl, GstGLContext * context,
  
  static const UploadMethod _direct_dma_buf_upload = {
    "DirectDmabuf",
@@ -35,7 +35,7 @@ index 709af330e1..8608e83e4d 100644
    &_dma_buf_upload_caps,
    &_direct_dma_buf_upload_new,
    &_direct_dma_buf_upload_transform_caps,
-@@ -1826,7 +1826,7 @@ _direct_dma_buf_external_upload_new (GstGLUpload * upload)
+@@ -1825,7 +1825,7 @@ _direct_dma_buf_external_upload_new (GstGLUpload * upload)
  
  static const UploadMethod _direct_dma_buf_external_upload = {
    "DirectDmabufExternal",

@@ -1,34 +1,39 @@
-From 7c1a3b1f111e929048bc62d571b001bbd1676f25 Mon Sep 17 00:00:00 2001
+From 7556223acb03c69b909cfdcae4cd9440b589c040 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 22 Feb 2023 18:53:32 +0800
-Subject: [PATCH 105/127] va: Improve the template caps for DMA, use new
+Subject: [PATCH 119/122] va: Improve the template caps for DMA, use new
  drm-format kind caps
 
 We should add the modifier information for each surface format when
 we report the template caps.
 ---
- .../gst-plugins-bad/sys/va/gstvacaps.c        | 120 +++++++++++++++++-
+ .../gst-plugins-bad/sys/va/gstvacaps.c        | 125 +++++++++++++++++-
  .../gst-plugins-bad/sys/va/gstvacaps.h        |  10 +-
  .../gst-plugins-bad/sys/va/gstvadecoder.c     |   2 +-
  .../gst-plugins-bad/sys/va/gstvaencoder.c     |   2 +-
  .../gst-plugins-bad/sys/va/gstvafilter.c      |   9 +-
- 5 files changed, 130 insertions(+), 13 deletions(-)
+ 5 files changed, 135 insertions(+), 13 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvacaps.c b/subprojects/gst-plugins-bad/sys/va/gstvacaps.c
-index 0343a10a6d..03b706e37f 100644
+index a980a63254..d94d49143a 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvacaps.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvacaps.c
-@@ -26,6 +26,9 @@
- 
- #include <gst/va/gstvavideoformat.h>
- #include <va/va_drmcommon.h>
-+#ifndef G_OS_WIN32
-+#include <libdrm/drm_fourcc.h>
-+#endif
- 
+@@ -30,6 +30,14 @@
  #include "gstvadisplay_priv.h"
  #include "gstvaprofile.h"
-@@ -145,6 +148,38 @@ gst_caps_set_format_array (GstCaps * caps, GArray * formats)
+ 
++#ifndef G_OS_WIN32
++#include <libdrm/drm_fourcc.h>
++#else
++#define DRM_FORMAT_INVALID     0
++#define DRM_FORMAT_MOD_LINEAR  0ULL
++#define DRM_FORMAT_MOD_INVALID 0xffffffffffffff
++#endif
++
+ GST_DEBUG_CATEGORY_EXTERN (gstva_debug);
+ #define GST_CAT_DEFAULT gstva_debug
+ 
+@@ -145,6 +153,38 @@ gst_caps_set_format_array (GstCaps * caps, GArray * formats)
    return TRUE;
  }
  
@@ -67,7 +72,7 @@ index 0343a10a6d..03b706e37f 100644
  /* Fix raw frames ill reported by drivers.
   *
   * Mesa Gallium reports P010 and P016 for H264 encoder:
-@@ -191,7 +226,80 @@ fix_raw_formats (GstVaDisplay * display, VAConfigID config, GArray * formats)
+@@ -191,7 +231,80 @@ fix_raw_formats (GstVaDisplay * display, VAConfigID config, GArray * formats)
  }
  
  GstCaps *
@@ -149,7 +154,7 @@ index 0343a10a6d..03b706e37f 100644
  {
    GArray *formats;
    GstCaps *caps = NULL, *base_caps, *feature_caps;
-@@ -263,10 +371,10 @@ gst_va_create_raw_caps_from_config (GstVaDisplay * display, VAConfigID config)
+@@ -263,10 +376,10 @@ gst_va_create_raw_caps_from_config (GstVaDisplay * display, VAConfigID config)
    }
    if (mem_type & VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME
        || mem_type & VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2) {
@@ -164,7 +169,7 @@ index 0343a10a6d..03b706e37f 100644
    }
  
    /* raw caps */
-@@ -302,7 +410,7 @@ gst_va_create_raw_caps (GstVaDisplay * display, VAProfile profile,
+@@ -302,7 +415,7 @@ gst_va_create_raw_caps (GstVaDisplay * display, VAProfile profile,
      return NULL;
    }
  
@@ -174,7 +179,7 @@ index 0343a10a6d..03b706e37f 100644
    status = vaDestroyConfig (dpy, config);
    if (status != VA_STATUS_SUCCESS) {
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvacaps.h b/subprojects/gst-plugins-bad/sys/va/gstvacaps.h
-index 64fc03fb7c..47ee43b586 100644
+index 2ef8691b43..85ea926777 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvacaps.h
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvacaps.h
 @@ -35,8 +35,16 @@ VASurfaceAttrib *     gst_va_get_surface_attribs          (GstVaDisplay * displa
@@ -209,10 +214,10 @@ index 8935178018..8143035988 100644
        GST_WARNING_OBJECT (self, "Invalid configuration caps");
        return NULL;
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index c4c8bdef03..0f99bda271 100644
+index d1e8ed1d0e..eb1214fdca 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-@@ -997,7 +997,7 @@ gst_va_encoder_get_sinkpad_caps (GstVaEncoder * self)
+@@ -993,7 +993,7 @@ gst_va_encoder_get_sinkpad_caps (GstVaEncoder * self)
  
    if (gst_va_encoder_is_open (self)) {
      sinkpad_caps = gst_va_create_raw_caps_from_config (self->display,
@@ -222,10 +227,10 @@ index c4c8bdef03..0f99bda271 100644
        GST_WARNING_OBJECT (self, "Invalid configuration caps");
        return NULL;
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvafilter.c b/subprojects/gst-plugins-bad/sys/va/gstvafilter.c
-index 4d1645276b..44261058e4 100644
+index 92ab0e3dfe..98e433887c 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvafilter.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvafilter.c
-@@ -1075,10 +1075,11 @@ gst_va_filter_get_caps (GstVaFilter * self)
+@@ -1071,10 +1071,11 @@ gst_va_filter_get_caps (GstVaFilter * self)
    }
    if (mem_types & VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME
        || mem_types & VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2) {

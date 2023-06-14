@@ -1,7 +1,7 @@
-From 8aa24ed24cc75db19c5bf98aee4a3c7490278e9d Mon Sep 17 00:00:00 2001
+From ca1c2a9e7d05cfc0291d9b59ab951c2b711a69df Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 22 Feb 2023 19:23:47 +0800
-Subject: [PATCH 108/127] va: Apply the new DMA format:modifier pair
+Subject: [PATCH 120/122] va: Apply the new DMA format:modifier pair
  negotiation in decoder
 
 We will consider the DMA modifier for negotiation, setting caps and

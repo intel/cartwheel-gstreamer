@@ -1,7 +1,7 @@
-From 6519e0e73ca73bf41c7fa2eb3625606e6481cb64 Mon Sep 17 00:00:00 2001
+From 1598f04d867b91d691706f6c46fb40b41f391249 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 19 May 2023 19:25:15 +0800
-Subject: [PATCH 117/127] glupload: add a helper function to convert drm
+Subject: [PATCH 104/122] glupload: add a helper function to convert drm
  formats into gst formats
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8

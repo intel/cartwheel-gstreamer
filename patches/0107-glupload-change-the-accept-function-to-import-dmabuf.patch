@@ -1,15 +1,15 @@
-From 5efe4d9243cd52c207180d44e98c5e68efa38116 Mon Sep 17 00:00:00 2001
+From 64693af6bc10bd737617eaf7a53ba1085555201c Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Sun, 21 May 2023 17:23:39 +0800
-Subject: [PATCH 120/127] glupload: change the accept function to import dmabuf
+Subject: [PATCH 107/122] glupload: change the accept function to import dmabuf
  with modifier
 
 ---
- .../gst-libs/gst/gl/gstglupload.c             | 112 ++++++++++++++----
- 1 file changed, 90 insertions(+), 22 deletions(-)
+ .../gst-libs/gst/gl/gstglupload.c             | 111 ++++++++++++++----
+ 1 file changed, 89 insertions(+), 22 deletions(-)
 
 diff --git a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
-index 224367c4f7..72a11a4f07 100644
+index 224367c4f7..ea395269ea 100644
 --- a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
 +++ b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
 @@ -92,7 +92,11 @@ typedef struct _UploadMethod UploadMethod;
@@ -58,7 +58,7 @@ index 224367c4f7..72a11a4f07 100644
    if (dmabuf->target == GST_GL_TEXTURE_TARGET_EXTERNAL_OES &&
        !gst_gl_context_check_feature (dmabuf->upload->context,
            "GL_OES_EGL_image_external")) {
-@@ -1373,6 +1384,64 @@ _dma_buf_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
+@@ -1373,6 +1384,63 @@ _dma_buf_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
      return FALSE;
    }
  
@@ -69,7 +69,6 @@ index 224367c4f7..72a11a4f07 100644
 +    filter_features =
 +        gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY, NULL);
 +    if (_filter_caps_with_features (in_caps, filter_features, NULL)) {
-+      g_assert (in_info_drm->drm_fourcc == DRM_FORMAT_INVALID);
 +      in_info_drm->drm_fourcc = gst_video_dma_drm_fourcc_from_format
 +          (GST_VIDEO_INFO_FORMAT (in_info));
 +      if (in_info_drm->drm_fourcc == DRM_FORMAT_INVALID) {
@@ -123,7 +122,7 @@ index 224367c4f7..72a11a4f07 100644
    /* This will eliminate most non-dmabuf out there */
    if (!gst_is_dmabuf_memory (gst_buffer_peek_memory (buffer, 0))) {
      GST_DEBUG_OBJECT (dmabuf->upload, "input not dmabuf");
-@@ -1420,10 +1489,9 @@ _dma_buf_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
+@@ -1420,10 +1488,9 @@ _dma_buf_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
  
    if (dmabuf->params)
      gst_gl_allocation_params_free ((GstGLAllocationParams *) dmabuf->params);
@@ -137,7 +136,7 @@ index 224367c4f7..72a11a4f07 100644
      return FALSE;
  
    /* Find and validate all memories */
-@@ -1461,15 +1529,10 @@ _dma_buf_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
+@@ -1461,15 +1528,10 @@ _dma_buf_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
    }
  
    if (dmabuf->direct) {
@@ -155,7 +154,7 @@ index 224367c4f7..72a11a4f07 100644
  
    /* Now create an EGLImage for each dmabuf */
    for (i = 0; i < dmabuf->n_mem; i++) {
-@@ -1485,13 +1548,13 @@ _dma_buf_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
+@@ -1485,13 +1547,13 @@ _dma_buf_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
      }
  
      /* otherwise create one and cache it */
@@ -176,7 +175,7 @@ index 224367c4f7..72a11a4f07 100644
  
      if (!dmabuf->eglimage[i]) {
        GST_DEBUG_OBJECT (dmabuf->upload, "could not create eglimage");
-@@ -3223,7 +3286,12 @@ _gst_gl_upload_set_caps_unlocked (GstGLUpload * upload, GstCaps * in_caps,
+@@ -3223,7 +3285,12 @@ _gst_gl_upload_set_caps_unlocked (GstGLUpload * upload, GstCaps * in_caps,
    gst_caps_replace (&upload->priv->in_caps, in_caps);
    gst_caps_replace (&upload->priv->out_caps, out_caps);
  
