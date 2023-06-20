@@ -1,0 +1,33 @@
+From d4dec70c687b4fc4abeaf29ab2c36163ca1d51a7 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Mon, 19 Jun 2023 15:20:58 +0800
+Subject: [PATCH 201/204] va: vpp: Copy all the meta data unconditionally when
+ preparing input buffer
+
+The current way of using parent's copy_metadata() virtual function will
+selectively filter out some meta such as crop meta. That virtual function
+should be used when copying input buffer's meta data into output buffer,
+not suitable when importing the input buffer.
+---
+ subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c b/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
+index b3055bce6f..e40d12bbeb 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
+@@ -875,10 +875,7 @@ gst_va_base_transform_import_buffer (GstVaBaseTransform * self,
+   if (!copied)
+     goto invalid_buffer;
+ 
+-  /* copy metadata, default implemenation of baseclass will copy everything
+-   * what we need */
+-  GST_BASE_TRANSFORM_CLASS (parent_class)->copy_metadata
+-      (GST_BASE_TRANSFORM_CAST (self), inbuf, buffer);
++  gst_buffer_copy_into (buffer, inbuf, GST_BUFFER_COPY_METADATA, 0, -1);
+ 
+   *buf = buffer;
+ 
+-- 
+2.25.1
+

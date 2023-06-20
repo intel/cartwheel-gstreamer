@@ -1,0 +1,56 @@
+From 415652a609984487bf26041fb085abde2ea23d1e Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Tue, 20 Jun 2023 15:27:07 +0800
+Subject: [PATCH 203/204] va: pool: Let the videometa contain the whole size
+ when it has crop
+
+The video meta should contain the whole uncropped size of the video
+when the buffer also contain the video crop meta. The current manner
+in va pool just considers the top/left padding case, the right/bottom
+case should also be covered.
+---
+ .../gst-plugins-bad/gst-libs/gst/va/gstvapool.c     | 13 ++++++++-----
+ 1 file changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
+index eb63ffb678..a786b30b0a 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
+@@ -60,7 +60,9 @@ struct _GstVaPool
+   gboolean force_videometa;
+   gboolean add_videometa;
+   gint crop_left;
++  gint crop_right;
+   gint crop_top;
++  gint crop_bottom;
+ 
+   gboolean starting;
+ };
+@@ -161,10 +163,10 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
+     width += video_align.padding_left + video_align.padding_right;
+     height += video_align.padding_bottom + video_align.padding_top;
+ 
+-    if (video_align.padding_left > 0)
+-      vpool->crop_left = video_align.padding_left;
+-    if (video_align.padding_top > 0)
+-      vpool->crop_top = video_align.padding_top;
++    vpool->crop_left = video_align.padding_left;
++    vpool->crop_right = video_align.padding_right;
++    vpool->crop_top = video_align.padding_top;
++    vpool->crop_bottom = video_align.padding_bottom;
+   }
+ 
+   /* update allocation info with aligned size */
+@@ -257,7 +259,8 @@ gst_va_pool_alloc (GstBufferPool * pool, GstBuffer ** buffer,
+     goto no_memory;
+ 
+   if (vpool->add_videometa) {
+-    if (vpool->crop_left > 0 || vpool->crop_top > 0) {
++    if (vpool->crop_left > 0 || vpool->crop_right > 0 ||
++        vpool->crop_top > 0 || vpool->crop_bottom > 0) {
+       GstVideoCropMeta *crop_meta;
+ 
+       /* For video crop, its video meta's width and height should be
+-- 
+2.25.1
+

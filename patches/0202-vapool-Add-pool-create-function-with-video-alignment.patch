@@ -1,0 +1,109 @@
+From 3e3c4bbdc8c740583727107929421e2992aa9286 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Mon, 19 Jun 2023 23:49:08 +0800
+Subject: [PATCH 202/204] vapool: Add pool create function with video alignment
+
+---
+ .../gst-libs/gst/va/gstvapool.c               | 42 ++++++++++++++++---
+ .../gst-libs/gst/va/gstvapool.h               | 10 +++++
+ 2 files changed, 47 insertions(+), 5 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
+index f5b77234bc..eb63ffb678 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
+@@ -442,7 +442,7 @@ gst_va_pool_requires_video_meta (GstBufferPool * pool)
+ }
+ 
+ /**
+- * gst_va_pool_new_with_config:
++ * gst_va_pool_new_with_config_and_alignment:
+  * @caps: the #GstCaps of the buffers handled by the new pool.
+  * @size: the size of the frames to hold.
+  * @min_buffers: minimum number of frames to create.
+@@ -452,17 +452,19 @@ gst_va_pool_requires_video_meta (GstBufferPool * pool)
+  *     VA allocator).
+  * @allocator: the VA allocator to use.
+  * @alloc_params: #GstAllocationParams to use.
++ * @align: #GstVideoAlignment to use.
+  *
+  * Returns: a new #GstBufferPool that handles VASurfacesID-backed
+  *     buffers. If the pool cannot be configured correctly, %NULL is
+  *     returned.
+  *
+- * Since: 1.22
++ * Since: 1.24
+  */
+ GstBufferPool *
+-gst_va_pool_new_with_config (GstCaps * caps, guint size, guint min_buffers,
+-    guint max_buffers, guint usage_hint, GstVaFeature use_derived,
+-    GstAllocator * allocator, GstAllocationParams * alloc_params)
++gst_va_pool_new_with_config_and_alignment (GstCaps * caps, guint size,
++    guint min_buffers, guint max_buffers, guint usage_hint,
++    GstVaFeature use_derived, GstAllocator * allocator,
++    GstAllocationParams * alloc_params, GstVideoAlignment * align)
+ {
+   GstBufferPool *pool;
+   GstStructure *config;
+@@ -476,9 +478,39 @@ gst_va_pool_new_with_config (GstCaps * caps, guint size, guint min_buffers,
+       use_derived);
+   gst_buffer_pool_config_set_allocator (config, allocator, alloc_params);
+   gst_buffer_pool_config_add_option (config, GST_BUFFER_POOL_OPTION_VIDEO_META);
++  if (align)
++    gst_buffer_pool_config_set_va_alignment (config, align);
+ 
+   if (!gst_buffer_pool_set_config (pool, config))
+     gst_clear_object (&pool);
+ 
+   return pool;
+ }
++
++/**
++ * gst_va_pool_new_with_config:
++ * @caps: the #GstCaps of the buffers handled by the new pool.
++ * @size: the size of the frames to hold.
++ * @min_buffers: minimum number of frames to create.
++ * @max_buffers: maximum number of frames to create.
++ * @usage_hint: VA usage hint
++ * @use_derived: a #GstVaFeature for derived mapping (only used when
++ *     VA allocator).
++ * @allocator: the VA allocator to use.
++ * @alloc_params: #GstAllocationParams to use.
++ *
++ * Returns: a new #GstBufferPool that handles VASurfacesID-backed
++ *     buffers. If the pool cannot be configured correctly, %NULL is
++ *     returned.
++ *
++ * Since: 1.22
++ */
++GstBufferPool *
++gst_va_pool_new_with_config (GstCaps * caps, guint size, guint min_buffers,
++    guint max_buffers, guint usage_hint, GstVaFeature use_derived,
++    GstAllocator * allocator, GstAllocationParams * alloc_params)
++{
++  return gst_va_pool_new_with_config_and_alignment (caps, size,
++      min_buffers, max_buffers, usage_hint, use_derived, allocator,
++      alloc_params, NULL);
++}
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.h b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.h
+index 86fe9dc60c..9e23f406a7 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.h
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.h
+@@ -56,4 +56,14 @@ GstBufferPool *      gst_va_pool_new_with_config          (GstCaps * caps,
+                                                            GstAllocator * allocator,
+                                                            GstAllocationParams * alloc_params);
+ 
++GST_VA_API
++GstBufferPool *      gst_va_pool_new_with_config_and_alignment (GstCaps * caps,
++                                                                guint size,
++                                                                guint min_buffers,
++                                                                guint max_buffers,
++                                                                guint usage_hint,
++                                                                GstVaFeature use_derived,
++                                                                GstAllocator * allocator,
++                                                                GstAllocationParams * alloc_params,
++                                                                GstVideoAlignment * align);
+ G_END_DECLS
+-- 
+2.25.1
+
