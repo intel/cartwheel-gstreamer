@@ -1,0 +1,47 @@
+From 9974bc74ba4d260ebe9574f8b419c27117518aee Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Fri, 16 Jun 2023 20:12:32 +0800
+Subject: [PATCH 124/125] va: jpegdec: Do not change the DMA template src caps
+
+---
+ subprojects/gst-plugins-bad/sys/va/gstvajpegdec.c | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvajpegdec.c b/subprojects/gst-plugins-bad/sys/va/gstvajpegdec.c
+index 4e0624426e..9835b2c2f4 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvajpegdec.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvajpegdec.c
+@@ -569,9 +569,6 @@ _fixup_src_caps (GstVaDisplay * display, GstCaps * caps)
+         }
+         gst_structure_set_value (s, "format", &out);
+         g_value_unset (&out);
+-      } else if (gst_caps_features_contains (f, GST_CAPS_FEATURE_MEMORY_DMABUF)) {
+-        /* dmabuf exportation only handles NV12 */
+-        gst_structure_set (s, "format", G_TYPE_STRING, "NV12", NULL);
+       }
+     }
+ 
+@@ -579,6 +576,7 @@ _fixup_src_caps (GstVaDisplay * display, GstCaps * caps)
+   } else if (GST_VA_DISPLAY_IS_IMPLEMENTATION (display, INTEL_I965)) {
+     GstCaps *ret;
+     GstStructure *s;
++    GstCapsFeatures *f;
+     guint i, len;
+ 
+     ret = gst_caps_copy (caps);
+@@ -586,6 +584,12 @@ _fixup_src_caps (GstVaDisplay * display, GstCaps * caps)
+     len = gst_caps_get_size (ret);
+     for (i = 0; i < len; i++) {
+       s = gst_caps_get_structure (ret, i);
++      f = gst_caps_get_features (ret, i);
++
++      /* DMA kind formats have modifiers, we should not change */
++      if (gst_caps_features_contains (f, GST_CAPS_FEATURE_MEMORY_DMABUF))
++        continue;
++
+       /* only NV12 works in this nigthmare */
+       gst_structure_set (s, "format", G_TYPE_STRING, "NV12", NULL);
+     }
+-- 
+2.25.1
+

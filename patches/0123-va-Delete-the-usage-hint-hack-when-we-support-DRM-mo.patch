@@ -1,0 +1,28 @@
+From 714e8925fead4c3bf0c3a08a60cd173383b164b5 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Sat, 3 Jun 2023 21:56:09 +0800
+Subject: [PATCH 123/125] va: Delete the usage hint hack when we support DRM
+ modifier
+
+---
+ subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c b/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
+index 901d8b6ea7..41466fb98b 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
+@@ -409,10 +409,6 @@ gst_va_base_transform_decide_allocation (GstBaseTransform * trans,
+   }
+ 
+   if (!allocator) {
+-    /* XXX(victor): USAGE_HINT_VPP_WRITE creates tiled dmabuf frames
+-     * in iHD */
+-    if (gst_caps_is_dmabuf (outcaps) && GST_VIDEO_INFO_IS_RGB (&vinfo))
+-      usage_hint = VA_SURFACE_ATTRIB_USAGE_HINT_GENERIC;
+     if (!(allocator =
+             gst_va_base_transform_allocator_from_caps (self, outcaps)))
+       return FALSE;
+-- 
+2.25.1
+

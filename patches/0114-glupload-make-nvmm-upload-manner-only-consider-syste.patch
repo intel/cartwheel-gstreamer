@@ -1,0 +1,84 @@
+From 7e0a3154138ec55c20498300cb53931d74afef05 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Thu, 25 May 2023 14:27:57 +0800
+Subject: [PATCH 114/125] glupload: make nvmm upload manner only consider
+ system memory
+
+The current _nvmm_upload_transform_caps() only simply apply
+"memory:NVMM" to all input caps to transform the output caps.
+This is not precise and may cause problem. For example, if the
+input caps include:
+
+  video/x-raw(memory:DMABuf), width=(int)1920, height=(int)1080, \
+  interlace-mode=(string)progressive, multiview-mode=(string)mono, \
+  framerate=(fraction)30/1, drm-format=(string)NV12:0x0100000000000002
+
+it will be changed as
+
+  video/x-raw(memory:GLMemory), width=(int)1920, height=(int)1080, \
+  interlace-mode=(string)progressive, multiview-mode=(string)mono, \
+  framerate=(fraction)30/1, drm-format=(string)NV12:0x0100000000000002
+
+For GLMemory kind caps, no drm-format should appear.
+
+So we should let it only transforms which it can recognize.
+
+And in _nvmm_upload_accept(), we should only accept the "memory:NVMM"
+feature in input caps.
+---
+ .../gst-libs/gst/gl/gstglupload.c             | 22 +++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+diff --git a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
+index df77e66e78..edb5ff846a 100644
+--- a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
++++ b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
+@@ -2705,13 +2705,22 @@ _nvmm_upload_transform_caps (gpointer impl, GstGLContext * context,
+ 
+   if (direction == GST_PAD_SINK) {
+     GstCaps *tmp;
++    GstCapsFeatures *filter_features;
+ 
+-    ret =
+-        _set_caps_features_with_passthrough (caps,
++    filter_features =
++        gst_caps_features_from_string (GST_CAPS_FEATURE_MEMORY_NVMM);
++    if (!_filter_caps_with_features (caps, filter_features, &tmp)) {
++      gst_caps_features_free (filter_features);
++      gst_caps_features_free (passthrough);
++      return NULL;
++    }
++    gst_caps_features_free (filter_features);
++
++    ret = _set_caps_features_with_passthrough (tmp,
+         GST_CAPS_FEATURE_MEMORY_GL_MEMORY, passthrough);
++    gst_caps_unref (tmp);
+ 
+-    tmp =
+-        _caps_intersect_texture_target (ret,
++    tmp = _caps_intersect_texture_target (ret,
+         1 << GST_GL_TEXTURE_TARGET_EXTERNAL_OES);
+     gst_caps_unref (ret);
+     ret = tmp;
+@@ -2747,6 +2756,7 @@ _nvmm_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
+   GstVideoInfo *out_info = &nvmm->out_info;
+   GstVideoMeta *meta;
+   GstMapInfo in_map_info = GST_MAP_INFO_INIT;
++  GstCapsFeatures *features;
+   guint n_mem;
+   guint i;
+ 
+@@ -2771,6 +2781,10 @@ _nvmm_upload_accept (gpointer impl, GstBuffer * buffer, GstCaps * in_caps,
+           "EGL_KHR_image_base"))
+     return FALSE;
+ 
++  features = gst_caps_get_features (in_caps, 0);
++  if (!gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_NVMM))
++    return FALSE;
++
+   if (!gst_buffer_map (buffer, &in_map_info, GST_MAP_READ)) {
+     GST_DEBUG_OBJECT (nvmm->upload, "Failed to map readonly NvBuffer");
+     return FALSE;
+-- 
+2.25.1
+

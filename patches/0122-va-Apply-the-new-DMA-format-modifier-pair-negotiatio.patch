@@ -1,0 +1,311 @@
+From 4d3c4730b9d01d810703e12f4d07f63cb9369134 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Wed, 22 Feb 2023 19:36:06 +0800
+Subject: [PATCH 122/125] va: Apply the new DMA format:modifier pair
+ negotiation in vpp
+
+---
+ .../sys/va/gstvabasetransform.c               |  45 ++++++-
+ subprojects/gst-plugins-bad/sys/va/gstvavpp.c | 121 +++++++++++++++---
+ 2 files changed, 142 insertions(+), 24 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c b/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
+index 8a352ae9b7..901d8b6ea7 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvabasetransform.c
+@@ -25,6 +25,14 @@
+ #include "gstvabasetransform.h"
+ 
+ #include <gst/va/gstva.h>
++#include <gst/va/gstvavideoformat.h>
++#ifndef G_OS_WIN32
++#include <libdrm/drm_fourcc.h>
++#else
++#define DRM_FORMAT_INVALID     0
++#define DRM_FORMAT_MOD_LINEAR  0ULL
++#define DRM_FORMAT_MOD_INVALID 0xffffffffffffff
++#endif
+ 
+ #include "gstvacaps.h"
+ #include "gstvapluginutils.h"
+@@ -177,11 +185,11 @@ gst_va_base_transform_set_caps (GstBaseTransform * trans, GstCaps * incaps,
+   gboolean res;
+ 
+   /* input caps */
+-  if (!gst_video_info_from_caps (&in_info, incaps))
++  if (!gst_va_video_info_from_caps (&in_info, NULL, incaps))
+     goto invalid_caps;
+ 
+   /* output caps */
+-  if (!gst_video_info_from_caps (&out_info, outcaps))
++  if (!gst_va_video_info_from_caps (&out_info, NULL, outcaps))
+     goto invalid_caps;
+ 
+   fclass = GST_VA_BASE_TRANSFORM_GET_CLASS (self);
+@@ -253,7 +261,7 @@ gst_va_base_transform_propose_allocation (GstBaseTransform * trans,
+   gst_query_parse_allocation (query, &caps, NULL);
+   if (!caps)
+     return FALSE;
+-  if (!gst_video_info_from_caps (&info, caps)) {
++  if (!gst_va_video_info_from_caps (&info, NULL, caps)) {
+     GST_ERROR_OBJECT (self, "Cannot parse caps %" GST_PTR_FORMAT, caps);
+     return FALSE;
+   }
+@@ -353,7 +361,7 @@ gst_va_base_transform_decide_allocation (GstBaseTransform * trans,
+   gst_allocation_params_init (&other_params);
+   gst_allocation_params_init (&params);
+ 
+-  if (!gst_video_info_from_caps (&vinfo, outcaps)) {
++  if (!gst_va_video_info_from_caps (&vinfo, NULL, outcaps)) {
+     GST_ERROR_OBJECT (self, "Cannot parse caps %" GST_PTR_FORMAT, outcaps);
+     return FALSE;
+   }
+@@ -848,6 +856,35 @@ _get_sinkpad_pool (GstVaBaseTransform * self, GstBuffer * inbuf)
+   else
+     caps = gst_caps_copy (self->in_caps);
+ 
++  g_assert (gst_caps_is_fixed (caps));
++  /* For DMA buffer, we can only import linear buffers.
++     Replace the drm-format into format field. */
++  if (gst_video_is_dma_drm_caps (caps)) {
++    GstVideoInfoDmaDrm dma_info;
++    GstVideoInfo info;
++
++    if (!gst_video_info_dma_drm_from_caps (&dma_info, caps)) {
++      GST_ERROR_OBJECT (self, "Cannot parse caps %" GST_PTR_FORMAT, caps);
++      gst_caps_unref (caps);
++      return NULL;
++    }
++
++    if (dma_info.drm_modifier != DRM_FORMAT_MOD_LINEAR) {
++      GST_ERROR_OBJECT (self, "Cannot import non-linear DMA buffer");
++      gst_caps_unref (caps);
++      return NULL;
++    }
++
++    if (!gst_va_video_info_from_dma_info (&info, &dma_info)) {
++      GST_ERROR_OBJECT (self, "Cannot get va video info");
++      gst_caps_unref (caps);
++      return NULL;
++    }
++
++    gst_caps_set_simple (caps, "format", G_TYPE_STRING,
++        gst_video_format_to_string (GST_VIDEO_INFO_FORMAT (&info)), NULL);
++    gst_structure_remove_field (gst_caps_get_structure (caps, 0), "drm-format");
++  }
+   gst_caps_set_features_simple (caps,
+       gst_caps_features_from_string (GST_CAPS_FEATURE_MEMORY_VA));
+ 
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavpp.c b/subprojects/gst-plugins-bad/sys/va/gstvavpp.c
+index 0b960cfd74..a6b62038aa 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvavpp.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvavpp.c
+@@ -65,6 +65,15 @@
+ #include <gst/va/gstva.h>
+ #include <gst/video/video.h>
+ #include <va/va_drmcommon.h>
++#include <gst/va/gstvavideoformat.h>
++
++#ifndef G_OS_WIN32
++#include <libdrm/drm_fourcc.h>
++#else
++#define DRM_FORMAT_INVALID     0
++#define DRM_FORMAT_MOD_LINEAR  0ULL
++#define DRM_FORMAT_MOD_INVALID 0xffffffffffffff
++#endif
+ 
+ #include "gstvabasetransform.h"
+ #include "gstvacaps.h"
+@@ -942,8 +951,8 @@ gst_va_vpp_caps_remove_fields (GstCaps * caps)
+         }
+ 
+         /* remove format-related fields */
+-        gst_structure_remove_fields (structure, "format", "colorimetry",
+-            "chroma-site", NULL);
++        gst_structure_remove_fields (structure, "format", "drm-format",
++            "colorimetry", "chroma-site", NULL);
+ 
+         break;
+       }
+@@ -1190,34 +1199,63 @@ gst_va_vpp_fixate_format (GstVaVpp * self, GstCaps * caps, GstCaps * result)
+   GstVideoFormat fmt;
+   gint min_loss = G_MAXINT;
+   guint i, best_i, capslen;
++  guint64 best_modifier;
+ 
+   ins = gst_caps_get_structure (caps, 0);
+-  in_format = gst_structure_get_string (ins, "format");
+-  if (!in_format)
+-    return NULL;
+ 
+-  GST_DEBUG_OBJECT (self, "source format %s", in_format);
++  if (gst_video_is_dma_drm_caps (caps)) {
++    guint32 fourcc;
++    GstVideoFormat video_format;
++
++    in_format = gst_structure_get_string (ins, "drm-format");
++    if (!in_format)
++      return NULL;
++
++    fourcc = gst_video_dma_drm_fourcc_from_string (in_format, NULL);
++    video_format = gst_va_video_format_from_drm_fourcc (fourcc);
++    if (video_format == GST_VIDEO_FORMAT_UNKNOWN)
++      return NULL;
++
++    in_info = gst_video_format_get_info (video_format);
++  } else {
++    in_format = gst_structure_get_string (ins, "format");
++    if (!in_format)
++      return NULL;
++
++    in_info =
++        gst_video_format_get_info (gst_video_format_from_string (in_format));
++  }
+ 
+-  in_info =
+-      gst_video_format_get_info (gst_video_format_from_string (in_format));
+   if (!in_info)
+     return NULL;
+ 
++  GST_DEBUG_OBJECT (self, "source format %s", in_format);
++
+   best_i = 0;
++  best_modifier = DRM_FORMAT_MOD_INVALID;
+   capslen = gst_caps_get_size (result);
+   GST_DEBUG_OBJECT (self, "iterate %d structures", capslen);
+   for (i = 0; i < capslen; i++) {
++    gboolean is_dma;
+     GstStructure *tests;
+     const GValue *format;
++    guint64 modifier;
++    guint32 fourcc;
+ 
++    features = gst_caps_get_features (result, i);
+     tests = gst_caps_get_structure (result, i);
+-    format = gst_structure_get_value (tests, "format");
++
++    if (gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_DMABUF)) {
++      format = gst_structure_get_value (tests, "drm-format");
++      is_dma = TRUE;
++    } else {
++      format = gst_structure_get_value (tests, "format");
++      is_dma = FALSE;
++    }
+     /* should not happen */
+     if (format == NULL)
+       continue;
+ 
+-    features = gst_caps_get_features (result, i);
+-
+     if (GST_VALUE_HOLDS_LIST (format)) {
+       gint j, len;
+ 
+@@ -1226,23 +1264,52 @@ gst_va_vpp_fixate_format (GstVaVpp * self, GstCaps * caps, GstCaps * result)
+       for (j = 0; j < len; j++) {
+         const GValue *val;
+ 
++        modifier = DRM_FORMAT_MOD_INVALID;
++
+         val = gst_value_list_get_value (format, j);
+         if (G_VALUE_HOLDS_STRING (val)) {
+-          fmt = gst_video_format_from_string (g_value_get_string (val));
++          if (is_dma) {
++            fourcc = gst_video_dma_drm_fourcc_from_string
++                (g_value_get_string (val), &modifier);
++            fmt = gst_va_video_format_from_drm_fourcc (fourcc);
++          } else {
++            fmt = gst_video_format_from_string (g_value_get_string (val));
++          }
++          if (fmt == GST_VIDEO_FORMAT_UNKNOWN)
++            continue;
++
+           if (!gst_va_filter_has_video_format (btrans->filter, fmt, features))
+             continue;
+-          if (score_value (self, in_info, fmt, &min_loss, &out_info))
++
++          if (score_value (self, in_info, fmt, &min_loss, &out_info)) {
+             best_i = i;
++            best_modifier = modifier;
++          }
++
+           if (min_loss == 0)
+             break;
+         }
+       }
+     } else if (G_VALUE_HOLDS_STRING (format)) {
+-      fmt = gst_video_format_from_string (g_value_get_string (format));
++      modifier = DRM_FORMAT_MOD_INVALID;
++
++      if (is_dma) {
++        fourcc = gst_video_dma_drm_fourcc_from_string
++            (g_value_get_string (format), &modifier);
++        fmt = gst_va_video_format_from_drm_fourcc (fourcc);
++      } else {
++        fmt = gst_video_format_from_string (g_value_get_string (format));
++      }
++      if (fmt == GST_VIDEO_FORMAT_UNKNOWN)
++        continue;
++
+       if (!gst_va_filter_has_video_format (btrans->filter, fmt, features))
+         continue;
+-      if (score_value (self, in_info, fmt, &min_loss, &out_info))
++
++      if (score_value (self, in_info, fmt, &min_loss, &out_info)) {
+         best_i = i;
++        best_modifier = modifier;
++      }
+     }
+ 
+     if (min_loss == 0)
+@@ -1255,8 +1322,21 @@ gst_va_vpp_fixate_format (GstVaVpp * self, GstCaps * caps, GstCaps * result)
+ 
+     features = gst_caps_features_copy (gst_caps_get_features (result, best_i));
+     out = gst_structure_copy (gst_caps_get_structure (result, best_i));
+-    gst_structure_set (out, "format", G_TYPE_STRING,
+-        GST_VIDEO_FORMAT_INFO_NAME (out_info), NULL);
++
++    if (gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_DMABUF)) {
++      gchar *drm_fmt_name;
++
++      g_assert (best_modifier != DRM_FORMAT_MOD_INVALID);
++
++      drm_fmt_name = gst_video_dma_drm_fourcc_to_string
++          (gst_va_drm_fourcc_from_video_format (out_info->format),
++          best_modifier);
++      gst_structure_set (out, "drm-format", G_TYPE_STRING, drm_fmt_name, NULL);
++      g_free (drm_fmt_name);
++    } else {
++      gst_structure_set (out, "format", G_TYPE_STRING,
++          GST_VIDEO_FORMAT_INFO_NAME (out_info), NULL);
++    }
+     ret = gst_caps_new_full (out, NULL);
+     gst_caps_set_features_simple (ret, features);
+     return ret;
+@@ -1757,12 +1837,13 @@ transfer_colorimetry_from_input (GstVaVpp * self, GstCaps * in_caps,
+     const GValue *in_colorimetry =
+         gst_structure_get_value (in_caps_s, "colorimetry");
+ 
+-    if (!gst_video_info_from_caps (&in_info, in_caps)) {
++    if (!gst_va_video_info_from_caps (&in_info, NULL, in_caps)) {
+       GST_WARNING_OBJECT (self,
+           "Failed to convert sink pad caps to video info");
+       return;
+     }
+-    if (!gst_video_info_from_caps (&out_info, out_caps)) {
++
++    if (!gst_va_video_info_from_caps (&out_info, NULL, out_caps)) {
+       GST_WARNING_OBJECT (self, "Failed to convert src pad caps to video info");
+       return;
+     }
+@@ -1844,7 +1925,7 @@ update_hdr_fields (GstVaVpp * self, GstCaps * result)
+ 
+   have_colorimetry = gst_structure_has_field (s, "colorimetry");
+   if (!have_colorimetry) {
+-    if (gst_video_info_from_caps (&out_info, result)) {
++    if (gst_va_video_info_from_caps (&out_info, NULL, result)) {
+       gchar *colorimetry_str =
+           gst_video_colorimetry_to_string (&out_info.colorimetry);
+       gst_caps_set_simple (result, "colorimetry", G_TYPE_STRING,
+-- 
+2.25.1
+
