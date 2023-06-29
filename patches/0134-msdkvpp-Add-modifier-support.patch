@@ -1,0 +1,344 @@
+From 14812bd91f938dd6dd8bf69b767cf92168dc71ab Mon Sep 17 00:00:00 2001
+From: Yinhang Liu <yinhang.liu@intel.com>
+Date: Tue, 30 May 2023 18:01:49 +0800
+Subject: [PATCH 134/138] msdkvpp: Add modifier support
+
+Co-authored-by: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
+---
+ .../sys/msdk/gstmsdkallocator_libva.c         | 12 ++-
+ .../gst-plugins-bad/sys/msdk/gstmsdkvpp.c     | 87 ++++++++++++-------
+ .../gst-plugins-bad/sys/msdk/gstmsdkvpp.h     |  2 +
+ .../gst-plugins-bad/sys/msdk/gstmsdkvpputil.c | 16 +++-
+ 4 files changed, 77 insertions(+), 40 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
+index f8cdbd0cb3..ed2ad783f9 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
+@@ -639,13 +639,19 @@ _get_va_surface (GstBuffer * buf, GstVideoInfo * info,
+ 
+     vmeta = gst_buffer_get_video_meta (buf);
+     if (vmeta) {
+-      if (GST_VIDEO_INFO_FORMAT (info) != vmeta->format ||
+-          GST_VIDEO_INFO_WIDTH (info) != vmeta->width ||
++      if (GST_VIDEO_INFO_WIDTH (info) != vmeta->width ||
+           GST_VIDEO_INFO_HEIGHT (info) != vmeta->height ||
+           GST_VIDEO_INFO_N_PLANES (info) != vmeta->n_planes) {
+         GST_ERROR ("VideoMeta attached to buffer is not matching"
+-            "the negotiated width/height/format");
++            "the negotiated width/height");
+         return va_surface;
++      } else if (GST_VIDEO_INFO_FORMAT (info) != vmeta->format) {
++        /* When format does not match, we need to check if it caused
++         * by modifier case */
++        if (GST_VIDEO_INFO_FORMAT (info) != GST_VIDEO_FORMAT_ENCODED &&
++            vmeta->format != GST_VIDEO_FORMAT_ENCODED)
++          GST_ERROR ("VideoMeta attached to buffer is not matching "
++              "the negotiated format");
+       }
+       for (i = 0; i < GST_VIDEO_INFO_N_PLANES (info); ++i) {
+         GST_VIDEO_INFO_PLANE_OFFSET (info, i) = vmeta->offset[i];
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
+index 6022d3aa1b..86b3bd4673 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
+@@ -60,6 +60,7 @@
+ #include "gstmsdkallocator.h"
+ 
+ #ifndef _WIN32
++#include <libdrm/drm_fourcc.h>
+ #include "gstmsdkallocator_libva.h"
+ #include <gst/va/gstvaallocator.h>
+ #else
+@@ -376,8 +377,8 @@ gst_msdkvpp_prepare_output_buffer (GstBaseTransform * trans,
+ 
+ #ifndef _WIN32
+ static GstBufferPool *
+-gst_msdk_create_va_pool (GstVideoInfo * info, GstMsdkContext * msdk_context,
+-    gboolean use_dmabuf, guint min_buffers)
++gst_msdk_create_va_pool (GstMsdkVPP * thiz, GstVideoInfo * info,
++    GstMsdkContext * msdk_context, guint min_buffers, GstPadDirection direction)
+ {
+   GstBufferPool *pool = NULL;
+   GstAllocator *allocator;
+@@ -385,9 +386,20 @@ gst_msdk_create_va_pool (GstVideoInfo * info, GstMsdkContext * msdk_context,
+   GstAllocationParams alloc_params = { 0, 31, 0, 0 };
+   GstVaDisplay *display = NULL;
+   GstCaps *aligned_caps = NULL;
++  guint usage_hint = VA_SURFACE_ATTRIB_USAGE_HINT_GENERIC;
++  gboolean use_dmabuf = FALSE;
++  guint64 modifier = DRM_FORMAT_MOD_INVALID;
+ 
+   display = (GstVaDisplay *) gst_msdk_context_get_va_display (msdk_context);
+ 
++  if (direction == GST_PAD_SINK) {
++    use_dmabuf = thiz->use_sinkpad_dmabuf;
++    modifier = thiz->sink_modifier;
++  } else if (direction == GST_PAD_SRC) {
++    use_dmabuf = thiz->use_srcpad_dmabuf;
++    modifier = thiz->src_modifier;
++  }
++
+   if (use_dmabuf)
+     allocator = gst_va_dmabuf_allocator_new (display);
+   else {
+@@ -405,12 +417,20 @@ gst_msdk_create_va_pool (GstVideoInfo * info, GstMsdkContext * msdk_context,
+       g_array_unref (formats);
+     return NULL;
+   }
+-  aligned_caps = gst_video_info_to_caps (info);
++
++  if (use_dmabuf && modifier != DRM_FORMAT_MOD_INVALID) {
++    aligned_caps = gst_msdkcaps_video_info_to_drm_caps (info, modifier);
++    usage_hint |= VA_SURFACE_ATTRIB_USAGE_HINT_VPP_READ |
++        VA_SURFACE_ATTRIB_USAGE_HINT_VPP_WRITE;
++    gst_caps_set_features (aligned_caps, 0,
++        gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_DMABUF, NULL));
++  } else
++    aligned_caps = gst_video_info_to_caps (info);
++
+   pool =
+       gst_va_pool_new_with_config (aligned_caps,
+       GST_VIDEO_INFO_SIZE (info), min_buffers, 0,
+-      VA_SURFACE_ATTRIB_USAGE_HINT_GENERIC, GST_VA_FEATURE_AUTO,
+-      allocator, &alloc_params);
++      usage_hint, GST_VA_FEATURE_AUTO, allocator, &alloc_params);
+ 
+   gst_object_unref (allocator);
+   gst_caps_unref (aligned_caps);
+@@ -480,17 +500,14 @@ gst_msdkvpp_create_buffer_pool (GstMsdkVPP * thiz, GstPadDirection direction,
+   GstVideoInfo info;
+   GstVideoInfo *pool_info = NULL;
+   GstVideoAlignment align;
+-  gboolean use_dmabuf = FALSE;
+ 
+   if (direction == GST_PAD_SINK) {
+     pool_info = &thiz->sinkpad_buffer_pool_info;
+-    use_dmabuf = thiz->use_sinkpad_dmabuf;
+   } else if (direction == GST_PAD_SRC) {
+     pool_info = &thiz->srcpad_buffer_pool_info;
+-    use_dmabuf = thiz->use_srcpad_dmabuf;
+   }
+ 
+-  if (!gst_video_info_from_caps (&info, caps)) {
++  if (!gst_msdkcaps_video_info_from_caps (caps, &info, NULL)) {
+     goto error_no_video_info;
+   }
+ 
+@@ -498,8 +515,8 @@ gst_msdkvpp_create_buffer_pool (GstMsdkVPP * thiz, GstPadDirection direction,
+   gst_video_info_align (&info, &align);
+ 
+ #ifndef _WIN32
+-  pool = gst_msdk_create_va_pool (&info, thiz->context, use_dmabuf,
+-      min_num_buffers);
++  pool = gst_msdk_create_va_pool (thiz, &info, thiz->context, min_num_buffers,
++      direction);
+ #else
+   pool = gst_msdk_create_d3d11_pool (thiz, &info, min_num_buffers, propose);
+ #endif
+@@ -534,7 +551,6 @@ error_no_pool:
+ error_no_video_info:
+   {
+     GST_INFO_OBJECT (thiz, "Failed to get Video info from caps");
+-    gst_object_unref (pool);
+     return NULL;
+   }
+ error_pool_config:
+@@ -605,7 +621,6 @@ static gboolean
+ gst_msdkvpp_decide_allocation (GstBaseTransform * trans, GstQuery * query)
+ {
+   GstMsdkVPP *thiz = GST_MSDKVPP (trans);
+-  GstVideoInfo info;
+   GstCaps *caps;
+ 
+   gst_query_parse_allocation (query, &caps, NULL);
+@@ -613,10 +628,7 @@ gst_msdkvpp_decide_allocation (GstBaseTransform * trans, GstQuery * query)
+     GST_ERROR_OBJECT (thiz, "Failed to parse the decide_allocation caps");
+     return FALSE;
+   }
+-  if (!gst_video_info_from_caps (&info, caps)) {
+-    GST_ERROR_OBJECT (thiz, "Failed to get video info");
+-    return FALSE;
+-  }
++
+   /* We allocate the memory of type that downstream allocation requests */
+ #ifndef _WIN32
+   if (gst_msdkcaps_has_feature (caps, GST_CAPS_FEATURE_MEMORY_DMABUF)) {
+@@ -658,13 +670,16 @@ gst_msdkvpp_propose_allocation (GstBaseTransform * trans,
+   guint size;
+   guint min_buffers = thiz->async_depth + 1;
+ 
++  if (gst_base_transform_is_passthrough (trans))
++    return TRUE;
++
+   gst_query_parse_allocation (query, &caps, &need_pool);
+   if (!caps) {
+     GST_ERROR_OBJECT (thiz, "Failed to parse the allocation caps");
+     return FALSE;
+   }
+ 
+-  if (!gst_video_info_from_caps (&info, caps)) {
++  if (!gst_msdkcaps_video_info_from_caps (caps, &info, NULL)) {
+     GST_ERROR_OBJECT (thiz, "Failed to get video info");
+     return FALSE;
+   }
+@@ -1264,9 +1279,15 @@ gst_msdkvpp_set_caps (GstBaseTransform * trans, GstCaps * caps,
+           gst_caps_get_features (out_caps, 0)))
+     thiz->need_vpp = 1;
+ 
+-  if (!gst_video_info_from_caps (&in_info, caps))
++  thiz->use_sinkpad_dmabuf = gst_msdkcaps_has_feature (caps,
++      GST_CAPS_FEATURE_MEMORY_DMABUF) ? TRUE : FALSE;
++  thiz->use_srcpad_dmabuf = gst_msdkcaps_has_feature (out_caps,
++      GST_CAPS_FEATURE_MEMORY_DMABUF) ? TRUE : FALSE;
++
++  if (!gst_msdkcaps_video_info_from_caps (caps, &in_info, &thiz->sink_modifier))
+     goto error_no_video_info;
+-  if (!gst_video_info_from_caps (&out_info, out_caps))
++  if (!gst_msdkcaps_video_info_from_caps (out_caps,
++          &out_info, &thiz->src_modifier))
+     goto error_no_video_info;
+ 
+   if (!gst_video_info_is_equal (&in_info, &thiz->sinkpad_info))
+@@ -1336,11 +1357,8 @@ pad_accept_memory (GstMsdkVPP * thiz, const gchar * mem_type,
+   gst_caps_set_features (caps, 0, gst_caps_features_from_string (mem_type));
+ 
+   out_caps = gst_pad_peer_query_caps (pad, caps);
+-  if (!out_caps)
+-    goto done;
+ 
+-  if (gst_caps_is_any (out_caps) || gst_caps_is_empty (out_caps)
+-      || out_caps == caps)
++  if (!out_caps || gst_caps_is_empty (out_caps))
+     goto done;
+ 
+   if (gst_msdkcaps_has_feature (out_caps, mem_type))
+@@ -1359,11 +1377,9 @@ gst_msdkvpp_fixate_caps (GstBaseTransform * trans,
+ {
+   GstMsdkVPP *thiz = GST_MSDKVPP (trans);
+   GstCaps *result = NULL;
+-  gboolean *use_dmabuf;
+ 
+   if (direction == GST_PAD_SRC) {
+     result = gst_caps_fixate (othercaps);
+-    use_dmabuf = &thiz->use_sinkpad_dmabuf;
+   } else {
+     /*
+      * Override mirroring & rotation properties once video-direction
+@@ -1374,11 +1390,9 @@ gst_msdkvpp_fixate_caps (GstBaseTransform * trans,
+           (thiz->video_direction, &thiz->mirroring, &thiz->rotation);
+ 
+     result = gst_msdkvpp_fixate_srccaps (thiz, caps, othercaps);
+-    use_dmabuf = &thiz->use_srcpad_dmabuf;
+   }
+ 
+   GST_DEBUG_OBJECT (trans, "fixated to %" GST_PTR_FORMAT, result);
+-  gst_caps_unref (othercaps);
+ 
+   /* We let msdkvpp srcpad first query if downstream has va memory type caps,
+    * if not, will check the type of dma memory.
+@@ -1392,7 +1406,7 @@ gst_msdkvpp_fixate_caps (GstBaseTransform * trans,
+           direction == GST_PAD_SRC ? GST_PAD_SINK : GST_PAD_SRC, result)) {
+     gst_caps_set_features (result, 0,
+         gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_DMABUF, NULL));
+-    *use_dmabuf = TRUE;
++    result = gst_msdkcaps_intersect (result, othercaps);
+   }
+ #else
+   if (pad_accept_memory (thiz, GST_CAPS_FEATURE_MEMORY_D3D11_MEMORY,
+@@ -1411,20 +1425,24 @@ static GstCaps *
+ gst_msdkvpp_transform_caps (GstBaseTransform * trans,
+     GstPadDirection direction, GstCaps * caps, GstCaps * filter)
+ {
+-  GstCaps *out_caps;
++  GstCaps *out_caps = NULL;
++  GstCaps *tmp_caps;
+ 
+   GST_DEBUG_OBJECT (trans,
+       "Transforming caps %" GST_PTR_FORMAT " in direction %s", caps,
+       (direction == GST_PAD_SINK) ? "sink" : "src");
+ 
+   if (direction == GST_PAD_SINK) {
+-    out_caps =
++    tmp_caps =
+         gst_pad_get_pad_template_caps (GST_BASE_TRANSFORM_SRC_PAD (trans));
+   } else {
+-    out_caps =
++    tmp_caps =
+         gst_pad_get_pad_template_caps (GST_BASE_TRANSFORM_SINK_PAD (trans));
+   }
+ 
++  if (!out_caps)
++    out_caps = tmp_caps;
++
+   if (out_caps && filter) {
+     GstCaps *intersection;
+ 
+@@ -1892,7 +1910,10 @@ gst_msdkvpp_init (GTypeInstance * instance, gpointer g_class)
+   thiz->crop_right = PROP_CROP_RIGHT_DEFAULT;
+   thiz->crop_top = PROP_CROP_TOP_DEFAULT;
+   thiz->crop_bottom = PROP_CROP_BOTTOM_DEFAULT;
+-
++#ifndef _WIN32
++  thiz->sink_modifier = DRM_FORMAT_MOD_INVALID;
++  thiz->src_modifier = DRM_FORMAT_MOD_INVALID;
++#endif
+   gst_video_info_init (&thiz->sinkpad_info);
+   gst_video_info_init (&thiz->srcpad_info);
+ }
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.h
+index a71321a0a5..aefec0b207 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.h
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.h
+@@ -88,6 +88,8 @@ struct _GstMsdkVPP
+   gboolean add_video_meta;
+   gboolean need_vpp;
+   guint flags;
++  guint64 sink_modifier;
++  guint64 src_modifier;
+ 
+   /* element properties */
+   gboolean hardware;
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
+index 7517bda894..938324d51e 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
+@@ -27,6 +27,7 @@
+ 
+ #include "gstmsdkvpputil.h"
+ #include "msdk-enums.h"
++#include "gstmsdkcaps.h"
+ 
+ #define SWAP_GINT(a, b) do {      \
+         const gint t = a; a = b; b = t; \
+@@ -541,8 +542,13 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
+         1, NULL);
+ 
+   /* Fixate the format */
+-  if (!gst_structure_fixate_field (structure, "format"))
+-    goto fixate_failed;
++  if (gst_video_is_dma_drm_caps (srccaps) &&
++      gst_structure_has_field (structure, "drm-format")) {
++    if (!gst_structure_fixate_field (structure, "drm-format"))
++      goto fixate_failed;
++  } else if (gst_structure_has_field (structure, "format"))
++    if (!gst_structure_fixate_field (structure, "format"))
++      goto fixate_failed;
+ 
+   /* Fixate the frame size */
+   if (!fixate_output_frame_size (thiz, vinfo, structure))
+@@ -597,7 +603,9 @@ gst_msdkvpp_fixate_srccaps (GstMsdkVPP * msdkvpp,
+     GstCaps * sinkcaps, GstCaps * srccaps)
+ {
+   GstVideoInfo vi;
+-  if (!gst_video_info_from_caps (&vi, sinkcaps))
+-    return NULL;
++
++  if (!gst_msdkcaps_video_info_from_caps (sinkcaps, &vi, NULL))
++    return FALSE;
++
+   return _get_preferred_src_caps (msdkvpp, &vi, srccaps);
+ }
+-- 
+2.34.1
+

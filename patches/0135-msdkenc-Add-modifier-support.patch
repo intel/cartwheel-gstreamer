@@ -1,0 +1,197 @@
+From c85af7d89cbf5954b1ff6fa6ab7f7d7cdf01a1ac Mon Sep 17 00:00:00 2001
+From: Yinhang Liu <yinhang.liu@intel.com>
+Date: Tue, 30 May 2023 18:12:38 +0800
+Subject: [PATCH 135/138] msdkenc: Add modifier support
+
+Co-authored-by: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
+---
+ .../gst-plugins-bad/sys/msdk/gstmsdkenc.c     | 61 ++++++++++++++++---
+ .../gst-plugins-bad/sys/msdk/gstmsdkenc.h     |  1 +
+ 2 files changed, 53 insertions(+), 9 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
+index 4b861989a5..0665d7040b 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
+@@ -48,8 +48,10 @@
+ #include "gstmsdkcontextutil.h"
+ #include "gstmsdkallocator.h"
+ #include "mfxjpeg.h"
++#include "gstmsdkcaps.h"
+ 
+ #ifndef _WIN32
++#include <libdrm/drm_fourcc.h>
+ #include "gstmsdkallocator_libva.h"
+ #include <gst/va/gstvaallocator.h>
+ #else
+@@ -1159,14 +1161,15 @@ gst_msdkenc_set_src_caps (GstMsdkEnc * thiz)
+ 
+ #ifndef _WIN32
+ static GstBufferPool *
+-gst_msdk_create_va_pool (GstMsdkEnc * thiz, GstCaps * caps, guint num_buffers)
++gst_msdk_create_va_pool (GstMsdkEnc * thiz, GstVideoInfo * info,
++    guint num_buffers)
+ {
+   GstBufferPool *pool = NULL;
+   GstAllocator *allocator;
+   GArray *formats = NULL;
+   GstAllocationParams alloc_params = { 0, 31, 0, 0 };
+   GstVaDisplay *display = NULL;
+-  GstVideoInfo info = thiz->input_state->info;
++  GstCaps *aligned_caps = NULL;
+ 
+   display = (GstVaDisplay *) gst_msdk_context_get_va_display (thiz->context);
+ 
+@@ -1174,7 +1177,7 @@ gst_msdk_create_va_pool (GstMsdkEnc * thiz, GstCaps * caps, guint num_buffers)
+     allocator = gst_va_dmabuf_allocator_new (display);
+   } else {
+     formats = g_array_new (FALSE, FALSE, sizeof (GstVideoFormat));
+-    g_array_append_val (formats, GST_VIDEO_INFO_FORMAT (&info));
++    g_array_append_val (formats, GST_VIDEO_INFO_FORMAT (info));
+     allocator = gst_va_allocator_new (display, formats);
+   }
+ 
+@@ -1185,12 +1188,20 @@ gst_msdk_create_va_pool (GstMsdkEnc * thiz, GstCaps * caps, guint num_buffers)
+     return NULL;
+   }
+ 
++  if (thiz->use_dmabuf && thiz->modifier != DRM_FORMAT_MOD_INVALID) {
++    aligned_caps = gst_msdkcaps_video_info_to_drm_caps (info, thiz->modifier);
++    gst_caps_set_features (aligned_caps, 0,
++        gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_DMABUF, NULL));
++  } else
++    aligned_caps = gst_video_info_to_caps (info);
++
+   pool =
+-      gst_va_pool_new_with_config (caps, GST_VIDEO_INFO_SIZE (&info),
++      gst_va_pool_new_with_config (aligned_caps, GST_VIDEO_INFO_SIZE (info),
+       num_buffers, 0, VA_SURFACE_ATTRIB_USAGE_HINT_GENERIC, GST_VA_FEATURE_AUTO,
+       allocator, &alloc_params);
+ 
+   gst_object_unref (allocator);
++  gst_caps_unref (aligned_caps);
+ 
+   GST_LOG_OBJECT (thiz, "Creating va pool");
+   return pool;
+@@ -1261,7 +1272,7 @@ gst_msdkenc_create_buffer_pool (GstMsdkEnc * thiz, GstCaps * caps,
+   GstVideoInfo info;
+   GstVideoAlignment align;
+ 
+-  if (!gst_video_info_from_caps (&info, caps)) {
++  if (!gst_msdkcaps_video_info_from_caps (caps, &info, NULL)) {
+     GST_INFO_OBJECT (thiz, "failed to get video info");
+     return FALSE;
+   }
+@@ -1269,7 +1280,7 @@ gst_msdkenc_create_buffer_pool (GstMsdkEnc * thiz, GstCaps * caps,
+   gst_msdk_set_video_alignment (&info, 0, 0, &align);
+   gst_video_info_align (&info, &align);
+ #ifndef _WIN32
+-  pool = gst_msdk_create_va_pool (thiz, caps, num_buffers);
++  pool = gst_msdk_create_va_pool (thiz, &info, num_buffers);
+ #else
+   pool = gst_msdk_create_d3d11_pool (thiz, num_buffers);
+ #endif
+@@ -1357,6 +1368,32 @@ sinkpad_is_d3d11 (GstMsdkEnc * thiz)
+ }
+ #endif
+ 
++static gboolean
++gst_msdkenc_sink_event (GstVideoEncoder * encoder, GstEvent * event)
++{
++  GstCaps *caps;
++  GstEvent *tmp_event = event;
++
++  if (GST_EVENT_TYPE (event) == GST_EVENT_CAPS) {
++    gst_event_parse_caps (event, &caps);
++    GstCaps *tmp_caps = gst_caps_copy (caps);
++#ifndef _WIN32
++    /* We need to remove drm-format in the caps to be compatible with base
++     * class which cannot handle caps with drm-format */
++    if (gst_video_is_dma_drm_caps (tmp_caps)) {
++      if (!gst_msdkcaps_remove_drm_format (tmp_caps)) {
++        GST_WARNING_OBJECT (encoder, "Failed to remove drm format from caps");
++      }
++    }
++#endif
++    tmp_event = gst_event_new_caps (tmp_caps);
++    gst_caps_unref (tmp_caps);
++  }
++
++  return GST_VIDEO_ENCODER_CLASS (parent_class)->sink_event (encoder,
++      tmp_event);
++}
++
+ static gboolean
+ gst_msdkenc_set_format (GstVideoEncoder * encoder, GstVideoCodecState * state)
+ {
+@@ -1396,13 +1433,16 @@ gst_msdkenc_set_format (GstVideoEncoder * encoder, GstVideoCodecState * state)
+    * based pipeline usage. Ideally we should have dmabuf support even with
+    * raw-caps negotiation, but we don't have dmabuf-import support in msdk
+    * plugin yet */
++#ifndef _WIN32
+   /* If VA is set, we do not fallback to DMA. */
+   if (!thiz->use_va && sinkpad_can_dmabuf (thiz)) {
+     thiz->input_state->caps = gst_caps_make_writable (thiz->input_state->caps);
+     gst_caps_set_features (thiz->input_state->caps, 0,
+         gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_DMABUF, NULL));
+     thiz->use_dmabuf = TRUE;
++    thiz->modifier = get_msdkcaps_get_modifier (state->caps);
+   }
++#endif
+ 
+   if (!gst_msdkenc_init_encoder (thiz))
+     return FALSE;
+@@ -1742,7 +1782,7 @@ gst_msdkenc_propose_allocation (GstVideoEncoder * encoder, GstQuery * query)
+     return FALSE;
+   }
+ 
+-  if (!gst_video_info_from_caps (&info, caps)) {
++  if (!gst_msdkcaps_video_info_from_caps (caps, &info, NULL)) {
+     GST_INFO_OBJECT (encoder, "failed to get video info");
+     return FALSE;
+   }
+@@ -1770,10 +1810,9 @@ gst_msdkenc_propose_allocation (GstVideoEncoder * encoder, GstQuery * query)
+     if (gst_buffer_pool_config_get_allocator (config, &allocator, NULL))
+       gst_query_add_allocation_param (query, allocator, &params);
+     gst_structure_free (config);
++    gst_object_unref (pool);
+   }
+ 
+-  gst_object_unref (pool);
+-
+   return GST_VIDEO_ENCODER_CLASS (parent_class)->propose_allocation (encoder,
+       query);
+ }
+@@ -1962,6 +2001,7 @@ gst_msdkenc_class_init (GstMsdkEncClass * klass)
+ 
+   element_class->set_context = gst_msdkenc_set_context;
+ 
++  gstencoder_class->sink_event = GST_DEBUG_FUNCPTR (gst_msdkenc_sink_event);
+   gstencoder_class->set_format = GST_DEBUG_FUNCPTR (gst_msdkenc_set_format);
+   gstencoder_class->handle_frame = GST_DEBUG_FUNCPTR (gst_msdkenc_handle_frame);
+   gstencoder_class->start = GST_DEBUG_FUNCPTR (gst_msdkenc_start);
+@@ -2001,6 +2041,9 @@ gst_msdkenc_init (GstMsdkEnc * thiz)
+   thiz->lowdelay_brc = PROP_LOWDELAY_BRC_DEFAULT;
+   thiz->adaptive_i = PROP_ADAPTIVE_I_DEFAULT;
+   thiz->adaptive_b = PROP_ADAPTIVE_B_DEFAULT;
++#ifndef _WIN32
++  thiz->modifier = DRM_FORMAT_MOD_INVALID;
++#endif
+ 
+   thiz->ext_coding_props = gst_structure_new (EC_PROPS_STRUCT_NAME,
+       EC_PROPS_EXTBRC, G_TYPE_STRING, "off", NULL);
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.h
+index 27c4f01061..aa765bd2b7 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.h
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.h
+@@ -142,6 +142,7 @@ struct _GstMsdkEnc
+   gboolean use_va;
+   gboolean use_d3d11;
+   gboolean initialized;
++  guint64 modifier;
+ 
+   /* element properties */
+   gboolean hardware;
+-- 
+2.34.1
+
