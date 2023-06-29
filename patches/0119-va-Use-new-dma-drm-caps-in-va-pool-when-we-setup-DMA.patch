@@ -1,7 +1,7 @@
-From 60216489c81aeed037130b0365e68e534d013dd3 Mon Sep 17 00:00:00 2001
+From ccf1bfd484d3a934b20a2fc4b090973e8a7da473 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 22 Feb 2023 18:39:22 +0800
-Subject: [PATCH 119/125] va: Use new dma drm caps in va pool when we setup DMA
+Subject: [PATCH 119/124] va: Use new dma drm caps in va pool when we setup DMA
  pools
 
 ---
@@ -9,7 +9,7 @@ Subject: [PATCH 119/125] va: Use new dma drm caps in va pool when we setup DMA
  1 file changed, 53 insertions(+), 22 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
-index f5b77234bc..371dbd8588 100644
+index f5b77234bc..07817a539d 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
 @@ -35,6 +35,7 @@
@@ -67,7 +67,7 @@ index f5b77234bc..371dbd8588 100644
 +    if (!gst_video_info_dma_drm_from_caps (&vpool->caps_info_drm, caps))
 +      goto wrong_caps;
 +
-+    if (!gst_va_video_info_from_dma_info (&info, &vpool->caps_info_drm))
++    if (!gst_va_dma_info_to_video_info (&vpool->caps_info_drm, &info))
 +      goto wrong_caps;
 +
 +    vpool->caps_info_drm.vinfo = info;
@@ -159,5 +159,5 @@ index f5b77234bc..371dbd8588 100644
      }
    }
 -- 
-2.25.1
+2.34.1
 

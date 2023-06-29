@@ -1,7 +1,7 @@
-From 92cae8ce3e4b24ed9180331a1ebca8e44e6b7c6b Mon Sep 17 00:00:00 2001
+From 9a5d68f7f4ae47ab3f4d726b1f1a4fb99dfe11b0 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 25 May 2023 11:11:40 +0800
-Subject: [PATCH 111/125] glupload: make meta upload manner only consider
+Subject: [PATCH 111/124] glupload: make meta upload manner only consider
  TextureUploadMeta feature
 
 The current _upload_meta_upload_transform_caps() only simply apply
@@ -58,5 +58,5 @@ index 15c0c82de1..c5930ba738 100644
      tmp = _caps_intersect_texture_target (ret, 1 << GST_GL_TEXTURE_TARGET_2D);
      gst_caps_unref (ret);
 -- 
-2.25.1
+2.34.1
 

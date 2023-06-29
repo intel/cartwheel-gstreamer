@@ -1,7 +1,7 @@
-From e5318d1e318ce9594bcd972927cfb8277ab8ef93 Mon Sep 17 00:00:00 2001
+From c144d7ac886d354cbabb27c84eac686b59e69116 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 25 May 2023 10:41:21 +0800
-Subject: [PATCH 110/125] glupload: make raw manner only consider system memory
+Subject: [PATCH 110/124] glupload: make raw manner only consider system memory
 
 The current _raw_data_upload_transform_caps() only simply apply
 "memory:GLMemory" to all input caps to transform the output caps.
@@ -73,5 +73,5 @@ index 5316da2fca..15c0c82de1 100644
    if (!gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_GL_MEMORY))
      return FALSE;
 -- 
-2.25.1
+2.34.1
 

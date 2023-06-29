@@ -1,8 +1,8 @@
-From 037e8f7f7e2025008e983fdd6b8e59c83f5481c1 Mon Sep 17 00:00:00 2001
+From 8a8425769707fe22080785999f10e38747b8b22d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?V=C3=ADctor=20Manuel=20J=C3=A1quez=20Leal?=
  <vjaquez@igalia.com>
 Date: Wed, 19 Apr 2023 12:46:10 +0200
-Subject: [PATCH 103/125] video: add GST_VIDEO_DMA_DRM_CAPS_MAKE
+Subject: [PATCH 103/124] video: add GST_VIDEO_DMA_DRM_CAPS_MAKE
 
 It is requried this macro because it doesn't define format field, neither
 drm-format which is suppossed to be generated in run-time.
@@ -54,5 +54,5 @@ index 15e6a87c48..d13a05c8a0 100644
  
  /**
 -- 
-2.25.1
+2.34.1
 

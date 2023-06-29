@@ -1,7 +1,7 @@
-From a873cc4e95ebda40cdd828002462e539a4f4a117 Mon Sep 17 00:00:00 2001
+From d6fca4f04937882785b6aca30006daab4b76ffb5 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 2 Jun 2023 18:17:25 +0800
-Subject: [PATCH 117/125] video DMA: Add several video formats support
+Subject: [PATCH 117/124] video DMA: Add several video formats support
 
 Add Y410, Y412, Y210, Y212, BGR10A2, P010 and P012 format support.
 ---
@@ -64,5 +64,5 @@ index a7192d8cc5..f651393326 100644
  /* *INDENT-ON* */
  
 -- 
-2.25.1
+2.34.1
 

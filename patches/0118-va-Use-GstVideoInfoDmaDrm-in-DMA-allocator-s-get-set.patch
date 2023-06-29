@@ -1,7 +1,7 @@
-From 4956f49970fec5a0625a2c7f48250ab7c938b2e8 Mon Sep 17 00:00:00 2001
+From 938b64a218eb911dd08f8115a4c9f59bb4b680b3 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 14 Jun 2023 16:32:52 +0800
-Subject: [PATCH 118/125]  va: Use GstVideoInfoDmaDrm in DMA allocator's
+Subject: [PATCH 118/124] va: Use GstVideoInfoDmaDrm in DMA allocator's
  get/set_format() API
 
 ---
@@ -206,5 +206,5 @@ index 882bc055db..3f2175816f 100644
      gst_va_allocator_get_format (allocator, &info, NULL, NULL);
    }
 -- 
-2.25.1
+2.34.1
 

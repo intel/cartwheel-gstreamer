@@ -1,7 +1,7 @@
-From 5284e48f34e21c7e50681b89b34587d41210521e Mon Sep 17 00:00:00 2001
+From f8fbd6636a175f420838fe93169adc8fe98a911e Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 1 Jun 2023 18:34:31 +0800
-Subject: [PATCH 107/125] glupload: Add a helper function of
+Subject: [PATCH 107/124] glupload: Add a helper function of
  _filter_caps_with_features()
 
 We sometimes need to filter some special feature for the next step.
@@ -120,5 +120,5 @@ index 07ce4ab41b..9556c8a621 100644
  _set_caps_features_with_passthrough (const GstCaps * caps,
      const gchar * feature_name, GstCapsFeatures * passthrough)
 -- 
-2.25.1
+2.34.1
 
