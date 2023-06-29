@@ -1,7 +1,7 @@
-From 4c83ae10a74bb496dbaf24c655194c3be50ba09c Mon Sep 17 00:00:00 2001
+From 48643244846edb126cb1069626757ddb13806ec2 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 19 May 2023 16:25:28 +0800
-Subject: [PATCH 105/125] glupload: add a helper function to convert gst
+Subject: [PATCH 105/124] glupload: add a helper function to convert gst
  formats into drm formats
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
@@ -129,5 +129,5 @@ index 15530a12da..d76458eddb 100644
  _dma_buf_upload_transform_caps (gpointer impl, GstGLContext * context,
      GstPadDirection direction, GstCaps * caps)
 -- 
-2.25.1
+2.34.1
 

@@ -1,7 +1,7 @@
-From f2e53bfd3ea21f94a2e9b69a7d231171dc800739 Mon Sep 17 00:00:00 2001
+From a1c12f5014cb37e1018d022e9fa3306892c85857 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 19 May 2023 22:44:52 +0800
-Subject: [PATCH 108/125] glupload: enable drm kind caps in glupload plugin for
+Subject: [PATCH 108/124] glupload: enable drm kind caps in glupload plugin for
  DMA buf
 
 Most of the time, the RGB kind formats are OpenGL native supported
@@ -575,5 +575,5 @@ index 9556c8a621..224367c4f7 100644
    return ret;
  }
 -- 
-2.25.1
+2.34.1
 

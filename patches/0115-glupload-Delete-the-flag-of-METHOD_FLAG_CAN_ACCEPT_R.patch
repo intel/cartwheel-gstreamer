@@ -1,7 +1,7 @@
-From 529fe21f8dcd52a03b4b98fffd1b2e87c0fc5bdc Mon Sep 17 00:00:00 2001
+From 6ba8a6d195e6130208e4cb64cee6207fa5a12fb7 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 1 Jun 2023 18:52:28 +0800
-Subject: [PATCH 115/125] glupload: Delete the flag of
+Subject: [PATCH 115/124] glupload: Delete the flag of
  METHOD_FLAG_CAN_ACCEPT_RAW for DMABuf
 
 When this flag is enabled, the transform_caps() simply set passthrough
@@ -45,5 +45,5 @@ index edb5ff846a..07a5842e65 100644
    &_direct_dma_buf_external_upload_new,
    &_direct_dma_buf_upload_transform_caps,
 -- 
-2.25.1
+2.34.1
 

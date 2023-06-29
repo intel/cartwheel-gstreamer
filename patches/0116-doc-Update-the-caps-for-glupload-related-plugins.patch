@@ -1,7 +1,7 @@
-From 41ad398747c2d5ba5d72ad6ff5adb8bcad3c821b Mon Sep 17 00:00:00 2001
+From 34b20be2a17f823810e9a90b708093b8f4f17d7a Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 2 Jun 2023 23:18:35 +0800
-Subject: [PATCH 116/125] doc: Update the caps for glupload related plugins
+Subject: [PATCH 116/124] doc: Update the caps for glupload related plugins
 
 ---
  .../docs/plugins/gst_plugins_cache.json              | 12 ++++++------
@@ -66,5 +66,5 @@ index c0711769dd..681ea82ee1 100644
                          "presence": "request",
                          "type": "GstGLVideoMixerInput"
 -- 
-2.25.1
+2.34.1
 

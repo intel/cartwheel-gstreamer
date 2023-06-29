@@ -1,7 +1,7 @@
-From b6772279da64775c5eeae8cef7ec2af0eb097428 Mon Sep 17 00:00:00 2001
+From 25c49ea3a0e104a4608e2cc7c13fd9903b64f700 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 25 May 2023 13:18:14 +0800
-Subject: [PATCH 112/125] glupload: make gl memory upload manner only consider
+Subject: [PATCH 112/124] glupload: make gl memory upload manner only consider
  memory:GLMemory feature
 
 The current _gl_memory_upload_transform_caps() only simply apply
@@ -150,5 +150,5 @@ index c5930ba738..479b1b217d 100644
    n_pools = gst_query_get_n_allocation_pools (query);
    for (i = 0; i < n_pools; i++) {
 -- 
-2.25.1
+2.34.1
 

@@ -1,21 +1,35 @@
-From d8d8f19144771a86bc18dba7a50db1fe2ec3391d Mon Sep 17 00:00:00 2001
+From 77bda7874d53a14371c5ce00c3562f2cf09dbf54 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 22 Feb 2023 18:53:32 +0800
-Subject: [PATCH 120/125] va: Improve the template caps for DMA, use new
+Subject: [PATCH 120/124] va: Improve the template caps for DMA, use new
  drm-format kind caps
 
 We should add the modifier information for each surface format when
 we report the template caps.
 ---
+ .../gst-libs/gst/va/gstvapool.c               |   2 +-
  .../gst-plugins-bad/sys/va/gstvacaps.c        | 125 +++++++++++++++++-
  .../gst-plugins-bad/sys/va/gstvacaps.h        |  10 +-
  .../gst-plugins-bad/sys/va/gstvadecoder.c     |   2 +-
  .../gst-plugins-bad/sys/va/gstvaencoder.c     |   2 +-
  .../gst-plugins-bad/sys/va/gstvafilter.c      |   9 +-
- 5 files changed, 135 insertions(+), 13 deletions(-)
+ 6 files changed, 136 insertions(+), 14 deletions(-)
 
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
+index 07817a539d..ade406eb10 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvapool.c
+@@ -153,7 +153,7 @@ gst_va_pool_set_config (GstBufferPool * pool, GstStructure * config)
+     if (!gst_video_info_dma_drm_from_caps (&vpool->caps_info_drm, caps))
+       goto wrong_caps;
+ 
+-    if (!gst_va_dma_info_to_video_info (&vpool->caps_info_drm, &info))
++    if (!gst_va_dma_drm_info_to_video_info (&vpool->caps_info_drm, &info))
+       goto wrong_caps;
+ 
+     vpool->caps_info_drm.vinfo = info;
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvacaps.c b/subprojects/gst-plugins-bad/sys/va/gstvacaps.c
-index a980a63254..d94d49143a 100644
+index 0c91822b2a..f17dbf5fbc 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvacaps.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvacaps.c
 @@ -30,6 +30,14 @@
@@ -247,5 +261,5 @@ index 92ab0e3dfe..98e433887c 100644
  
    gst_caps_unref (base_caps);
 -- 
-2.25.1
+2.34.1
 

@@ -1,7 +1,7 @@
-From d0b9824aa34c93cf99bf7f1bcec030682e9b52a3 Mon Sep 17 00:00:00 2001
+From 7346cccd0f4edb6600b293197064047af746ff13 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 25 May 2023 14:15:33 +0800
-Subject: [PATCH 113/125] glupload: make directviv upload manner only consider
+Subject: [PATCH 113/124] glupload: make directviv upload manner only consider
  system memory
 
 The current _directviv_upload_transform_caps() only simply apply
@@ -74,5 +74,5 @@ index 479b1b217d..df77e66e78 100644
    if (!gst_caps_features_contains (features, GST_CAPS_FEATURE_MEMORY_GL_MEMORY))
      return FALSE;
 -- 
-2.25.1
+2.34.1
 
