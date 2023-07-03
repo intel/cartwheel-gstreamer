@@ -1,4 +1,4 @@
-From dac3c430cdacba10e06bb0e6c5c00ae5771612f7 Mon Sep 17 00:00:00 2001
+From 238da81dea121005f325f6053c759c21cf88f9c7 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:39:30 +0800
 Subject: [PATCH 10/14] tests: Add the av1 bit code writer test case.
@@ -674,7 +674,7 @@ index 0000000000..dcd4a7ada8
 +
 +GST_CHECK_MAIN (av1bitwriter);
 diff --git a/subprojects/gst-plugins-bad/tests/check/meson.build b/subprojects/gst-plugins-bad/tests/check/meson.build
-index f8e96f72f8..d3d923b7bd 100644
+index aab48e0b82..d06f9ac61b 100644
 --- a/subprojects/gst-plugins-bad/tests/check/meson.build
 +++ b/subprojects/gst-plugins-bad/tests/check/meson.build
 @@ -94,6 +94,7 @@ base_tests = [
@@ -686,5 +686,5 @@ index f8e96f72f8..d3d923b7bd 100644
    [['elements/vkcolorconvert.c'], not gstvulkan_dep.found(), [gstvulkan_dep]],
    [['libs/vkwindow.c'], not gstvulkan_dep.found(), [gstvulkan_dep]],
 -- 
-2.25.1
+2.34.1
 

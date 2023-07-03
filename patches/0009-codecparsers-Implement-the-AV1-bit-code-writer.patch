@@ -1,4 +1,4 @@
-From acfa577b831f97a16bffced6ca88d5a09c1db15d Mon Sep 17 00:00:00 2001
+From 79e52f02a4744480b4be151f733cc02008f17787 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 19 Jul 2022 17:33:13 +0800
 Subject: [PATCH 09/14] codecparsers: Implement the AV1 bit code writer.
@@ -2593,5 +2593,5 @@ index b462628604..94c1a53aa4 100644
  codecparser_headers = [
    'codecparsers-prelude.h',
 -- 
-2.25.1
+2.34.1
 
