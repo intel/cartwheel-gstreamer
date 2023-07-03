@@ -1,4 +1,4 @@
-From b9e82dd4bf564ff47b2386daefb0de86a5ef68f7 Mon Sep 17 00:00:00 2001
+From 491a0ccaae2d23eedcdc9f4de3c411a1d8fa97ca Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 10 Nov 2022 17:00:28 +0800
 Subject: [PATCH 01/14] va: encoder: extend prepare_output() virtual function.
@@ -114,7 +114,7 @@ index 8c9b570ad1..eca2b72415 100644
  void                  gst_va_base_enc_update_property_uint (GstVaBaseEnc * base,
                                                              guint32 * old_val,
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index 5865400397..94e786fb1e 100644
+index 7bd54e62b6..70bba65475 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 @@ -3037,11 +3037,13 @@ gst_va_h264_enc_flush (GstVideoEncoder * venc)
@@ -192,5 +192,5 @@ index 7f1f326b94..0357d41249 100644
  
  /* *INDENT-OFF* */
 -- 
-2.25.1
+2.34.1
 

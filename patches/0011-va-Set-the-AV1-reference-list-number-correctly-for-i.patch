@@ -1,4 +1,4 @@
-From ce05db675a5aac8390148df67a00266037e5076a Mon Sep 17 00:00:00 2001
+From c9b59811d54282508e33c7362f79452f104d389f Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 1 May 2023 23:34:58 +0800
 Subject: [PATCH 11/14] va: Set the AV1 reference list number correctly for iHD
@@ -32,5 +32,5 @@ index d1e8ed1d0e..b524b00cf2 100644
  }
  
 -- 
-2.25.1
+2.34.1
 

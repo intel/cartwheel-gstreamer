@@ -1,7 +1,7 @@
-From a2de84b2ad8af4f565d468c94dc9bd830ba55a8a Mon Sep 17 00:00:00 2001
+From 638e062bedb8d6d9fd8b0e14192c1d68f104898e Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 12 Sep 2022 14:48:50 +0800
-Subject: [PATCH 1/2] va: Implement the vaav1enc plugin.
+Subject: [PATCH 13/14] va: Implement the vaav1enc plugin.
 
 ---
  .../gst-plugins-bad/sys/va/gstvaav1enc.c      | 4453 +++++++++++++++++
@@ -4554,5 +4554,5 @@ index 43e83b02de..f1fd314c2c 100644
          GST_DEBUG ("No encoder implementation for %" GST_FOURCC_FORMAT,
              GST_FOURCC_ARGS (codec));
 -- 
-2.25.1
+2.34.1
 

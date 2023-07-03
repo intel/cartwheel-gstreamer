@@ -1,4 +1,4 @@
-From 5696a104600e0d66656cdbec25f68def4c0b3b99 Mon Sep 17 00:00:00 2001
+From 6d3b7134271609d6520e3be07ffaa875efe351e1 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Sun, 11 Jun 2023 20:17:19 +0800
 Subject: [PATCH 12/14] va: baseenc: Extend the create_output_buffer() to
@@ -64,7 +64,7 @@ index 0007a13e29..05b72ec023 100644
                                                             GstVaEncodePicture * picture,
                                                             guint8 * data,
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index 94e786fb1e..7db58e7430 100644
+index 70bba65475..82b1271429 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 @@ -3056,7 +3056,8 @@ gst_va_h264_enc_prepare_output (GstVaBaseEnc * base,
@@ -92,10 +92,10 @@ index 0357d41249..8dbc0f576d 100644
      GST_ERROR_OBJECT (base, "Failed to create output buffer");
      return FALSE;
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-index 1e1379b4ca..a392954011 100644
+index 80da43a9d5..5b8e3f3b6e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -2599,7 +2599,8 @@ gst_va_vp9_enc_prepare_output (GstVaBaseEnc * base,
+@@ -2600,7 +2600,8 @@ gst_va_vp9_enc_prepare_output (GstVaBaseEnc * base,
      if (self->frames_in_super_num > 0) {
        buf = _vp9_create_super_frame_output_buffer (self, frame);
      } else {
@@ -106,5 +106,5 @@ index 1e1379b4ca..a392954011 100644
      if (!buf) {
        GST_ERROR_OBJECT (base, "Failed to create output buffer%s",
 -- 
-2.25.1
+2.34.1
 

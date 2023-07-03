@@ -1,4 +1,4 @@
-From 0cbe8ce959c0a3c13d32d5814c81224de0df60d0 Mon Sep 17 00:00:00 2001
+From 5171fc5cab6c49195ee05e3ba85bb9ffd9d809bc Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 3 Nov 2022 20:17:23 +0800
 Subject: [PATCH 14/14] va: implement jpeg encoder.
@@ -632,7 +632,7 @@ index 94c1a53aa4..b863cfdbb2 100644
  codecparser_headers = [
    'codecparsers-prelude.h',
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-index 14acddbadc..631a42359b 100644
+index 075943b096..b37c2cb87f 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 @@ -2754,7 +2754,7 @@ gst_va_av1_enc_reconfig (GstVaBaseEnc * base)
@@ -703,7 +703,7 @@ index 8d2be78a3a..a3503bde5e 100644
  gboolean              gst_va_encoder_get_reconstruct_pool_config (GstVaEncoder * self,
                                                                    GstCaps ** caps,
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index 7db58e7430..c281014a5b 100644
+index 82b1271429..1ca89e0141 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 @@ -1630,7 +1630,7 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
@@ -1888,10 +1888,10 @@ index 0000000000..7ffd375441
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-index a392954011..7f97bad88d 100644
+index 5b8e3f3b6e..c3b6bb2c11 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -2088,7 +2088,7 @@ gst_va_vp9_enc_reconfig (GstVaBaseEnc * base)
+@@ -2089,7 +2089,7 @@ gst_va_vp9_enc_reconfig (GstVaBaseEnc * base)
    if (!gst_va_encoder_open (base->encoder, base->profile,
            GST_VIDEO_INFO_FORMAT (&base->input_state->info), base->rt_format,
            base->width, base->height, base->codedbuf_size, max_ref_frames,
@@ -2208,7 +2208,7 @@ index 0000000000..ce22e65e7e
 +
 +GST_CHECK_MAIN (jpegbitwriter);
 diff --git a/subprojects/gst-plugins-bad/tests/check/meson.build b/subprojects/gst-plugins-bad/tests/check/meson.build
-index d3d923b7bd..fc3e0a42ed 100644
+index d06f9ac61b..d5b3a5e5f1 100644
 --- a/subprojects/gst-plugins-bad/tests/check/meson.build
 +++ b/subprojects/gst-plugins-bad/tests/check/meson.build
 @@ -91,6 +91,7 @@ base_tests = [
@@ -2220,5 +2220,5 @@ index d3d923b7bd..fc3e0a42ed 100644
    [['libs/h265bitwriter.c'], false, [gstcodecparsers_dep]],
    [['libs/vkformat.c'], not gstvulkan_dep.found(), [gstvulkan_dep]],
 -- 
-2.25.1
+2.34.1
 

@@ -1,23 +1,23 @@
-From 63c077cc0a71d0a260de93d25dfe6603e022707f Mon Sep 17 00:00:00 2001
+From 5567b7494b3aca191c8fe3b0661c204efc196e76 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
 Subject: [PATCH 04/14] va: Implement the vavp9enc plugin.
 
 ---
- .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3185 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3184 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvavp9enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +-
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
- 4 files changed, 3229 insertions(+), 1 deletion(-)
+ 4 files changed, 3228 insertions(+), 1 deletion(-)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 new file mode 100644
-index 0000000000..1e1379b4ca
+index 0000000000..80da43a9d5
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -0,0 +1,3185 @@
+@@ -0,0 +1,3184 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -77,6 +77,7 @@ index 0000000000..1e1379b4ca
 +#include "gstvacaps.h"
 +#include "gstvaprofile.h"
 +#include "gstvadisplay_priv.h"
++#include "gstvapluginutils.h"
 +
 +GST_DEBUG_CATEGORY_STATIC (gst_va_vp9enc_debug);
 +#define GST_CAT_DEFAULT gst_va_vp9enc_debug
@@ -2239,7 +2240,7 @@ index 0000000000..1e1379b4ca
 +    .reconstructed_frame =
 +        gst_va_encode_picture_get_reconstruct_surface (va_frame->picture),
 +    /* Set it later. */
-+    .reference_frames = { },
++    .reference_frames = { 0, },
 +    .coded_buf = va_frame->picture->coded_buffer,
 +    .ref_flags.bits = {
 +      .force_kf = 0,
@@ -2283,8 +2284,8 @@ index 0000000000..1e1379b4ca
 +    .chroma_dc_qindex_delta = 0,
 +    .filter_level = self->rc.filter_level,
 +    .sharpness_level = self->rc.sharpness_level,
-+    .ref_lf_delta = { },
-+    .mode_lf_delta = { },
++    .ref_lf_delta = { 0, },
++    .mode_lf_delta = { 0, },
 +    .bit_offset_ref_lf_delta = 0,
 +    .bit_offset_mode_lf_delta = 0,
 +    .bit_offset_lf_level = 0,
@@ -2473,7 +2474,7 @@ index 0000000000..1e1379b4ca
 +  guint total_sz, offset;
 +  GstVaVp9EncFrame *frame_enc;
 +  GstBuffer *buf = NULL;
-+  gint frame_size[GST_VP9_MAX_FRAMES_IN_SUPERFRAME] = { };
++  gint frame_size[GST_VP9_MAX_FRAMES_IN_SUPERFRAME] = { 0, };
 +  guint num;
 +
 +  g_assert ((_enc_frame (last_frame)->flags & FRAME_TYPE_REPEAT) == 0);
@@ -2873,7 +2874,6 @@ index 0000000000..1e1379b4ca
 +  va_enc_class->codec = VP9;
 +  va_enc_class->entrypoint = cdata->entrypoint;
 +  va_enc_class->render_device_path = g_strdup (cdata->render_device_path);
-+
 +  sink_pad_templ = gst_pad_template_new ("sink", GST_PAD_SINK, GST_PAD_ALWAYS,
 +      cdata->sink_caps);
 +  gst_element_class_add_pad_template (element_class, sink_pad_templ);
@@ -2902,8 +2902,7 @@ index 0000000000..1e1379b4ca
 +      GST_DEBUG_FUNCPTR (gst_va_vp9_enc_prepare_output);
 +
 +  {
-+    display =
-+        gst_va_display_drm_new_from_path (va_enc_class->render_device_path);
++    display = gst_va_display_platform_new (va_enc_class->render_device_path);
 +    encoder = gst_va_encoder_new (display, va_enc_class->codec,
 +        va_enc_class->entrypoint);
 +    if (gst_va_encoder_get_rate_control_enum (encoder,
@@ -3291,5 +3290,5 @@ index 0b186377d1..43e83b02de 100644
          GST_DEBUG ("No encoder implementation for %" GST_FOURCC_FORMAT,
              GST_FOURCC_ARGS (codec));
 -- 
-2.25.1
+2.34.1
 
