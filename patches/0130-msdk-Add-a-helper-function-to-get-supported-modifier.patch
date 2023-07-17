@@ -1,4 +1,4 @@
-From a62b0482a86849c00836f82755ed936b2e1975c1 Mon Sep 17 00:00:00 2001
+From 5a1570f86e3eabdb6fbb556b47b151c762500e7a Mon Sep 17 00:00:00 2001
 From: Yinhang Liu <yinhang.liu@intel.com>
 Date: Thu, 18 May 2023 14:36:23 +0800
 Subject: [PATCH 130/138] msdk: Add a helper function to get supported
@@ -8,12 +8,12 @@ The modifiers will be used when creating caps for dma feature.
 
 co-authored-by: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 ---
- .../sys/msdk/gstmsdkallocator_libva.c         | 76 +++++++++++++++++++
+ .../sys/msdk/gstmsdkallocator_libva.c         | 77 +++++++++++++++++++
  .../sys/msdk/gstmsdkallocator_libva.h         |  4 +
- 2 files changed, 80 insertions(+)
+ 2 files changed, 81 insertions(+)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index b2ab8bf6d1..88c2c3ef96 100644
+index b2ab8bf6d1..caa0a1b5f4 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 @@ -32,6 +32,7 @@
@@ -24,7 +24,7 @@ index b2ab8bf6d1..88c2c3ef96 100644
  #include <unistd.h>
  #include "gstmsdkallocator.h"
  #include "gstmsdkallocator_libva.h"
-@@ -776,3 +777,78 @@ error_destroy_va_surface:
+@@ -776,3 +777,79 @@ error_destroy_va_surface:
      return FALSE;
    }
  }
@@ -62,7 +62,7 @@ index b2ab8bf6d1..88c2c3ef96 100644
 +  GValue gmod = G_VALUE_INIT;
 +  guint usage_hint = VA_SURFACE_ATTRIB_USAGE_HINT_GENERIC;
 +  GstVaDisplay *display =
-+        (GstVaDisplay *) gst_msdk_context_get_va_display (context);
++      (GstVaDisplay *) gst_msdk_context_get_va_display (context);
 +
 +  g_return_val_if_fail (context != NULL, FALSE);
 +  g_return_val_if_fail (format != GST_VIDEO_FORMAT_UNKNOWN, FALSE);
@@ -78,7 +78,8 @@ index b2ab8bf6d1..88c2c3ef96 100644
 +  }
 +
 +  if (usage_hint != VA_SURFACE_ATTRIB_USAGE_HINT_GENERIC) {
-+    mod_gen = gst_va_dmabuf_get_modifier_for_format (display, format, usage_hint);
++    mod_gen =
++        gst_va_dmabuf_get_modifier_for_format (display, format, usage_hint);
 +    if (mod_gen != mod && mod_gen != DRM_FORMAT_MOD_INVALID &&
 +        mod_gen != DRM_FORMAT_MOD_LINEAR) {
 +      g_value_set_uint64 (&gmod, mod_gen);

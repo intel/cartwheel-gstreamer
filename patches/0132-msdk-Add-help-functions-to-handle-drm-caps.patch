@@ -1,16 +1,16 @@
-From 8a2417138b311e2fddae3ccf79621ed47ba82ca3 Mon Sep 17 00:00:00 2001
+From 387ab40f93bbf823c36660047938ca0e01b216d7 Mon Sep 17 00:00:00 2001
 From: Yinhang Liu <yinhang.liu@intel.com>
 Date: Tue, 30 May 2023 16:24:46 +0800
 Subject: [PATCH 132/138] msdk: Add help functions to handle drm caps
 
 Co-authored-by: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 ---
- .../gst-plugins-bad/sys/msdk/gstmsdkcaps.c    | 321 +++++++++++++++++-
+ .../gst-plugins-bad/sys/msdk/gstmsdkcaps.c    | 327 +++++++++++++++++-
  .../gst-plugins-bad/sys/msdk/gstmsdkcaps.h    |  21 ++
- 2 files changed, 328 insertions(+), 14 deletions(-)
+ 2 files changed, 334 insertions(+), 14 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c
-index 7472eaa165..e2c2e74464 100644
+index 2fc498d146..e83b6facb8 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c
 @@ -30,9 +30,11 @@
@@ -69,7 +69,7 @@ index 7472eaa165..e2c2e74464 100644
      if (!drm_fmt_str)
        continue;
  
-@@ -2022,3 +2018,300 @@ gst_msdkcaps_remove_structure (GstCaps * caps, const gchar * features)
+@@ -2024,3 +2020,306 @@ gst_msdkcaps_remove_structure (GstCaps * caps, const gchar * features)
  
    return TRUE;
  }
@@ -123,26 +123,31 @@ index 7472eaa165..e2c2e74464 100644
 +
 +
 +static gboolean
-+_get_used_formats (GValue * used_fmts, const GValue * fmt,
++_get_used_formats (GValue * used_fmts, const gchar * fmt_str,
 +    const GValue * refer_fmts)
 +{
-+  const gchar *fmt_str, *str;
++  const gchar *str;
 +  guint len;
-+  guint size;
++  guint size = 1;
 +  gboolean ret = FALSE;
 +  GstVideoFormat vfmt;
 +  guint32 drm_fourcc;
++  const GValue *val;
 +
-+
-+  if (!fmt || !refer_fmts)
++  if (!fmt_str || !refer_fmts)
 +    return FALSE;
 +
-+  fmt_str = g_value_get_string (fmt);
 +  len = strlen (fmt_str);
-+  size = gst_value_list_get_size (refer_fmts);
++
++  if (GST_VALUE_HOLDS_LIST (refer_fmts))
++    size = gst_value_list_get_size (refer_fmts);
 +
 +  for (guint i = 0; i < size; i++) {
-+    const GValue *val = gst_value_list_get_value (refer_fmts, i);
++    if (GST_VALUE_HOLDS_LIST (refer_fmts))
++      val = gst_value_list_get_value (refer_fmts, i);
++    else
++      val = refer_fmts;
++
 +    const gchar *drm_fmt = g_value_get_string (val);
 +
 +    drm_fourcc = gst_video_dma_drm_fourcc_from_string (drm_fmt, NULL);
@@ -181,9 +186,8 @@ index 7472eaa165..e2c2e74464 100644
 +    GstCapsFeatures *f = gst_caps_get_features (ret, i);
 +    if (!gst_caps_features_contains (f, GST_CAPS_FEATURE_MEMORY_DMABUF))
 +      continue;
-+
 +    dma_s = gst_caps_get_structure (ret, i);
-+    fmts = gst_structure_get_value (dma_s, "format");
++    fmts = gst_structure_get_value (dma_s, "drm-format");
 +    if (!fmts)
 +      continue;
 +
@@ -200,19 +204,20 @@ index 7472eaa165..e2c2e74464 100644
 +
 +    g_value_init (&used_fmts, GST_TYPE_LIST);
 +    if (G_VALUE_HOLDS_STRING (fmts)) {
-+      success = _get_used_formats (&used_fmts, fmts, refer_fmts);
++      success =
++          _get_used_formats (&used_fmts, g_value_get_string (fmts), refer_fmts);
 +    } else if (GST_VALUE_HOLDS_LIST (fmts)) {
 +      guint n = gst_value_list_get_size (fmts);
 +      for (guint k = 0; k < n; k++) {
 +        const GValue *val = gst_value_list_get_value (fmts, k);
-+        if (_get_used_formats (&used_fmts, val, refer_fmts))
++        if (_get_used_formats (&used_fmts, g_value_get_string (val),
++                refer_fmts))
 +          success = TRUE;
 +      }
 +    }
 +
 +    if (success) {
 +      gst_structure_set_value (dma_s, "drm-format", &used_fmts);
-+      gst_structure_remove_field (dma_s, "format");
 +    }
 +
 +    g_value_unset (&used_fmts);
@@ -248,7 +253,8 @@ index 7472eaa165..e2c2e74464 100644
 +      const GValue *drm_fmts = gst_structure_get_value (s, "drm-format");
 +
 +      g_value_init (&used_fmts, GST_TYPE_LIST);
-+      if (!_get_used_formats (&used_fmts, &gfmt, drm_fmts)) {
++      if (!_get_used_formats (&used_fmts, gst_video_format_to_string (fmt),
++              drm_fmts)) {
 +        g_value_unset (&used_fmts);
 +        goto failed;
 +      }
@@ -256,8 +262,8 @@ index 7472eaa165..e2c2e74464 100644
 +      gst_structure_set_value (s, "drm-format", &used_fmts);
 +      g_value_unset (&used_fmts);
 +
-+      if (gst_structure_has_field (s, "format"))
-+        gst_structure_remove_field (s, "format");
++      // if (gst_structure_has_field (s, "format"))
++      //   gst_structure_remove_field (s, "format");
 +    } else {
 +      const GValue *fmts = gst_structure_get_value (s, "format");
 +      if (!gst_value_can_intersect (&gfmt, fmts))

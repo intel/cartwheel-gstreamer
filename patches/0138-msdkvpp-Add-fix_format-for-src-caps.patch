@@ -1,14 +1,14 @@
-From b95769e6c06dc85ae10e767bd2733058e7979516 Mon Sep 17 00:00:00 2001
+From 2ac84ad339e848dde419e3ed9b32282f62d44e12 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 26 Jun 2023 18:29:01 +0800
 Subject: [PATCH 138/138] msdkvpp: Add fix_format for src caps
 
 ---
- .../gst-plugins-bad/sys/msdk/gstmsdkvpputil.c | 143 ++++++++++++++++--
- 1 file changed, 130 insertions(+), 13 deletions(-)
+ .../gst-plugins-bad/sys/msdk/gstmsdkvpputil.c | 141 ++++++++++++++++--
+ 1 file changed, 128 insertions(+), 13 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
-index 938324d51e..05fbb30bf3 100644
+index 938324d51e..9ed9334866 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
 @@ -29,6 +29,11 @@
@@ -23,7 +23,7 @@ index 938324d51e..05fbb30bf3 100644
  #define SWAP_GINT(a, b) do {      \
          const gint t = a; a = b; b = t; \
      } while (0)
-@@ -52,6 +57,122 @@ gst_msdkvpp_is_deinterlace_enabled (GstMsdkVPP * msdkvpp, GstVideoInfo * vip)
+@@ -52,6 +57,120 @@ gst_msdkvpp_is_deinterlace_enabled (GstMsdkVPP * msdkvpp, GstVideoInfo * vip)
    return deinterlace;
  }
  
@@ -39,7 +39,7 @@ index 938324d51e..05fbb30bf3 100644
 +  gboolean is_dma = FALSE;
 +  gboolean fixate = FALSE;
 +#ifndef _WIN32
-+  guint64 modifier;
++  guint64 modifier = DRM_FORMAT_MOD_INVALID;
 +  guint32 fourcc;
 +#endif
 +
@@ -74,7 +74,6 @@ index 938324d51e..05fbb30bf3 100644
 +        if (G_VALUE_HOLDS_STRING (val)) {
 +#ifndef _WIN32
 +          if (is_dma) {
-+            modifier = DRM_FORMAT_MOD_INVALID;
 +            fourcc = gst_video_dma_drm_fourcc_from_string
 +                (g_value_get_string (val), &modifier);
 +            fmt = gst_va_video_format_from_drm_fourcc (fourcc);
@@ -95,7 +94,6 @@ index 938324d51e..05fbb30bf3 100644
 +    } else if (G_VALUE_HOLDS_STRING (format)) {
 +#ifndef _WIN32
 +      if (is_dma) {
-+        modifier = DRM_FORMAT_MOD_INVALID;
 +        fourcc = gst_video_dma_drm_fourcc_from_string
 +            (g_value_get_string (format), &modifier);
 +        fmt = gst_va_video_format_from_drm_fourcc (fourcc);
@@ -146,7 +144,7 @@ index 938324d51e..05fbb30bf3 100644
  static gboolean
  fixate_output_frame_size (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
      GstStructure * outs)
-@@ -529,11 +650,15 @@ static GstCaps *
+@@ -529,11 +648,15 @@ static GstCaps *
  _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
      GstCaps * srccaps)
  {
@@ -165,7 +163,7 @@ index 938324d51e..05fbb30bf3 100644
    /* make a copy */
    structure = gst_structure_copy (structure);
  
-@@ -541,15 +666,6 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
+@@ -541,15 +664,6 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
      gst_structure_set (structure, "pixel-aspect-ratio", GST_TYPE_FRACTION, 1,
          1, NULL);
  
@@ -181,7 +179,7 @@ index 938324d51e..05fbb30bf3 100644
    /* Fixate the frame size */
    if (!fixate_output_frame_size (thiz, vinfo, structure))
      goto fixate_failed;
-@@ -577,7 +693,8 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
+@@ -577,7 +691,8 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
  fixate_failed:
    {
      GST_WARNING_OBJECT (thiz, "Could not fixate src caps");
