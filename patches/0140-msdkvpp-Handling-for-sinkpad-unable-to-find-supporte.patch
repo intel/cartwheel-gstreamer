@@ -1,0 +1,46 @@
+From 6e14e2160827daa5c30085c343c00f38c7cee0a7 Mon Sep 17 00:00:00 2001
+From: "Cheah, Vincent Beng Keat" <vincent.beng.keat.cheah@intel.com>
+Date: Tue, 25 Jul 2023 11:40:11 +0800
+Subject: [PATCH 2/2] msdkvpp: Handling for sinkpad unable to find supported
+ format
+
+---
+ subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
+index 05fbb30bf3..1a10a76ffb 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
+@@ -68,6 +68,7 @@ fixate_output_format (GstMsdkVPP * thiz, GstVideoInfo * vinfo, GstCaps * caps)
+   const GValue *format;
+   gboolean is_dma = FALSE;
+   gboolean fixate = FALSE;
++  gboolean is_negotiated = FALSE;
+ #ifndef _WIN32
+   guint64 modifier;
+   guint32 fourcc;
+@@ -118,6 +119,7 @@ fixate_output_format (GstMsdkVPP * thiz, GstVideoInfo * vinfo, GstCaps * caps)
+             continue;
+           if (fmt == GST_VIDEO_INFO_FORMAT (vinfo)) {
+             fixate = TRUE;
++            is_negotiated = TRUE;
+             break;
+           }
+         }
+@@ -144,6 +146,12 @@ fixate_output_format (GstMsdkVPP * thiz, GstVideoInfo * vinfo, GstCaps * caps)
+       break;
+   }
+ 
++  /* sinkpad format could unable intercept supportable output format. */
++  /* use last one for the negotiaton.  */
++  if (gst_caps_get_size (caps) == i && !is_negotiated) {
++    i--;
++  }
++
+   out = gst_structure_copy (gst_caps_get_structure (caps, i));
+   features = gst_caps_features_copy (gst_caps_get_features (caps, i));
+ 
+-- 
+2.34.1
+

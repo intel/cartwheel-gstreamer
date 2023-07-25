@@ -1,0 +1,781 @@
+From 9620db2e79a2419fdff4041d613b8984cca7587d Mon Sep 17 00:00:00 2001
+From: "Cheah, Vincent Beng Keat" <vincent.beng.keat.cheah@intel.com>
+Date: Tue, 25 Jul 2023 11:37:02 +0800
+Subject: [PATCH] waylandsink: Add DRM modifiers support
+
+---
+ .../ext/gtk/gstgtkwaylandsink.c               | 51 ++++++++++----
+ .../ext/wayland/gstwaylandsink.c              | 50 ++++++++++----
+ .../ext/wayland/gstwaylandsink.h              |  7 +-
+ .../gst-libs/gst/wayland/gstwldisplay.c       | 67 +++++++++++++++++--
+ .../gst-libs/gst/wayland/gstwldisplay.h       | 56 ++++++++--------
+ .../gst-libs/gst/wayland/gstwllinuxdmabuf.c   | 14 ++--
+ .../gst-libs/gst/wayland/gstwllinuxdmabuf.h   |  9 +--
+ .../gst-libs/gst/wayland/gstwlshmallocator.c  |  3 +-
+ .../gst-libs/gst/wayland/gstwlvideoformat.c   | 10 +--
+ .../gst-libs/gst/wayland/gstwlvideoformat.h   | 20 +++---
+ 10 files changed, 193 insertions(+), 94 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/ext/gtk/gstgtkwaylandsink.c b/subprojects/gst-plugins-bad/ext/gtk/gstgtkwaylandsink.c
+index d5e481f47b..8885ea7e34 100644
+--- a/subprojects/gst-plugins-bad/ext/gtk/gstgtkwaylandsink.c
++++ b/subprojects/gst-plugins-bad/ext/gtk/gstgtkwaylandsink.c
+@@ -50,8 +50,7 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
+     GST_PAD_SINK,
+     GST_PAD_ALWAYS,
+     GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE (WL_VIDEO_FORMATS) ";"
+-        GST_VIDEO_CAPS_MAKE_WITH_FEATURES (GST_CAPS_FEATURE_MEMORY_DMABUF,
+-            WL_VIDEO_FORMATS))
++        GST_VIDEO_DMA_DRM_CAPS_MAKE)
+     );
+ 
+ static void gst_gtk_wayland_sink_get_property (GObject * object,
+@@ -109,6 +108,7 @@ typedef struct _GstGtkWaylandSinkPrivate
+ 
+   gboolean video_info_changed;
+   GstVideoInfo video_info;
++  guint64 modifier;
+   GstCaps *caps;
+ 
+   gboolean redraw_pending;
+@@ -797,10 +797,11 @@ gst_gtk_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
+   if (priv->display) {
+     GValue shm_list = G_VALUE_INIT, dmabuf_list = G_VALUE_INIT;
+     GValue value = G_VALUE_INIT;
+-    GArray *formats;
++    GArray *formats, *modifiers;
+     gint i;
+     guint fmt;
+     GstVideoFormat gfmt;
++    guint64 mod;
+ 
+     g_value_init (&shm_list, GST_TYPE_LIST);
+     g_value_init (&dmabuf_list, GST_TYPE_LIST);
+@@ -822,17 +823,19 @@ gst_gtk_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
+ 
+     /* Add corresponding dmabuf formats */
+     formats = gst_wl_display_get_dmabuf_formats (priv->display);
++    modifiers = gst_wl_display_get_dmabuf_modifiers (priv->display);
+     for (i = 0; i < formats->len; i++) {
+       fmt = g_array_index (formats, uint32_t, i);
+       gfmt = gst_wl_dmabuf_format_to_video_format (fmt);
++      mod = g_array_index (modifiers, guint64, i);
+       if (gfmt != GST_VIDEO_FORMAT_UNKNOWN) {
+         g_value_init (&value, G_TYPE_STRING);
+-        g_value_set_static_string (&value, gst_video_format_to_string (gfmt));
++        g_value_take_string (&value, gst_wl_dmabuf_format_to_string (fmt, mod));
+         gst_value_list_append_and_take_value (&dmabuf_list, &value);
+       }
+     }
+ 
+-    gst_structure_take_value (gst_caps_get_structure (caps, 1), "format",
++    gst_structure_take_value (gst_caps_get_structure (caps, 1), "drm-format",
+         &dmabuf_list);
+ 
+     GST_DEBUG_OBJECT (self, "display caps: %" GST_PTR_FORMAT, caps);
+@@ -948,14 +951,26 @@ gst_gtk_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
+       gst_gtk_wayland_sink_get_instance_private (self);
+   gboolean use_dmabuf;
+   GstVideoFormat format;
++  GstVideoInfoDmaDrm drm_info;
+ 
+   GST_DEBUG_OBJECT (self, "set caps %" GST_PTR_FORMAT, caps);
+ 
+-  /* extract info from caps */
+-  if (!gst_video_info_from_caps (&priv->video_info, caps))
+-    goto invalid_format;
++  gst_video_info_dma_drm_init (&drm_info);
++
++  if (gst_video_is_dma_drm_caps (caps)) {
++    if (!gst_video_info_dma_drm_from_caps (&drm_info, caps))
++      goto invalid_format;
++
++    if (!gst_video_info_dma_drm_to_video_info (&drm_info, &priv->video_info))
++      goto invalid_format;
++  } else {
++    /* extract info from caps */
++    if (!gst_video_info_from_caps (&priv->video_info, caps))
++      goto invalid_format;
++  }
+ 
+   format = GST_VIDEO_INFO_FORMAT (&priv->video_info);
++  priv->modifier = drm_info.drm_modifier;
+   priv->video_info_changed = TRUE;
+   priv->skip_dumb_buffer_copy = FALSE;
+ 
+@@ -970,9 +985,11 @@ gst_gtk_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
+ 
+   /* validate the format base on the memory type. */
+   if (use_dmabuf) {
+-    if (!gst_wl_display_check_format_for_dmabuf (priv->display, format))
++    if (!gst_wl_display_check_format_for_dmabuf (priv->display, format,
++            drm_info.drm_modifier))
+       goto unsupported_format;
+-  } else if (!gst_wl_display_check_format_for_shm (priv->display, format)) {
++  } else if (!gst_wl_display_check_format_for_shm (priv->display, format,
++          drm_info.drm_modifier)) {
+     /* Note: we still support dmabuf in this case, but formats must also be
+      * supported on SHM interface to ensure a fallback is possible as we are
+      * not guarantied we'll get dmabuf in the buffers. */
+@@ -1037,6 +1054,8 @@ gst_gtk_wayland_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
+     GstStructure *config;
+     pool = gst_wl_video_buffer_pool_new ();
+     config = gst_buffer_pool_get_config (pool);
++    gst_buffer_pool_config_set_params (config,
++        caps, priv->video_info.size, 2, 0);
+     gst_buffer_pool_config_set_allocator (config,
+         gst_wl_shm_allocator_get (), NULL);
+     gst_buffer_pool_set_config (pool, config);
+@@ -1117,6 +1136,7 @@ gst_gtk_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
+   GstVideoFormat format;
+   GstMemory *mem;
+   struct wl_buffer *wbuf = NULL;
++  guint64 modifier;
+ 
+   GstFlowReturn ret = GST_FLOW_OK;
+ 
+@@ -1162,7 +1182,8 @@ gst_gtk_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
+       "display, creating it", buffer);
+ 
+   format = GST_VIDEO_INFO_FORMAT (&priv->video_info);
+-  if (gst_wl_display_check_format_for_dmabuf (priv->display, format)) {
++  modifier = priv->modifier;
++  if (gst_wl_display_check_format_for_dmabuf (priv->display, format, modifier)) {
+     guint i, nb_dmabuf = 0;
+ 
+     for (i = 0; i < gst_buffer_n_memory (buffer); i++)
+@@ -1171,7 +1192,7 @@ gst_gtk_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
+ 
+     if (nb_dmabuf && (nb_dmabuf == gst_buffer_n_memory (buffer)))
+       wbuf = gst_wl_linux_dmabuf_construct_wl_buffer (buffer, priv->display,
+-          &priv->video_info);
++          &priv->video_info, modifier);
+ 
+     /* DMABuf did not work, let try and make this a dmabuf, it does not matter
+      * if it was a SHM since the compositor needs to copy that anyway, and
+@@ -1195,7 +1216,7 @@ gst_gtk_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
+       /* attach a wl_buffer if there isn't one yet */
+       if (G_UNLIKELY (!wlbuffer)) {
+         wbuf = gst_wl_linux_dmabuf_construct_wl_buffer (to_render,
+-            priv->display, &priv->video_info);
++            priv->display, &priv->video_info, modifier);
+ 
+         if (G_UNLIKELY (!wbuf)) {
+           GST_WARNING_OBJECT (self, "failed to import DRM Dumb dmabuf");
+@@ -1226,7 +1247,9 @@ gst_gtk_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
+   }
+ 
+ handle_shm:
+-  if (!wbuf && gst_wl_display_check_format_for_shm (priv->display, format)) {
++  if (!wbuf
++      && gst_wl_display_check_format_for_shm (priv->display, format,
++          modifier)) {
+     if (gst_buffer_n_memory (buffer) == 1 && gst_is_fd_memory (mem))
+       wbuf = gst_wl_shm_memory_construct_wl_buffer (mem, priv->display,
+           &priv->video_info);
+diff --git a/subprojects/gst-plugins-bad/ext/wayland/gstwaylandsink.c b/subprojects/gst-plugins-bad/ext/wayland/gstwaylandsink.c
+index 13800fd639..1455582012 100644
+--- a/subprojects/gst-plugins-bad/ext/wayland/gstwaylandsink.c
++++ b/subprojects/gst-plugins-bad/ext/wayland/gstwaylandsink.c
+@@ -77,8 +77,7 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
+     GST_PAD_SINK,
+     GST_PAD_ALWAYS,
+     GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE (WL_VIDEO_FORMATS) ";"
+-        GST_VIDEO_CAPS_MAKE_WITH_FEATURES (GST_CAPS_FEATURE_MEMORY_DMABUF,
+-            WL_VIDEO_FORMATS))
++        GST_VIDEO_DMA_DRM_CAPS_MAKE)
+     );
+ 
+ static void gst_wayland_sink_get_property (GObject * object,
+@@ -549,10 +548,11 @@ gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
+   if (self->display) {
+     GValue shm_list = G_VALUE_INIT, dmabuf_list = G_VALUE_INIT;
+     GValue value = G_VALUE_INIT;
+-    GArray *formats;
++    GArray *formats, *modifiers;
+     gint i;
+     guint fmt;
+     GstVideoFormat gfmt;
++    guint64 mod;
+ 
+     g_value_init (&shm_list, GST_TYPE_LIST);
+     g_value_init (&dmabuf_list, GST_TYPE_LIST);
+@@ -574,17 +574,19 @@ gst_wayland_sink_get_caps (GstBaseSink * bsink, GstCaps * filter)
+ 
+     /* Add corresponding dmabuf formats */
+     formats = gst_wl_display_get_dmabuf_formats (self->display);
++    modifiers = gst_wl_display_get_dmabuf_modifiers (self->display);
+     for (i = 0; i < formats->len; i++) {
+       fmt = g_array_index (formats, uint32_t, i);
+       gfmt = gst_wl_dmabuf_format_to_video_format (fmt);
++      mod = g_array_index (modifiers, guint64, i);
+       if (gfmt != GST_VIDEO_FORMAT_UNKNOWN) {
+         g_value_init (&value, G_TYPE_STRING);
+-        g_value_set_static_string (&value, gst_video_format_to_string (gfmt));
++        g_value_take_string (&value, gst_wl_dmabuf_format_to_string (fmt, mod));
+         gst_value_list_append_and_take_value (&dmabuf_list, &value);
+       }
+     }
+ 
+-    gst_structure_take_value (gst_caps_get_structure (caps, 1), "format",
++    gst_structure_take_value (gst_caps_get_structure (caps, 1), "drm-format",
+         &dmabuf_list);
+ 
+     GST_DEBUG_OBJECT (self, "display caps: %" GST_PTR_FORMAT, caps);
+@@ -692,14 +694,26 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
+   GstWaylandSink *self = GST_WAYLAND_SINK (bsink);;
+   gboolean use_dmabuf;
+   GstVideoFormat format;
++  GstVideoInfoDmaDrm drm_info;
+ 
+   GST_DEBUG_OBJECT (self, "set caps %" GST_PTR_FORMAT, caps);
+ 
+-  /* extract info from caps */
+-  if (!gst_video_info_from_caps (&self->video_info, caps))
+-    goto invalid_format;
++  gst_video_info_dma_drm_init (&drm_info);
++
++  if (gst_video_is_dma_drm_caps (caps)) {
++    if (!gst_video_info_dma_drm_from_caps (&drm_info, caps))
++      goto invalid_format;
++
++    if (!gst_video_info_dma_drm_to_video_info (&drm_info, &self->video_info))
++      goto invalid_format;
++  } else {
++    /* extract info from caps */
++    if (!gst_video_info_from_caps (&self->video_info, caps))
++      goto invalid_format;
++  }
+ 
+   format = GST_VIDEO_INFO_FORMAT (&self->video_info);
++  self->modifier = drm_info.drm_modifier;
+   self->video_info_changed = TRUE;
+   self->skip_dumb_buffer_copy = FALSE;
+ 
+@@ -714,9 +728,11 @@ gst_wayland_sink_set_caps (GstBaseSink * bsink, GstCaps * caps)
+ 
+   /* validate the format base on the memory type. */
+   if (use_dmabuf) {
+-    if (!gst_wl_display_check_format_for_dmabuf (self->display, format))
++    if (!gst_wl_display_check_format_for_dmabuf (self->display, format,
++            drm_info.drm_modifier))
+       goto unsupported_format;
+-  } else if (!gst_wl_display_check_format_for_shm (self->display, format)) {
++  } else if (!gst_wl_display_check_format_for_shm (self->display, format,
++          drm_info.drm_modifier)) {
+     /* Note: we still support dmabuf in this case, but formats must also be
+      * supported on SHM interface to ensure a fallback is possible as we are
+      * not guarantied we'll get dmabuf in the buffers. */
+@@ -757,6 +773,8 @@ gst_wayland_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
+     GstStructure *config;
+     pool = gst_wl_video_buffer_pool_new ();
+     config = gst_buffer_pool_get_config (pool);
++    gst_buffer_pool_config_set_params (config,
++        caps, self->video_info.size, 2, 0);
+     gst_buffer_pool_config_set_allocator (config,
+         gst_wl_shm_allocator_get (), NULL);
+     gst_buffer_pool_set_config (pool, config);
+@@ -838,6 +856,7 @@ gst_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
+   GstVideoFormat format;
+   GstMemory *mem;
+   struct wl_buffer *wbuf = NULL;
++  guint64 modifier;
+ 
+   GstFlowReturn ret = GST_FLOW_OK;
+ 
+@@ -894,7 +913,8 @@ gst_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
+       "display, creating it", buffer);
+ 
+   format = GST_VIDEO_INFO_FORMAT (&self->video_info);
+-  if (gst_wl_display_check_format_for_dmabuf (self->display, format)) {
++  modifier = self->modifier;
++  if (gst_wl_display_check_format_for_dmabuf (self->display, format, modifier)) {
+     guint i, nb_dmabuf = 0;
+ 
+     for (i = 0; i < gst_buffer_n_memory (buffer); i++)
+@@ -903,7 +923,7 @@ gst_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
+ 
+     if (nb_dmabuf && (nb_dmabuf == gst_buffer_n_memory (buffer)))
+       wbuf = gst_wl_linux_dmabuf_construct_wl_buffer (buffer, self->display,
+-          &self->video_info);
++          &self->video_info, modifier);
+ 
+     /* DMABuf did not work, let try and make this a dmabuf, it does not matter
+      * if it was a SHM since the compositor needs to copy that anyway, and
+@@ -927,7 +947,7 @@ gst_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
+       /* attach a wl_buffer if there isn't one yet */
+       if (G_UNLIKELY (!wlbuffer)) {
+         wbuf = gst_wl_linux_dmabuf_construct_wl_buffer (to_render,
+-            self->display, &self->video_info);
++            self->display, &self->video_info, modifier);
+ 
+         if (G_UNLIKELY (!wbuf)) {
+           GST_WARNING_OBJECT (self, "failed to import DRM Dumb dmabuf");
+@@ -958,7 +978,9 @@ gst_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
+   }
+ 
+ handle_shm:
+-  if (!wbuf && gst_wl_display_check_format_for_shm (self->display, format)) {
++  if (!wbuf
++      && gst_wl_display_check_format_for_shm (self->display, format,
++          modifier)) {
+     if (gst_buffer_n_memory (buffer) == 1 && gst_is_fd_memory (mem))
+       wbuf = gst_wl_shm_memory_construct_wl_buffer (mem, self->display,
+           &self->video_info);
+diff --git a/subprojects/gst-plugins-bad/ext/wayland/gstwaylandsink.h b/subprojects/gst-plugins-bad/ext/wayland/gstwaylandsink.h
+index eb1fc7d33e..cdb259d3a4 100644
+--- a/subprojects/gst-plugins-bad/ext/wayland/gstwaylandsink.h
++++ b/subprojects/gst-plugins-bad/ext/wayland/gstwaylandsink.h
+@@ -26,7 +26,6 @@
+ #include <gst/wayland/wayland.h>
+ 
+ G_BEGIN_DECLS
+-
+ #define GST_TYPE_WAYLAND_SINK \
+ 	    (gst_wayland_sink_get_type())
+ #define GST_WAYLAND_SINK(obj) \
+@@ -39,7 +38,6 @@ G_BEGIN_DECLS
+ 	    (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_WAYLAND_SINK))
+ #define GST_WAYLAND_SINK_GET_CLASS(inst) \
+         (G_TYPE_INSTANCE_GET_CLASS ((inst), GST_TYPE_WAYLAND_SINK, GstWaylandSinkClass))
+-
+ typedef struct _GstWaylandSink GstWaylandSink;
+ typedef struct _GstWaylandSinkClass GstWaylandSinkClass;
+ 
+@@ -54,6 +52,7 @@ struct _GstWaylandSink
+ 
+   gboolean video_info_changed;
+   GstVideoInfo video_info;
++  guint64 modifier;
+   gboolean fullscreen;
+   GstCaps *caps;
+ 
+@@ -78,7 +77,9 @@ struct _GstWaylandSinkClass
+   GstVideoSinkClass parent;
+ };
+ 
+-GType gst_wayland_sink_get_type (void) G_GNUC_CONST;
++GType
++gst_wayland_sink_get_type (void)
++    G_GNUC_CONST;
+ 
+ GST_ELEMENT_REGISTER_DECLARE (waylandsink);
+ 
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwldisplay.c b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwldisplay.c
+index 7b492c3614..b113d4221f 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwldisplay.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwldisplay.c
+@@ -30,6 +30,7 @@
+ #include "xdg-shell-client-protocol.h"
+ 
+ #include <errno.h>
++#include <drm_fourcc.h>
+ 
+ #define GST_CAT_DEFAULT gst_wl_display_debug
+ GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
+@@ -52,6 +53,7 @@ typedef struct _GstWlDisplayPrivate
+   struct zwp_linux_dmabuf_v1 *dmabuf;
+   GArray *shm_formats;
+   GArray *dmabuf_formats;
++  GArray *dmabuf_modifiers;
+ 
+   /* private */
+   gboolean own_display;
+@@ -85,6 +87,7 @@ gst_wl_display_init (GstWlDisplay * self)
+ 
+   priv->shm_formats = g_array_new (FALSE, FALSE, sizeof (uint32_t));
+   priv->dmabuf_formats = g_array_new (FALSE, FALSE, sizeof (uint32_t));
++  priv->dmabuf_modifiers = g_array_new (FALSE, FALSE, sizeof (guint64));
+   priv->wl_fd_poll = gst_poll_new (TRUE);
+   priv->buffers = g_hash_table_new (g_direct_hash, g_direct_equal);
+   g_mutex_init (&priv->buffers_mutex);
+@@ -123,6 +126,7 @@ gst_wl_display_finalize (GObject * gobject)
+ 
+   g_array_unref (priv->shm_formats);
+   g_array_unref (priv->dmabuf_formats);
++  g_array_unref (priv->dmabuf_modifiers);
+   gst_poll_free (priv->wl_fd_poll);
+   g_hash_table_unref (priv->buffers);
+   g_mutex_clear (&priv->buffers_mutex);
+@@ -181,26 +185,63 @@ static const struct wl_shm_listener shm_listener = {
+ static void
+ dmabuf_format (void *data, struct zwp_linux_dmabuf_v1 *zwp_linux_dmabuf,
+     uint32_t format)
++{
++}
++
++static void
++dmabuf_modifier (void *data, struct zwp_linux_dmabuf_v1 *zwp_linux_dmabuf,
++    uint32_t format, uint32_t modifier_hi, uint32_t modifier_lo)
+ {
+   GstWlDisplay *self = data;
++  guint64 modifier = (guint64) modifier_hi << 32 | modifier_lo;
++  static gboolean table_header = TRUE;
++
+   GstWlDisplayPrivate *priv = gst_wl_display_get_instance_private (self);
+ 
+-  if (gst_wl_dmabuf_format_to_video_format (format) != GST_VIDEO_FORMAT_UNKNOWN)
++  if (gst_wl_dmabuf_format_to_video_format (format) != GST_VIDEO_FORMAT_UNKNOWN) {
++    GstVideoFormat gst_format = gst_wl_dmabuf_format_to_video_format (format);
++    const guint32 fourcc = gst_video_dma_drm_fourcc_from_format (gst_format);
++
++    if (fourcc == DRM_FORMAT_INVALID)
++      return;
++
++    if (table_header == TRUE) {
++      GST_INFO ("===== All DMA Formats With Modifiers =====");
++      GST_INFO ("| Gst Format   | DRM Format              |");
++      table_header = FALSE;
++    }
++
++    if (modifier == 0)
++      GST_INFO ("|-----------------------------------------");
++
++    GST_INFO ("| %-12s | %-23s |",
++        (modifier == 0) ? gst_video_format_to_string (gst_format) : "",
++        gst_video_dma_drm_fourcc_to_string (fourcc, modifier));
++
+     g_array_append_val (priv->dmabuf_formats, format);
++    g_array_append_val (priv->dmabuf_modifiers, modifier);
++  }
+ }
+ 
+ static const struct zwp_linux_dmabuf_v1_listener dmabuf_listener = {
+   dmabuf_format,
++  dmabuf_modifier,
+ };
+ 
+ gboolean
+-gst_wl_display_check_format_for_shm (GstWlDisplay * self, GstVideoFormat format)
++gst_wl_display_check_format_for_shm (GstWlDisplay * self,
++    GstVideoFormat format, guint64 modifier)
+ {
+   GstWlDisplayPrivate *priv = gst_wl_display_get_instance_private (self);
+   enum wl_shm_format shm_fmt;
+   GArray *formats;
+   guint i;
+ 
++  if (modifier != DRM_FORMAT_MOD_INVALID && modifier != DRM_FORMAT_MOD_LINEAR) {
++    GST_ERROR ("SHM interface does not support modifiers");
++    return FALSE;
++  }
++
+   shm_fmt = gst_video_format_to_wl_shm_format (format);
+   if (shm_fmt == (enum wl_shm_format) -1)
+     return FALSE;
+@@ -216,10 +257,10 @@ gst_wl_display_check_format_for_shm (GstWlDisplay * self, GstVideoFormat format)
+ 
+ gboolean
+ gst_wl_display_check_format_for_dmabuf (GstWlDisplay * self,
+-    GstVideoFormat format)
++    GstVideoFormat format, guint64 modifier)
+ {
+   GstWlDisplayPrivate *priv = gst_wl_display_get_instance_private (self);
+-  GArray *formats;
++  GArray *formats, *modifiers;
+   guint i, dmabuf_fmt;
+ 
+   if (!priv->dmabuf)
+@@ -230,9 +271,13 @@ gst_wl_display_check_format_for_dmabuf (GstWlDisplay * self,
+     return FALSE;
+ 
+   formats = priv->dmabuf_formats;
++  modifiers = priv->dmabuf_modifiers;
+   for (i = 0; i < formats->len; i++) {
+-    if (g_array_index (formats, uint32_t, i) == dmabuf_fmt)
+-      return TRUE;
++    if (g_array_index (formats, uint32_t, i) == dmabuf_fmt) {
++      if (g_array_index (modifiers, guint64, i) == modifier) {
++        return TRUE;
++      }
++    }
+   }
+ 
+   return FALSE;
+@@ -277,7 +322,7 @@ registry_handle_global (void *data, struct wl_registry *registry,
+         wl_registry_bind (registry, id, &wp_viewporter_interface, 1);
+   } else if (g_strcmp0 (interface, "zwp_linux_dmabuf_v1") == 0) {
+     priv->dmabuf =
+-        wl_registry_bind (registry, id, &zwp_linux_dmabuf_v1_interface, 1);
++        wl_registry_bind (registry, id, &zwp_linux_dmabuf_v1_interface, 3);
+     zwp_linux_dmabuf_v1_add_listener (priv->dmabuf, &dmabuf_listener, self);
+   }
+ }
+@@ -550,6 +595,14 @@ gst_wl_display_get_dmabuf_v1 (GstWlDisplay * self)
+   return priv->dmabuf;
+ }
+ 
++GArray *
++gst_wl_display_get_dmabuf_modifiers (GstWlDisplay * self)
++{
++  GstWlDisplayPrivate *priv = gst_wl_display_get_instance_private (self);
++
++  return priv->dmabuf_modifiers;
++}
++
+ GArray *
+ gst_wl_display_get_dmabuf_formats (GstWlDisplay * self)
+ {
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwldisplay.h b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwldisplay.h
+index f0373a3d0f..a90d51dfc1 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwldisplay.h
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwldisplay.h
+@@ -26,9 +26,7 @@
+ #include <gst/video/video-info.h>
+ 
+ G_BEGIN_DECLS
+-
+ #define GST_TYPE_WL_DISPLAY (gst_wl_display_get_type ())
+-
+ GST_WL_API
+ G_DECLARE_FINAL_TYPE (GstWlDisplay, gst_wl_display, GST, WL_DISPLAY, GObject);
+ 
+@@ -38,65 +36,67 @@ struct _GstWlDisplay
+ };
+ 
+ GST_WL_API
+-GstWlDisplay *gst_wl_display_new (const gchar * name, GError ** error);
++    GstWlDisplay * gst_wl_display_new (const gchar * name, GError ** error);
+ 
+ GST_WL_API
+-GstWlDisplay *gst_wl_display_new_existing (struct wl_display * display,
++    GstWlDisplay * gst_wl_display_new_existing (struct wl_display *display,
+     gboolean take_ownership, GError ** error);
+ 
+ /* see wlbuffer.c for explanation */
+ GST_WL_API
+-void gst_wl_display_register_buffer (GstWlDisplay * self, gpointer gstmem,
++    void gst_wl_display_register_buffer (GstWlDisplay * self, gpointer gstmem,
+     gpointer wlbuffer);
+ 
+ GST_WL_API
+-void gst_wl_display_unregister_buffer (GstWlDisplay * self, gpointer gstmem);
++    void gst_wl_display_unregister_buffer (GstWlDisplay * self,
++    gpointer gstmem);
+ 
+ GST_WL_API
+-gpointer gst_wl_display_lookup_buffer (GstWlDisplay * self, gpointer gstmem);
++    gpointer gst_wl_display_lookup_buffer (GstWlDisplay * self,
++    gpointer gstmem);
+ 
+ GST_WL_API
+-gboolean gst_wl_display_check_format_for_shm (GstWlDisplay * self,
+-    GstVideoFormat format);
++    gboolean gst_wl_display_check_format_for_shm (GstWlDisplay * self,
++    GstVideoFormat format, guint64 modifier);
+ 
+ GST_WL_API
+-gboolean gst_wl_display_check_format_for_dmabuf (GstWlDisplay * self,
+-    GstVideoFormat format);
++    gboolean gst_wl_display_check_format_for_dmabuf (GstWlDisplay * self,
++    GstVideoFormat format, guint64 modifier);
+ 
+-GST_WL_API
+-struct wl_display *gst_wl_display_get_display (GstWlDisplay * self);
++GST_WL_API struct wl_display *gst_wl_display_get_display (GstWlDisplay * self);
+ 
+ GST_WL_API
+-struct wl_event_queue *gst_wl_display_get_event_queue (GstWlDisplay * self);
++    struct wl_event_queue *gst_wl_display_get_event_queue (GstWlDisplay * self);
+ 
+ GST_WL_API
+-struct wl_compositor *gst_wl_display_get_compositor (GstWlDisplay * self);
++    struct wl_compositor *gst_wl_display_get_compositor (GstWlDisplay * self);
+ 
+ GST_WL_API
+-struct wl_subcompositor *gst_wl_display_get_subcompositor (GstWlDisplay * self);
++    struct wl_subcompositor *gst_wl_display_get_subcompositor (GstWlDisplay *
++    self);
+ 
+ GST_WL_API
+-struct xdg_wm_base *gst_wl_display_get_xdg_wm_base (GstWlDisplay * self);
++    struct xdg_wm_base *gst_wl_display_get_xdg_wm_base (GstWlDisplay * self);
+ 
+ GST_WL_API
+-struct zwp_fullscreen_shell_v1 *gst_wl_display_get_fullscreen_shell_v1 (GstWlDisplay * self);
++    struct zwp_fullscreen_shell_v1
++    *gst_wl_display_get_fullscreen_shell_v1 (GstWlDisplay * self);
+ 
+ GST_WL_API
+-struct wp_viewporter *gst_wl_display_get_viewporter (GstWlDisplay * self);
++    struct wp_viewporter *gst_wl_display_get_viewporter (GstWlDisplay * self);
+ 
+-GST_WL_API
+-struct wl_shm *gst_wl_display_get_shm (GstWlDisplay * self);
++GST_WL_API struct wl_shm *gst_wl_display_get_shm (GstWlDisplay * self);
+ 
+-GST_WL_API
+-GArray *gst_wl_display_get_shm_formats (GstWlDisplay * self);
++GST_WL_API GArray *gst_wl_display_get_shm_formats (GstWlDisplay * self);
+ 
+-GST_WL_API
+-GArray *gst_wl_display_get_dmabuf_formats (GstWlDisplay * self);
++GST_WL_API GArray *gst_wl_display_get_dmabuf_formats (GstWlDisplay * self);
+ 
+-GST_WL_API
+-struct zwp_linux_dmabuf_v1 *gst_wl_display_get_dmabuf_v1 (GstWlDisplay * self);
++GST_WL_API GArray *gst_wl_display_get_dmabuf_modifiers (GstWlDisplay * self);
+ 
+ GST_WL_API
+-gboolean gst_wl_display_has_own_display (GstWlDisplay * self);
++    struct zwp_linux_dmabuf_v1 *gst_wl_display_get_dmabuf_v1 (GstWlDisplay *
++    self);
++
++GST_WL_API gboolean gst_wl_display_has_own_display (GstWlDisplay * self);
+ 
+ G_END_DECLS
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwllinuxdmabuf.c b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwllinuxdmabuf.c
+index deb5d32f45..1fd5f7a6c2 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwllinuxdmabuf.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwllinuxdmabuf.c
+@@ -83,7 +83,7 @@ static const struct zwp_linux_buffer_params_v1_listener params_listener = {
+ 
+ struct wl_buffer *
+ gst_wl_linux_dmabuf_construct_wl_buffer (GstBuffer * buf,
+-    GstWlDisplay * display, const GstVideoInfo * info)
++    GstWlDisplay * display, const GstVideoInfo * info, guint64 modifier)
+ {
+   GstMemory *mem;
+   int format;
+@@ -97,7 +97,7 @@ gst_wl_linux_dmabuf_construct_wl_buffer (GstBuffer * buf,
+   ConstructBufferData data;
+ 
+   g_return_val_if_fail (gst_wl_display_check_format_for_dmabuf (display,
+-          GST_VIDEO_INFO_FORMAT (info)), NULL);
++          GST_VIDEO_INFO_FORMAT (info), modifier), NULL);
+ 
+   mem = gst_buffer_peek_memory (buf, 0);
+   format = gst_video_format_to_wl_dmabuf_format (GST_VIDEO_INFO_FORMAT (info));
+@@ -116,9 +116,11 @@ gst_wl_linux_dmabuf_construct_wl_buffer (GstBuffer * buf,
+     strides = vmeta->stride;
+   }
+ 
+-  GST_DEBUG_OBJECT (display, "Creating wl_buffer from DMABuf of size %"
+-      G_GSSIZE_FORMAT " (%d x %d), format %s", info->size, width, height,
+-      gst_wl_dmabuf_format_to_string (format));
++  const gchar *format_string =
++      gst_wl_dmabuf_format_to_string (format, modifier);
++  GST_DEBUG_OBJECT (display,
++      "Creating wl_buffer from DMABuf of size %" G_GSSIZE_FORMAT
++      " (%d x %d), format %s", info->size, width, height, format_string);
+ 
+   /* Creation and configuration of planes  */
+   params = zwp_linux_dmabuf_v1_create_params (gst_wl_display_get_dmabuf_v1
+@@ -134,7 +136,7 @@ gst_wl_linux_dmabuf_construct_wl_buffer (GstBuffer * buf,
+       GstMemory *m = gst_buffer_peek_memory (buf, mem_idx);
+       gint fd = gst_dmabuf_memory_get_fd (m);
+       zwp_linux_buffer_params_v1_add (params, fd, i, m->offset + skip,
+-          stride, 0, 0);
++          stride, modifier >> 32, modifier & G_GUINT64_CONSTANT (0x0ffffffff));
+     } else {
+       GST_ERROR_OBJECT (mem->allocator, "memory does not seem to contain "
+           "enough data for the specified format");
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwllinuxdmabuf.h b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwllinuxdmabuf.h
+index d20eb41107..879b0c2b9d 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwllinuxdmabuf.h
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwllinuxdmabuf.h
+@@ -27,16 +27,13 @@
+ #include <gst/video/video.h>
+ 
+ G_BEGIN_DECLS
+-
+ #ifndef GST_CAPS_FEATURE_MEMORY_DMABUF
+ #define GST_CAPS_FEATURE_MEMORY_DMABUF "memory:DMABuf"
+ #endif
++GST_WL_API void gst_wl_linux_dmabuf_init_once (void);
+ 
+ GST_WL_API
+-void gst_wl_linux_dmabuf_init_once (void);
+-
+-GST_WL_API
+-struct wl_buffer * gst_wl_linux_dmabuf_construct_wl_buffer (GstBuffer * buf,
+-    GstWlDisplay * display, const GstVideoInfo * info);
++    struct wl_buffer *gst_wl_linux_dmabuf_construct_wl_buffer (GstBuffer * buf,
++    GstWlDisplay * display, const GstVideoInfo * info, guint64 modifier);
+ 
+ G_END_DECLS
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlshmallocator.c b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlshmallocator.c
+index de7e3d8b10..0d4367c73e 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlshmallocator.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlshmallocator.c
+@@ -34,6 +34,7 @@
+ #include <sys/mman.h>
+ #include <sys/types.h>
+ #include <unistd.h>
++#include <drm_fourcc.h>
+ 
+ #define GST_CAT_DEFAULT gst_wl_shm_debug
+ GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
+@@ -219,7 +220,7 @@ gst_wl_shm_memory_construct_wl_buffer (GstMemory * mem, GstWlDisplay * display,
+   g_return_val_if_fail (gst_is_fd_memory (mem), NULL);
+   g_return_val_if_fail (size <= memsize, NULL);
+   g_return_val_if_fail (gst_wl_display_check_format_for_shm (display,
+-          GST_VIDEO_INFO_FORMAT (info)), NULL);
++          GST_VIDEO_INFO_FORMAT (info), DRM_FORMAT_MOD_INVALID), NULL);
+ 
+   GST_DEBUG_OBJECT (display, "Creating wl_buffer from SHM of size %"
+       G_GSSIZE_FORMAT " (%d x %d, stride %d), format %s", size, width, height,
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlvideoformat.c b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlvideoformat.c
+index 49d927ac55..62f8164f22 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlvideoformat.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlvideoformat.c
+@@ -140,9 +140,11 @@ gst_wl_shm_format_to_string (enum wl_shm_format wl_format)
+       (gst_wl_shm_format_to_video_format (wl_format));
+ }
+ 
+-const gchar *
+-gst_wl_dmabuf_format_to_string (guint wl_format)
++gchar *
++gst_wl_dmabuf_format_to_string (guint wl_format, guint64 modifier)
+ {
+-  return gst_video_format_to_string
+-      (gst_wl_dmabuf_format_to_video_format (wl_format));
++  GstVideoFormat gst_format = gst_wl_dmabuf_format_to_video_format (wl_format);
++  const guint32 fourcc = gst_video_dma_drm_fourcc_from_format (gst_format);
++
++  return gst_video_dma_drm_fourcc_to_string (fourcc, modifier);
+ }
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlvideoformat.h b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlvideoformat.h
+index bbacde38bc..be97ad9aa2 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlvideoformat.h
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/wayland/gstwlvideoformat.h
+@@ -27,27 +27,25 @@
+ 
+ #include <gst/video/video.h>
+ 
+-G_BEGIN_DECLS
++G_BEGIN_DECLS GST_WL_API void gst_wl_videoformat_init_once (void);
+ 
+ GST_WL_API
+-void gst_wl_videoformat_init_once (void);
++    enum wl_shm_format gst_video_format_to_wl_shm_format (GstVideoFormat
++    format);
+ 
+-GST_WL_API
+-enum wl_shm_format gst_video_format_to_wl_shm_format (GstVideoFormat format);
+-
+-GST_WL_API
+-guint32 gst_video_format_to_wl_dmabuf_format (GstVideoFormat format);
++GST_WL_API guint32 gst_video_format_to_wl_dmabuf_format (GstVideoFormat format);
+ 
+ GST_WL_API
+-GstVideoFormat gst_wl_shm_format_to_video_format (enum wl_shm_format wl_format);
++    GstVideoFormat gst_wl_shm_format_to_video_format (enum wl_shm_format
++    wl_format);
+ 
+ GST_WL_API
+-GstVideoFormat gst_wl_dmabuf_format_to_video_format (guint wl_format);
++    GstVideoFormat gst_wl_dmabuf_format_to_video_format (guint wl_format);
+ 
+ GST_WL_API
+-const gchar *gst_wl_shm_format_to_string (enum wl_shm_format wl_format);
++    const gchar *gst_wl_shm_format_to_string (enum wl_shm_format wl_format);
+ 
+ GST_WL_API
+-const gchar *gst_wl_dmabuf_format_to_string (guint wl_format);
++    gchar * gst_wl_dmabuf_format_to_string (guint wl_format, guint64 modifier);
+ 
+ G_END_DECLS
+-- 
+2.25.1
+
