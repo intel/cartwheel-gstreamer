@@ -1,0 +1,26 @@
+From bf433928a11e027c276d4e20c259a0529b752825 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Mon, 17 Jul 2023 21:46:35 +0800
+Subject: [PATCH 105/123] va: update the gst_va_dma_drm_info_to_video_info() to
+ use DMA_DRM format
+
+---
+ subprojects/gst-plugins-bad/gst-libs/gst/va/gstvavideoformat.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvavideoformat.c b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvavideoformat.c
+index cb737c0c64..bab1fea432 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvavideoformat.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/gstvavideoformat.c
+@@ -375,7 +375,7 @@ gst_va_dma_drm_info_to_video_info (const GstVideoInfoDmaDrm * drm_info,
+   g_return_val_if_fail (drm_info, FALSE);
+   g_return_val_if_fail (info, FALSE);
+ 
+-  if (GST_VIDEO_INFO_FORMAT (&drm_info->vinfo) != GST_VIDEO_FORMAT_ENCODED) {
++  if (GST_VIDEO_INFO_FORMAT (&drm_info->vinfo) != GST_VIDEO_FORMAT_DMA_DRM) {
+     *info = drm_info->vinfo;
+     return TRUE;
+   }
+-- 
+2.25.1
+
