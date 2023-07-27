@@ -1,0 +1,106 @@
+From 933c08e8119b75640f3784df28ec0efc8affa504 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Thu, 1 Jun 2023 18:34:31 +0800
+Subject: [PATCH 113/123] glupload: Add a helper function of
+ _filter_caps_with_features()
+
+We sometimes need to filter some special feature for the next step.
+This helper function can help us to filter out un-needed features
+in a caps.
+---
+ .../gst-libs/gst/gl/gstglupload.c             | 79 +++++++++++++++++++
+ 1 file changed, 79 insertions(+)
+
+diff --git a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
+index 07ce4ab41b..0454045ff3 100644
+--- a/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
++++ b/subprojects/gst-plugins-base/gst-libs/gst/gl/gstglupload.c
+@@ -117,6 +117,85 @@ struct _GstGLUploadPrivate
+ G_DEFINE_TYPE_WITH_CODE (GstGLUpload, gst_gl_upload, GST_TYPE_OBJECT,
+     G_ADD_PRIVATE (GstGLUpload) DEBUG_INIT);
+ 
++static gboolean
++filter_map_function (GstCapsFeatures * features, GstStructure * structure,
++    gpointer user_data)
++{
++  const GstCapsFeatures *user_features = user_data;
++  gboolean is_system_mem;
++  const gchar *feature;
++  guint i, m;
++
++  m = gst_caps_features_get_size (user_features);
++
++  /* Something like video/x-raw(meta:GstVideoOverlayComposition)
++     should be considered as the system memory. */
++  is_system_mem = TRUE;
++  for (i = 0; i < gst_caps_features_get_size (features); i++) {
++    feature = gst_caps_features_get_nth (features, i);
++
++    if (!g_strcmp0 (feature, GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY))
++      break;
++
++    if (!strncmp (feature, "memory:", 7)) {
++      is_system_mem = FALSE;
++      break;
++    }
++  }
++
++  if (!gst_caps_features_is_any (features) && is_system_mem)
++    gst_caps_features_add (features, GST_CAPS_FEATURE_MEMORY_SYSTEM_MEMORY);
++
++  if (gst_caps_features_is_any (features))
++    return TRUE;
++
++  for (i = 0; i < m; i++) {
++    feature = gst_caps_features_get_nth (user_features, i);
++
++    if (gst_caps_features_contains (features, feature))
++      return TRUE;
++  }
++
++  return FALSE;
++}
++
++static gboolean
++_filter_caps_with_features (const GstCaps * caps,
++    const GstCapsFeatures * features, GstCaps ** ret_caps)
++{
++  GstCaps *tmp = NULL;
++  gboolean ret = TRUE;
++
++  if (gst_caps_is_empty (caps))
++    return FALSE;
++
++  if (gst_caps_is_any (caps)) {
++    if (ret_caps) {
++      tmp = gst_caps_new_empty ();
++      gst_caps_set_features_simple (tmp, gst_caps_features_copy (features));
++      *ret_caps = tmp;
++    }
++
++    return TRUE;
++  }
++
++  tmp = gst_caps_copy (caps);
++  gst_caps_filter_and_map_in_place (tmp,
++      (GstCapsFilterMapFunc) filter_map_function, (gpointer) features);
++
++  if (gst_caps_is_empty (tmp)) {
++    gst_clear_caps (&tmp);
++    ret = FALSE;
++  }
++
++  if (ret_caps)
++    *ret_caps = tmp;
++  else
++    gst_clear_caps (&tmp);
++
++  return ret;
++}
++
+ static GstCaps *
+ _set_caps_features_with_passthrough (const GstCaps * caps,
+     const gchar * feature_name, GstCapsFeatures * passthrough)
+-- 
+2.25.1
+

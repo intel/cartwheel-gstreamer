@@ -1,0 +1,454 @@
+From b1482d1c29eb5fa25cb7e512ca4d8eacef816390 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Tue, 18 Jul 2023 16:07:41 +0800
+Subject: [PATCH 123/123] va: encoder: Add DMA input support for H264 and H265
+ encoder
+
+---
+ .../gst-plugins-bad/sys/va/gstvabaseenc.c     | 129 +++++++++++++++++-
+ .../gst-plugins-bad/sys/va/gstvabaseenc.h     |   1 +
+ .../gst-plugins-bad/sys/va/gstvah264enc.c     |  42 +++---
+ .../gst-plugins-bad/sys/va/gstvah265enc.c     |  58 ++++----
+ 4 files changed, 178 insertions(+), 52 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
+index 75c38060ad..4b6b4672fd 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
+@@ -22,6 +22,14 @@
+ 
+ #include <gst/va/gstva.h>
+ #include <gst/va/vasurfaceimage.h>
++#include <gst/va/gstvavideoformat.h>
++#ifndef G_OS_WIN32
++#include <libdrm/drm_fourcc.h>
++#else
++#define DRM_FORMAT_INVALID     0
++#define DRM_FORMAT_MOD_LINEAR  0ULL
++#define DRM_FORMAT_MOD_INVALID 0xffffffffffffff
++#endif
+ 
+ #include "vacompat.h"
+ #include "gstvacaps.h"
+@@ -59,6 +67,8 @@ G_DEFINE_ABSTRACT_TYPE_WITH_CODE (GstVaBaseEnc, gst_va_base_enc,
+         "vabaseenc", 0, "vabaseenc element"););
+ /* *INDENT-ON* */
+ 
++extern GRecMutex GST_VA_SHARED_LOCK;
++
+ static void
+ gst_va_base_enc_reset_state_default (GstVaBaseEnc * base)
+ {
+@@ -205,6 +215,35 @@ _get_sinkpad_pool (GstVaBaseEnc * base)
+ 
+   g_assert (base->input_state);
+   caps = gst_caps_copy (base->input_state->caps);
++  g_assert (gst_caps_is_fixed (caps));
++  /* For DMA buffer, we can only import linear buffers.
++     Replace the drm-format into format field. */
++  if (gst_video_is_dma_drm_caps (caps)) {
++    GstVideoInfoDmaDrm dma_info;
++    GstVideoInfo info;
++
++    if (!gst_video_info_dma_drm_from_caps (&dma_info, caps)) {
++      GST_ERROR_OBJECT (base, "Cannot parse caps %" GST_PTR_FORMAT, caps);
++      gst_caps_unref (caps);
++      return NULL;
++    }
++
++    if (dma_info.drm_modifier != DRM_FORMAT_MOD_LINEAR) {
++      GST_ERROR_OBJECT (base, "Cannot import non-linear DMA buffer");
++      gst_caps_unref (caps);
++      return NULL;
++    }
++
++    if (!gst_va_dma_drm_info_to_video_info (&dma_info, &info)) {
++      GST_ERROR_OBJECT (base, "Cannot get va video info");
++      gst_caps_unref (caps);
++      return NULL;
++    }
++
++    gst_caps_set_simple (caps, "format", G_TYPE_STRING,
++        gst_video_format_to_string (GST_VIDEO_INFO_FORMAT (&info)), NULL);
++    gst_structure_remove_field (gst_caps_get_structure (caps, 0), "drm-format");
++  }
+   gst_caps_set_features_simple (caps,
+       gst_caps_features_from_string (GST_CAPS_FEATURE_MEMORY_VA));
+ 
+@@ -238,10 +277,91 @@ _get_sinkpad_pool (GstVaBaseEnc * base)
+   return base->priv->raw_pool;
+ }
+ 
++static inline gsize
++_get_plane_data_size (GstVideoInfo * info, guint plane)
++{
++  gint comp[GST_VIDEO_MAX_COMPONENTS];
++  gint height, padded_height;
++
++  gst_video_format_info_component (info->finfo, plane, comp);
++
++  height = GST_VIDEO_INFO_HEIGHT (info);
++  padded_height =
++      GST_VIDEO_FORMAT_INFO_SCALE_HEIGHT (info->finfo, comp[0], height);
++
++  return GST_VIDEO_INFO_PLANE_STRIDE (info, plane) * padded_height;
++}
++
++static gboolean
++_try_import_dmabuf_unlocked (GstVaBaseEnc * base, GstBuffer * inbuf)
++{
++  GstVideoMeta *meta;
++  GstVideoInfo in_info = base->in_info;
++  GstMemory *mems[GST_VIDEO_MAX_PLANES];
++  guint i, n_mem, n_planes;
++  gsize offset[GST_VIDEO_MAX_PLANES];
++  uintptr_t fd[GST_VIDEO_MAX_PLANES];
++
++  n_planes = GST_VIDEO_INFO_N_PLANES (&in_info);
++  n_mem = gst_buffer_n_memory (inbuf);
++  meta = gst_buffer_get_video_meta (inbuf);
++
++  /* This will eliminate most non-dmabuf out there */
++  if (!gst_is_dmabuf_memory (gst_buffer_peek_memory (inbuf, 0)))
++    return FALSE;
++
++  /* We cannot have multiple dmabuf per plane */
++  if (n_mem > n_planes)
++    return FALSE;
++
++  /* Update video info based on video meta */
++  if (meta) {
++    GST_VIDEO_INFO_WIDTH (&in_info) = meta->width;
++    GST_VIDEO_INFO_HEIGHT (&in_info) = meta->height;
++
++    for (i = 0; i < meta->n_planes; i++) {
++      GST_VIDEO_INFO_PLANE_OFFSET (&in_info, i) = meta->offset[i];
++      GST_VIDEO_INFO_PLANE_STRIDE (&in_info, i) = meta->stride[i];
++    }
++  }
++
++  /* Find and validate all memories */
++  for (i = 0; i < n_planes; i++) {
++    guint plane_size;
++    guint length;
++    guint mem_idx;
++    gsize mem_skip;
++
++    plane_size = _get_plane_data_size (&in_info, i);
++
++    if (!gst_buffer_find_memory (inbuf, in_info.offset[i], plane_size,
++            &mem_idx, &length, &mem_skip))
++      return FALSE;
++
++    /* We can't have more then one dmabuf per plane */
++    if (length != 1)
++      return FALSE;
++
++    mems[i] = gst_buffer_peek_memory (inbuf, mem_idx);
++
++    /* And all memory found must be dmabuf */
++    if (!gst_is_dmabuf_memory (mems[i]))
++      return FALSE;
++
++    offset[i] = mems[i]->offset + mem_skip;
++    fd[i] = gst_dmabuf_memory_get_fd (mems[i]);
++  }
++
++  /* Now create a VASurfaceID for the buffer */
++  return gst_va_dmabuf_memories_setup (base->display, &in_info, n_planes,
++      mems, fd, offset, VA_SURFACE_ATTRIB_USAGE_HINT_ENCODER);
++}
++
+ static gboolean
+ _try_import_buffer (GstVaBaseEnc * base, GstBuffer * inbuf)
+ {
+   VASurfaceID surface;
++  gboolean ret;
+ 
+   /* The VA buffer. */
+   surface = gst_va_buffer_get_surface (inbuf);
+@@ -249,9 +369,11 @@ _try_import_buffer (GstVaBaseEnc * base, GstBuffer * inbuf)
+       (gst_va_buffer_peek_display (inbuf) == base->display))
+     return TRUE;
+ 
+-  /* TODO: DMA buffer. */
++  g_rec_mutex_lock (&GST_VA_SHARED_LOCK);
++  ret = _try_import_dmabuf_unlocked (base, inbuf);
++  g_rec_mutex_unlock (&GST_VA_SHARED_LOCK);
+ 
+-  return FALSE;
++  return ret;
+ }
+ 
+ static GstFlowReturn
+@@ -723,6 +845,9 @@ gst_va_base_enc_set_format (GstVideoEncoder * venc, GstVideoCodecState * state)
+ 
+   g_return_val_if_fail (state->caps != NULL, FALSE);
+ 
++  if (!gst_va_video_info_from_caps (&base->in_info, NULL, state->caps))
++    return FALSE;
++
+   if (base->input_state)
+     gst_video_codec_state_unref (base->input_state);
+   base->input_state = gst_video_codec_state_ref (state);
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
+index 8c9b570ad1..ecf2454d66 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
++++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
+@@ -65,6 +65,7 @@ struct _GstVaBaseEnc
+   GQueue output_list;
+ 
+   GstVideoCodecState *input_state;
++  GstVideoInfo in_info;
+ 
+   /*< private >*/
+   GstVaBaseEncPrivate *priv;
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
+index 7bd54e62b6..cf370595f1 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
+@@ -601,8 +601,8 @@ _ensure_rate_control (GstVaH264Enc * self)
+ 
+     factor = (guint64) self->mb_width * self->mb_height * bits_per_mb;
+     bitrate = gst_util_uint64_scale (factor,
+-        GST_VIDEO_INFO_FPS_N (&base->input_state->info),
+-        GST_VIDEO_INFO_FPS_D (&base->input_state->info)) / 1000;
++        GST_VIDEO_INFO_FPS_N (&base->in_info),
++        GST_VIDEO_INFO_FPS_D (&base->in_info)) / 1000;
+     GST_INFO_OBJECT (self, "target bitrate computed to %u kbps", bitrate);
+   }
+ 
+@@ -704,8 +704,8 @@ _calculate_level (GstVaH264Enc * self)
+   PicSizeMbs = self->mb_width * self->mb_height;
+   MaxDpbMbs = PicSizeMbs * (self->gop.num_ref_frames + 1);
+   MaxMBPS = gst_util_uint64_scale_int_ceil (PicSizeMbs,
+-      GST_VIDEO_INFO_FPS_N (&base->input_state->info),
+-      GST_VIDEO_INFO_FPS_D (&base->input_state->info));
++      GST_VIDEO_INFO_FPS_N (&base->in_info),
++      GST_VIDEO_INFO_FPS_D (&base->in_info));
+ 
+   for (i = 0; i < G_N_ELEMENTS (_va_h264_level_limits); i++) {
+     const GstVaH264LevelLimits *const limits = &_va_h264_level_limits[i];
+@@ -949,9 +949,9 @@ _generate_gop_structure (GstVaH264Enc * self)
+ 
+   /* If not set, generate a idr every second */
+   if (self->gop.idr_period == 0) {
+-    self->gop.idr_period = (GST_VIDEO_INFO_FPS_N (&base->input_state->info)
+-        + GST_VIDEO_INFO_FPS_D (&base->input_state->info) - 1) /
+-        GST_VIDEO_INFO_FPS_D (&base->input_state->info);
++    self->gop.idr_period = (GST_VIDEO_INFO_FPS_N (&base->in_info)
++        + GST_VIDEO_INFO_FPS_D (&base->in_info) - 1) /
++        GST_VIDEO_INFO_FPS_D (&base->in_info);
+   }
+ 
+   /* Do not use a too huge GOP size. */
+@@ -1346,7 +1346,7 @@ _decide_profile (GstVaH264Enc * self, VAProfile * _profile, guint * _rt_format)
+     goto out;
+   }
+ 
+-  in_format = GST_VIDEO_INFO_FORMAT (&base->input_state->info);
++  in_format = GST_VIDEO_INFO_FORMAT (&base->in_info);
+   rt_format = _get_rtformat (self, in_format);
+   if (!rt_format) {
+     GST_ERROR_OBJECT (self, "unsupported video format %s",
+@@ -1538,9 +1538,9 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
+   guint max_ref_frames, max_surfaces = 0, rt_format = 0, codedbuf_size;
+   gint width, height;
+ 
+-  width = GST_VIDEO_INFO_WIDTH (&base->input_state->info);
+-  height = GST_VIDEO_INFO_HEIGHT (&base->input_state->info);
+-  format = GST_VIDEO_INFO_FORMAT (&base->input_state->info);
++  width = GST_VIDEO_INFO_WIDTH (&base->in_info);
++  height = GST_VIDEO_INFO_HEIGHT (&base->in_info);
++  format = GST_VIDEO_INFO_FORMAT (&base->in_info);
+   codedbuf_size = base->codedbuf_size;
+ 
+   need_negotiation =
+@@ -1575,15 +1575,15 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
+   self->mb_height = GST_ROUND_UP_16 (base->height) / 16;
+ 
+   /* Frame rate is needed for rate control and PTS setting. */
+-  if (GST_VIDEO_INFO_FPS_N (&base->input_state->info) == 0
+-      || GST_VIDEO_INFO_FPS_D (&base->input_state->info) == 0) {
++  if (GST_VIDEO_INFO_FPS_N (&base->in_info) == 0
++      || GST_VIDEO_INFO_FPS_D (&base->in_info) == 0) {
+     GST_INFO_OBJECT (self, "Unknown framerate, just set to 30 fps");
+-    GST_VIDEO_INFO_FPS_N (&base->input_state->info) = 30;
+-    GST_VIDEO_INFO_FPS_D (&base->input_state->info) = 1;
++    GST_VIDEO_INFO_FPS_N (&base->in_info) = 30;
++    GST_VIDEO_INFO_FPS_D (&base->in_info) = 1;
+   }
+   base->frame_duration = gst_util_uint64_scale (GST_SECOND,
+-      GST_VIDEO_INFO_FPS_D (&base->input_state->info),
+-      GST_VIDEO_INFO_FPS_N (&base->input_state->info));
++      GST_VIDEO_INFO_FPS_D (&base->in_info),
++      GST_VIDEO_INFO_FPS_N (&base->in_info));
+ 
+   GST_DEBUG_OBJECT (self, "resolution:%dx%d, MB size: %dx%d,"
+       " frame duration is %" GST_TIME_FORMAT,
+@@ -2180,10 +2180,10 @@ _fill_sequence_param (GstVaH264Enc * self,
+     },
+     .aspect_ratio_idc = 0xff,
+     /* FIXME: what if no framerate info is provided */
+-    .sar_width = GST_VIDEO_INFO_PAR_N (&base->input_state->info),
+-    .sar_height = GST_VIDEO_INFO_PAR_D (&base->input_state->info),
+-    .num_units_in_tick = GST_VIDEO_INFO_FPS_D (&base->input_state->info),
+-    .time_scale = GST_VIDEO_INFO_FPS_N (&base->input_state->info) * 2,
++    .sar_width = GST_VIDEO_INFO_PAR_N (&base->in_info),
++    .sar_height = GST_VIDEO_INFO_PAR_D (&base->in_info),
++    .num_units_in_tick = GST_VIDEO_INFO_FPS_D (&base->in_info),
++    .time_scale = GST_VIDEO_INFO_FPS_N (&base->in_info) * 2,
+   };
+   /* *INDENT-ON* */
+ 
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
+index 7f1f326b94..993351097e 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
+@@ -1415,11 +1415,11 @@ _h265_fill_sequence_parameter (GstVaH265Enc * self,
+     },
+     /* if (vui_fields.bits.aspect_ratio_info_present_flag) */
+     .aspect_ratio_idc = 0xff,
+-    .sar_width = GST_VIDEO_INFO_PAR_N (&base->input_state->info),
+-    .sar_height = GST_VIDEO_INFO_PAR_D (&base->input_state->info),
++    .sar_width = GST_VIDEO_INFO_PAR_N (&base->in_info),
++    .sar_height = GST_VIDEO_INFO_PAR_D (&base->in_info),
+     /* if (vui_fields.bits.vui_timing_info_present_flag) */
+-    .vui_num_units_in_tick = GST_VIDEO_INFO_FPS_D (&base->input_state->info),
+-    .vui_time_scale = GST_VIDEO_INFO_FPS_N (&base->input_state->info),
++    .vui_num_units_in_tick = GST_VIDEO_INFO_FPS_D (&base->in_info),
++    .vui_time_scale = GST_VIDEO_INFO_FPS_N (&base->in_info),
+     .scc_fields.bits.palette_mode_enabled_flag = _is_scc_enabled (self),
+   };
+   /* *INDENT-ON* */
+@@ -2662,7 +2662,7 @@ _h265_decide_profile (GstVaH265Enc * self, VAProfile * _profile,
+     goto out;
+   }
+ 
+-  in_format = GST_VIDEO_INFO_FORMAT (&base->input_state->info);
++  in_format = GST_VIDEO_INFO_FORMAT (&base->in_info);
+   rt_format = _h265_get_rtformat (self, in_format, &depth, &chrome);
+   if (!rt_format) {
+     GST_ERROR_OBJECT (self, "unsupported video format %s",
+@@ -3330,7 +3330,7 @@ _h265_ensure_rate_control (GstVaH265Enc * self)
+     guint bits_per_pix;
+ 
+     if (!_h265_get_rtformat (self,
+-            GST_VIDEO_INFO_FORMAT (&base->input_state->info), &depth, &chrome))
++            GST_VIDEO_INFO_FORMAT (&base->in_info), &depth, &chrome))
+       g_assert_not_reached ();
+ 
+     if (chrome == 3) {
+@@ -3344,8 +3344,8 @@ _h265_ensure_rate_control (GstVaH265Enc * self)
+ 
+     factor = (guint64) self->luma_width * self->luma_height * bits_per_pix / 16;
+     bitrate = gst_util_uint64_scale (factor,
+-        GST_VIDEO_INFO_FPS_N (&base->input_state->info),
+-        GST_VIDEO_INFO_FPS_D (&base->input_state->info)) / 1000;
++        GST_VIDEO_INFO_FPS_N (&base->in_info),
++        GST_VIDEO_INFO_FPS_D (&base->in_info)) / 1000;
+ 
+     GST_INFO_OBJECT (self, "target bitrate computed to %u kbps", bitrate);
+ 
+@@ -3423,8 +3423,8 @@ _h265_calculate_tier_level (GstVaH265Enc * self)
+ 
+   PicSizeInSamplesY = self->luma_width * self->luma_height;
+   LumaSr = gst_util_uint64_scale_int_ceil (PicSizeInSamplesY,
+-      GST_VIDEO_INFO_FPS_N (&base->input_state->info),
+-      GST_VIDEO_INFO_FPS_D (&base->input_state->info));
++      GST_VIDEO_INFO_FPS_N (&base->in_info),
++      GST_VIDEO_INFO_FPS_D (&base->in_info));
+ 
+   for (i = 0; i < G_N_ELEMENTS (_va_h265_level_limits); i++) {
+     const GstVaH265LevelLimits *const limits = &_va_h265_level_limits[i];
+@@ -3648,7 +3648,7 @@ _h265_calculate_coded_size (GstVaH265Enc * self)
+   guint chrome, depth;
+ 
+   if (!_h265_get_rtformat (self,
+-          GST_VIDEO_INFO_FORMAT (&base->input_state->info), &depth, &chrome))
++          GST_VIDEO_INFO_FORMAT (&base->in_info), &depth, &chrome))
+     g_assert_not_reached ();
+ 
+   switch (chrome) {
+@@ -3734,9 +3734,9 @@ _h265_generate_gop_structure (GstVaH265Enc * self)
+ 
+   /* If not set, generate a idr every second */
+   if (self->gop.idr_period == 0) {
+-    self->gop.idr_period = (GST_VIDEO_INFO_FPS_N (&base->input_state->info)
+-        + GST_VIDEO_INFO_FPS_D (&base->input_state->info) - 1) /
+-        GST_VIDEO_INFO_FPS_D (&base->input_state->info);
++    self->gop.idr_period = (GST_VIDEO_INFO_FPS_N (&base->in_info)
++        + GST_VIDEO_INFO_FPS_D (&base->in_info) - 1) /
++        GST_VIDEO_INFO_FPS_D (&base->in_info);
+   }
+ 
+   /* Do not use a too huge GOP size. */
+@@ -4404,9 +4404,9 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+   guint max_ref_frames, max_surfaces = 0, rt_format = 0, codedbuf_size;
+   gint width, height;
+ 
+-  width = GST_VIDEO_INFO_WIDTH (&base->input_state->info);
+-  height = GST_VIDEO_INFO_HEIGHT (&base->input_state->info);
+-  format = GST_VIDEO_INFO_FORMAT (&base->input_state->info);
++  width = GST_VIDEO_INFO_WIDTH (&base->in_info);
++  height = GST_VIDEO_INFO_HEIGHT (&base->in_info);
++  format = GST_VIDEO_INFO_FORMAT (&base->in_info);
+   codedbuf_size = base->codedbuf_size;
+ 
+   need_negotiation =
+@@ -4446,7 +4446,7 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+     static const guint SubWidthC[] = { 1, 2, 2, 1 };
+     static const guint SubHeightC[] = { 1, 2, 1, 1 };
+     guint index = _get_chroma_format_idc (gst_va_chroma_from_video_format
+-        (GST_VIDEO_INFO_FORMAT (&base->input_state->info)));
++        (GST_VIDEO_INFO_FORMAT (&base->in_info)));
+ 
+     self->conformance_window_flag = 1;
+     self->conf_win_left_offset = 0;
+@@ -4465,16 +4465,16 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+     return FALSE;
+ 
+   self->bits_depth_luma_minus8 =
+-      GST_VIDEO_FORMAT_INFO_DEPTH (base->input_state->info.finfo, 0);
++      GST_VIDEO_FORMAT_INFO_DEPTH (base->in_info.finfo, 0);
+   self->bits_depth_luma_minus8 -= 8;
+ 
+-  if (GST_VIDEO_FORMAT_INFO_N_COMPONENTS (base->input_state->info.finfo)) {
++  if (GST_VIDEO_FORMAT_INFO_N_COMPONENTS (base->in_info.finfo)) {
+     self->bits_depth_chroma_minus8 =
+-        GST_VIDEO_FORMAT_INFO_DEPTH (base->input_state->info.finfo, 1);
++        GST_VIDEO_FORMAT_INFO_DEPTH (base->in_info.finfo, 1);
+     if (self->bits_depth_chroma_minus8 <
+-        GST_VIDEO_FORMAT_INFO_DEPTH (base->input_state->info.finfo, 2))
++        GST_VIDEO_FORMAT_INFO_DEPTH (base->in_info.finfo, 2))
+       self->bits_depth_chroma_minus8 =
+-          GST_VIDEO_FORMAT_INFO_DEPTH (base->input_state->info.finfo, 2);
++          GST_VIDEO_FORMAT_INFO_DEPTH (base->in_info.finfo, 2);
+ 
+     self->bits_depth_chroma_minus8 -= 8;
+   } else {
+@@ -4482,15 +4482,15 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+   }
+ 
+   /* Frame rate is needed for rate control and PTS setting. */
+-  if (GST_VIDEO_INFO_FPS_N (&base->input_state->info) == 0
+-      || GST_VIDEO_INFO_FPS_D (&base->input_state->info) == 0) {
++  if (GST_VIDEO_INFO_FPS_N (&base->in_info) == 0
++      || GST_VIDEO_INFO_FPS_D (&base->in_info) == 0) {
+     GST_INFO_OBJECT (self, "Unknown framerate, just set to 30 fps");
+-    GST_VIDEO_INFO_FPS_N (&base->input_state->info) = 30;
+-    GST_VIDEO_INFO_FPS_D (&base->input_state->info) = 1;
++    GST_VIDEO_INFO_FPS_N (&base->in_info) = 30;
++    GST_VIDEO_INFO_FPS_D (&base->in_info) = 1;
+   }
+   base->frame_duration = gst_util_uint64_scale (GST_SECOND,
+-      GST_VIDEO_INFO_FPS_D (&base->input_state->info),
+-      GST_VIDEO_INFO_FPS_N (&base->input_state->info));
++      GST_VIDEO_INFO_FPS_D (&base->in_info),
++      GST_VIDEO_INFO_FPS_N (&base->in_info));
+ 
+   GST_DEBUG_OBJECT (self, "resolution:%dx%d, CTU size: %dx%d,"
+       " frame duration is %" GST_TIME_FORMAT,
+-- 
+2.25.1
+
