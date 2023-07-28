@@ -1,4 +1,4 @@
-From 644c7bf7314e9b9093f68f4a2432d84c1c06fc89 Mon Sep 17 00:00:00 2001
+From a9b6b54cb33aba311640cd81269865b648fca5cb Mon Sep 17 00:00:00 2001
 From: Yinhang Liu <yinhang.liu@intel.com>
 Date: Tue, 30 May 2023 18:12:38 +0800
 Subject: [PATCH 135/138] msdkenc: Add modifier support
@@ -6,9 +6,9 @@ Subject: [PATCH 135/138] msdkenc: Add modifier support
 Co-authored-by: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 ---
  .../sys/msdk/gstmsdkallocator_libva.c         |  1 +
- .../gst-plugins-bad/sys/msdk/gstmsdkenc.c     | 73 ++++++++++++-------
+ .../gst-plugins-bad/sys/msdk/gstmsdkenc.c     | 76 ++++++++++++-------
  .../gst-plugins-bad/sys/msdk/gstmsdkenc.h     |  1 +
- 3 files changed, 48 insertions(+), 27 deletions(-)
+ 3 files changed, 51 insertions(+), 27 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 index 9bebed369a..f678c8ceba 100644
@@ -23,7 +23,7 @@ index 9bebed369a..f678c8ceba 100644
          data->B = buf + mem_id->image.offsets[0];
          data->G = data->B + 1;
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
-index 4b861989a5..41bf3c3572 100644
+index 4b861989a5..f94ff0ce8d 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
 @@ -48,8 +48,10 @@
@@ -46,18 +46,21 @@ index 4b861989a5..41bf3c3572 100644
    mfxSession session;
    mfxStatus status;
    mfxFrameAllocRequest request;
-@@ -514,7 +516,9 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
+@@ -514,7 +516,12 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
      GST_DEBUG_OBJECT (thiz, "Have no input state yet");
      return FALSE;
    }
 -  info = &thiz->input_state->info;
 +
-+  gst_msdkcaps_video_info_from_caps (thiz->input_state->caps, &info,
-+      &thiz->modifier);
++  if (!gst_msdkcaps_video_info_from_caps (thiz->input_state->caps, &info,
++          &thiz->modifier)) {
++    GST_WARNING_OBJECT (thiz, "Failed to get video info from input caps");
++    return FALSE;
++  }
  
    GST_OBJECT_LOCK (thiz);
    session = gst_msdk_context_get_session (thiz->context);
-@@ -525,7 +529,7 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
+@@ -525,7 +532,7 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
  
  #if (MFX_VERSION < 2000)
    /* check the format for MSDK path */
@@ -66,7 +69,7 @@ index 4b861989a5..41bf3c3572 100644
      GST_ERROR_OBJECT (thiz,
          "internal vpp is no longer supported, "
          "please use msdkvpp plugin to do conversion first");
-@@ -547,14 +551,14 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
+@@ -547,14 +554,14 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
    thiz->param.mfx.NumRefFrame = thiz->ref_frames;
    thiz->param.mfx.EncodedOrder = 0;     /* Take input frames in display order */
  
@@ -89,7 +92,7 @@ index 4b861989a5..41bf3c3572 100644
    thiz->param.mfx.FrameInfo.PicStruct = MFX_PICSTRUCT_PROGRESSIVE;
    thiz->param.mfx.FrameInfo.ChromaFormat = MFX_CHROMAFORMAT_YUV420;
  
-@@ -567,7 +571,7 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
+@@ -567,7 +574,7 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
        thiz->param.mfx.FrameInfo.FrameRateExtD,
        thiz->param.mfx.FrameInfo.FrameRateExtN);
  
@@ -98,7 +101,7 @@ index 4b861989a5..41bf3c3572 100644
      case GST_VIDEO_FORMAT_P010_10LE:
        thiz->param.mfx.FrameInfo.FourCC = MFX_FOURCC_P010;
        thiz->param.mfx.FrameInfo.BitDepthLuma = 10;
-@@ -596,6 +600,7 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
+@@ -596,6 +603,7 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
        break;
  #endif
      case GST_VIDEO_FORMAT_BGRA:
@@ -106,7 +109,7 @@ index 4b861989a5..41bf3c3572 100644
        thiz->param.mfx.FrameInfo.FourCC = MFX_FOURCC_RGB4;
        thiz->param.mfx.FrameInfo.ChromaFormat = MFX_CHROMAFORMAT_YUV444;
        thiz->param.mfx.FrameInfo.BitDepthLuma = 8;
-@@ -647,18 +652,18 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
+@@ -647,18 +655,18 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
     */
    if (thiz->param.mfx.CodecId != MFX_CODEC_JPEG &&
        thiz->param.mfx.CodecId != MFX_CODEC_VP9 &&
@@ -130,7 +133,7 @@ index 4b861989a5..41bf3c3572 100644
      gst_msdkenc_add_extra_param (thiz, (mfxExtBuffer *) & ext_vsi);
    }
  
-@@ -1159,14 +1164,15 @@ gst_msdkenc_set_src_caps (GstMsdkEnc * thiz)
+@@ -1159,14 +1167,15 @@ gst_msdkenc_set_src_caps (GstMsdkEnc * thiz)
  
  #ifndef _WIN32
  static GstBufferPool *
@@ -148,7 +151,7 @@ index 4b861989a5..41bf3c3572 100644
  
    display = (GstVaDisplay *) gst_msdk_context_get_va_display (thiz->context);
  
-@@ -1174,7 +1180,7 @@ gst_msdk_create_va_pool (GstMsdkEnc * thiz, GstCaps * caps, guint num_buffers)
+@@ -1174,7 +1183,7 @@ gst_msdk_create_va_pool (GstMsdkEnc * thiz, GstCaps * caps, guint num_buffers)
      allocator = gst_va_dmabuf_allocator_new (display);
    } else {
      formats = g_array_new (FALSE, FALSE, sizeof (GstVideoFormat));
@@ -157,7 +160,7 @@ index 4b861989a5..41bf3c3572 100644
      allocator = gst_va_allocator_new (display, formats);
    }
  
-@@ -1185,12 +1191,20 @@ gst_msdk_create_va_pool (GstMsdkEnc * thiz, GstCaps * caps, guint num_buffers)
+@@ -1185,12 +1194,20 @@ gst_msdk_create_va_pool (GstMsdkEnc * thiz, GstCaps * caps, guint num_buffers)
      return NULL;
    }
  
@@ -179,7 +182,7 @@ index 4b861989a5..41bf3c3572 100644
  
    GST_LOG_OBJECT (thiz, "Creating va pool");
    return pool;
-@@ -1261,7 +1275,7 @@ gst_msdkenc_create_buffer_pool (GstMsdkEnc * thiz, GstCaps * caps,
+@@ -1261,7 +1278,7 @@ gst_msdkenc_create_buffer_pool (GstMsdkEnc * thiz, GstCaps * caps,
    GstVideoInfo info;
    GstVideoAlignment align;
  
@@ -188,7 +191,7 @@ index 4b861989a5..41bf3c3572 100644
      GST_INFO_OBJECT (thiz, "failed to get video info");
      return FALSE;
    }
-@@ -1269,7 +1283,7 @@ gst_msdkenc_create_buffer_pool (GstMsdkEnc * thiz, GstCaps * caps,
+@@ -1269,7 +1286,7 @@ gst_msdkenc_create_buffer_pool (GstMsdkEnc * thiz, GstCaps * caps,
    gst_msdk_set_video_alignment (&info, 0, 0, &align);
    gst_video_info_align (&info, &align);
  #ifndef _WIN32
@@ -197,7 +200,7 @@ index 4b861989a5..41bf3c3572 100644
  #else
    pool = gst_msdk_create_d3d11_pool (thiz, num_buffers);
  #endif
-@@ -1396,13 +1410,16 @@ gst_msdkenc_set_format (GstVideoEncoder * encoder, GstVideoCodecState * state)
+@@ -1396,13 +1413,16 @@ gst_msdkenc_set_format (GstVideoEncoder * encoder, GstVideoCodecState * state)
     * based pipeline usage. Ideally we should have dmabuf support even with
     * raw-caps negotiation, but we don't have dmabuf-import support in msdk
     * plugin yet */
@@ -214,7 +217,7 @@ index 4b861989a5..41bf3c3572 100644
  
    if (!gst_msdkenc_init_encoder (thiz))
      return FALSE;
-@@ -1517,7 +1534,7 @@ gst_msdkenc_get_surface_from_frame (GstMsdkEnc * thiz,
+@@ -1517,7 +1537,7 @@ gst_msdkenc_get_surface_from_frame (GstMsdkEnc * thiz,
    inbuf = frame->input_buffer;
  
    msdk_surface = gst_msdk_import_to_msdk_surface (inbuf, thiz->context,
@@ -223,7 +226,7 @@ index 4b861989a5..41bf3c3572 100644
    if (msdk_surface) {
      msdk_surface->buf = gst_buffer_ref (inbuf);
      return msdk_surface;
-@@ -1742,7 +1759,7 @@ gst_msdkenc_propose_allocation (GstVideoEncoder * encoder, GstQuery * query)
+@@ -1742,7 +1762,7 @@ gst_msdkenc_propose_allocation (GstVideoEncoder * encoder, GstQuery * query)
      return FALSE;
    }
  
@@ -232,7 +235,7 @@ index 4b861989a5..41bf3c3572 100644
      GST_INFO_OBJECT (encoder, "failed to get video info");
      return FALSE;
    }
-@@ -1770,10 +1787,9 @@ gst_msdkenc_propose_allocation (GstVideoEncoder * encoder, GstQuery * query)
+@@ -1770,10 +1790,9 @@ gst_msdkenc_propose_allocation (GstVideoEncoder * encoder, GstQuery * query)
      if (gst_buffer_pool_config_get_allocator (config, &allocator, NULL))
        gst_query_add_allocation_param (query, allocator, &params);
      gst_structure_free (config);
@@ -244,7 +247,7 @@ index 4b861989a5..41bf3c3572 100644
    return GST_VIDEO_ENCODER_CLASS (parent_class)->propose_allocation (encoder,
        query);
  }
-@@ -2001,6 +2017,9 @@ gst_msdkenc_init (GstMsdkEnc * thiz)
+@@ -2001,6 +2020,9 @@ gst_msdkenc_init (GstMsdkEnc * thiz)
    thiz->lowdelay_brc = PROP_LOWDELAY_BRC_DEFAULT;
    thiz->adaptive_i = PROP_ADAPTIVE_I_DEFAULT;
    thiz->adaptive_b = PROP_ADAPTIVE_B_DEFAULT;
