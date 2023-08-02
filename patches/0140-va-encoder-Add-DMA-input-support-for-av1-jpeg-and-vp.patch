@@ -1,0 +1,229 @@
+From 5fd6c56c711652ffadde45fff303679cbf60632d Mon Sep 17 00:00:00 2001
+From: "Cheah, Vincent Beng Keat" <vincent.beng.keat.cheah@intel.com>
+Date: Tue, 1 Aug 2023 21:54:21 +0800
+Subject: [PATCH] va: encoder: Add DMA input support for av1, jpeg and vp9
+
+---
+ .../gst-plugins-bad/sys/va/gstvaav1enc.c      | 36 +++++++++----------
+ .../gst-plugins-bad/sys/va/gstvajpegenc.c     | 20 +++++------
+ .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 32 ++++++++---------
+ 3 files changed, 44 insertions(+), 44 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
+index b37c2cb87f..5c0c236158 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
+@@ -385,8 +385,8 @@ _av1_calculate_level_and_tier (GstVaAV1Enc * self)
+ 
+   pic_size = base->width * base->height;
+   display_rate = gst_util_uint64_scale_int_ceil (pic_size,
+-      GST_VIDEO_INFO_FPS_N (&base->input_state->info),
+-      GST_VIDEO_INFO_FPS_D (&base->input_state->info));
++      GST_VIDEO_INFO_FPS_N (&base->in_info),
++      GST_VIDEO_INFO_FPS_D (&base->in_info));
+ 
+   for (i = 0; i < G_N_ELEMENTS (_va_av1_level_limits); i++) {
+     const GstVaAV1LevelLimits *limits = &_va_av1_level_limits[i];
+@@ -1980,9 +1980,9 @@ _av1_generate_gop_structure (GstVaAV1Enc * self)
+   /* If not set, generate a key frame every 2 second */
+   if (self->gop.keyframe_interval == 0) {
+     self->gop.keyframe_interval =
+-        (2 * GST_VIDEO_INFO_FPS_N (&base->input_state->info)
+-        + GST_VIDEO_INFO_FPS_D (&base->input_state->info) - 1) /
+-        GST_VIDEO_INFO_FPS_D (&base->input_state->info);
++        (2 * GST_VIDEO_INFO_FPS_N (&base->in_info)
++        + GST_VIDEO_INFO_FPS_D (&base->in_info) - 1) /
++        GST_VIDEO_INFO_FPS_D (&base->in_info);
+   }
+ 
+   if (self->gop.keyframe_interval > MAX_KEY_FRAME_INTERVAL)
+@@ -2610,7 +2610,7 @@ _av1_ensure_rate_control (GstVaAV1Enc * self)
+     guint bits_per_pix;
+ 
+     if (!_av1_get_rtformat (self,
+-            GST_VIDEO_INFO_FORMAT (&base->input_state->info), &depth, &chrome))
++            GST_VIDEO_INFO_FORMAT (&base->in_info), &depth, &chrome))
+       g_assert_not_reached ();
+ 
+     if (chrome == 3) {
+@@ -2624,8 +2624,8 @@ _av1_ensure_rate_control (GstVaAV1Enc * self)
+ 
+     factor = (guint64) base->width * base->height * bits_per_pix / 16;
+     bitrate = gst_util_uint64_scale (factor,
+-        GST_VIDEO_INFO_FPS_N (&base->input_state->info),
+-        GST_VIDEO_INFO_FPS_D (&base->input_state->info)) / 1000;
++        GST_VIDEO_INFO_FPS_N (&base->in_info),
++        GST_VIDEO_INFO_FPS_D (&base->in_info)) / 1000;
+ 
+     GST_INFO_OBJECT (self, "target bitrate computed to %u kbps", bitrate);
+ 
+@@ -2704,23 +2704,23 @@ gst_va_av1_enc_reconfig (GstVaBaseEnc * base)
+ 
+   gst_va_base_enc_reset_state (base);
+ 
+-  base->width = GST_VIDEO_INFO_WIDTH (&base->input_state->info);
+-  base->height = GST_VIDEO_INFO_HEIGHT (&base->input_state->info);
++  base->width = GST_VIDEO_INFO_WIDTH (&base->in_info);
++  base->height = GST_VIDEO_INFO_HEIGHT (&base->in_info);
+   self->mi_cols = 2 * ((base->width + 7) >> 3);
+   self->mi_rows = 2 * ((base->height + 7) >> 3);
+ 
+   /* Frame rate is needed for rate control and PTS setting. */
+-  if (GST_VIDEO_INFO_FPS_N (&base->input_state->info) == 0
+-      || GST_VIDEO_INFO_FPS_D (&base->input_state->info) == 0) {
++  if (GST_VIDEO_INFO_FPS_N (&base->in_info) == 0
++      || GST_VIDEO_INFO_FPS_D (&base->in_info) == 0) {
+     GST_INFO_OBJECT (self, "Unknown framerate, just set to 30 fps");
+-    GST_VIDEO_INFO_FPS_N (&base->input_state->info) = 30;
+-    GST_VIDEO_INFO_FPS_D (&base->input_state->info) = 1;
++    GST_VIDEO_INFO_FPS_N (&base->in_info) = 30;
++    GST_VIDEO_INFO_FPS_D (&base->in_info) = 1;
+   }
+   base->frame_duration = gst_util_uint64_scale (GST_SECOND,
+-      GST_VIDEO_INFO_FPS_D (&base->input_state->info),
+-      GST_VIDEO_INFO_FPS_N (&base->input_state->info));
++      GST_VIDEO_INFO_FPS_D (&base->in_info),
++      GST_VIDEO_INFO_FPS_N (&base->in_info));
+ 
+-  in_format = GST_VIDEO_INFO_FORMAT (&base->input_state->info);
++  in_format = GST_VIDEO_INFO_FORMAT (&base->in_info);
+   base->rt_format =
+       _av1_get_rtformat (self, in_format, &self->depth, &self->chrome);
+   if (!base->rt_format) {
+@@ -2752,7 +2752,7 @@ gst_va_av1_enc_reconfig (GstVaBaseEnc * base)
+ 
+   max_ref_frames = GST_AV1_NUM_REF_FRAMES + 3 /* scratch frames */ ;
+   if (!gst_va_encoder_open (base->encoder, base->profile,
+-          GST_VIDEO_INFO_FORMAT (&base->input_state->info), base->rt_format,
++          GST_VIDEO_INFO_FORMAT (&base->in_info), base->rt_format,
+           base->width, base->height, base->codedbuf_size, max_ref_frames,
+           self->rc.rc_ctrl_mode, self->packed_headers, NULL)) {
+     GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c b/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
+index af25280efc..897b1c121a 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
+@@ -190,7 +190,7 @@ _jpeg_generate_sampling_factors (GstVaJpegEnc * self)
+   const GstVideoInfo *vinfo;
+   gint i;
+ 
+-  vinfo = &base->input_state->info;
++  vinfo = &base->in_info;
+ 
+   if (GST_VIDEO_INFO_FORMAT (vinfo) == GST_VIDEO_FORMAT_ENCODED) {
+     /* Use native I420 format */
+@@ -308,9 +308,9 @@ gst_va_jpeg_enc_reconfig (GstVaBaseEnc * base)
+   GstCaps *out_caps;
+   VAConfigAttrib jpeg_attr;
+ 
+-  width = GST_VIDEO_INFO_WIDTH (&base->input_state->info);
+-  height = GST_VIDEO_INFO_HEIGHT (&base->input_state->info);
+-  format = GST_VIDEO_INFO_FORMAT (&base->input_state->info);
++  width = GST_VIDEO_INFO_WIDTH (&base->in_info);
++  height = GST_VIDEO_INFO_HEIGHT (&base->in_info);
++  format = GST_VIDEO_INFO_FORMAT (&base->in_info);
+   codedbuf_size = base->codedbuf_size;
+ 
+   need_negotiation = (base->profile != VAProfileNone);
+@@ -336,15 +336,15 @@ gst_va_jpeg_enc_reconfig (GstVaBaseEnc * base)
+   self->input_format = format;
+ 
+   /* Frame rate is needed for rate control and PTS setting. */
+-  if (GST_VIDEO_INFO_FPS_N (&base->input_state->info) == 0
+-      || GST_VIDEO_INFO_FPS_D (&base->input_state->info) == 0) {
++  if (GST_VIDEO_INFO_FPS_N (&base->in_info) == 0
++      || GST_VIDEO_INFO_FPS_D (&base->in_info) == 0) {
+     GST_INFO_OBJECT (self, "Unknown framerate, just set to 30 fps");
+-    GST_VIDEO_INFO_FPS_N (&base->input_state->info) = 30;
+-    GST_VIDEO_INFO_FPS_D (&base->input_state->info) = 1;
++    GST_VIDEO_INFO_FPS_N (&base->in_info) = 30;
++    GST_VIDEO_INFO_FPS_D (&base->in_info) = 1;
+   }
+   base->frame_duration = gst_util_uint64_scale (GST_SECOND,
+-      GST_VIDEO_INFO_FPS_D (&base->input_state->info),
+-      GST_VIDEO_INFO_FPS_N (&base->input_state->info));
++      GST_VIDEO_INFO_FPS_D (&base->in_info),
++      GST_VIDEO_INFO_FPS_N (&base->in_info));
+ 
+   GST_DEBUG_OBJECT (self, "resolution:%dx%d, frame duration is %"
+       GST_TIME_FORMAT, base->width, base->height,
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
+index c3b6bb2c11..301008895d 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
+@@ -1617,9 +1617,9 @@ _vp9_generate_gop_structure (GstVaVp9Enc * self)
+   /* If not set, generate a key frame every 2 second */
+   if (self->gop.keyframe_interval == 0) {
+     self->gop.keyframe_interval =
+-        (2 * GST_VIDEO_INFO_FPS_N (&base->input_state->info)
+-        + GST_VIDEO_INFO_FPS_D (&base->input_state->info) - 1) /
+-        GST_VIDEO_INFO_FPS_D (&base->input_state->info);
++        (2 * GST_VIDEO_INFO_FPS_N (&base->in_info)
++        + GST_VIDEO_INFO_FPS_D (&base->in_info) - 1) /
++        GST_VIDEO_INFO_FPS_D (&base->in_info);
+   }
+ 
+   if (self->gop.keyframe_interval > MAX_KEY_FRAME_INTERVAL)
+@@ -1921,7 +1921,7 @@ _vp9_ensure_rate_control (GstVaVp9Enc * self)
+     guint bits_per_pix;
+ 
+     if (!_vp9_get_rtformat (self,
+-            GST_VIDEO_INFO_FORMAT (&base->input_state->info), &depth, &chrome))
++            GST_VIDEO_INFO_FORMAT (&base->in_info), &depth, &chrome))
+       g_assert_not_reached ();
+ 
+     if (chrome == 3) {
+@@ -1935,8 +1935,8 @@ _vp9_ensure_rate_control (GstVaVp9Enc * self)
+ 
+     factor = (guint64) base->width * base->height * bits_per_pix / 16;
+     bitrate = gst_util_uint64_scale (factor,
+-        GST_VIDEO_INFO_FPS_N (&base->input_state->info),
+-        GST_VIDEO_INFO_FPS_D (&base->input_state->info)) / 1000;
++        GST_VIDEO_INFO_FPS_N (&base->in_info),
++        GST_VIDEO_INFO_FPS_D (&base->in_info)) / 1000;
+ 
+     GST_INFO_OBJECT (self, "target bitrate computed to %u kbps", bitrate);
+ 
+@@ -2049,21 +2049,21 @@ gst_va_vp9_enc_reconfig (GstVaBaseEnc * base)
+ 
+   gst_va_base_enc_reset_state (base);
+ 
+-  base->width = GST_VIDEO_INFO_WIDTH (&base->input_state->info);
+-  base->height = GST_VIDEO_INFO_HEIGHT (&base->input_state->info);
++  base->width = GST_VIDEO_INFO_WIDTH (&base->in_info);
++  base->height = GST_VIDEO_INFO_HEIGHT (&base->in_info);
+ 
+   /* Frame rate is needed for rate control and PTS setting. */
+-  if (GST_VIDEO_INFO_FPS_N (&base->input_state->info) == 0
+-      || GST_VIDEO_INFO_FPS_D (&base->input_state->info) == 0) {
++  if (GST_VIDEO_INFO_FPS_N (&base->in_info) == 0
++      || GST_VIDEO_INFO_FPS_D (&base->in_info) == 0) {
+     GST_INFO_OBJECT (self, "Unknown framerate, just set to 30 fps");
+-    GST_VIDEO_INFO_FPS_N (&base->input_state->info) = 30;
+-    GST_VIDEO_INFO_FPS_D (&base->input_state->info) = 1;
++    GST_VIDEO_INFO_FPS_N (&base->in_info) = 30;
++    GST_VIDEO_INFO_FPS_D (&base->in_info) = 1;
+   }
+   base->frame_duration = gst_util_uint64_scale (GST_SECOND,
+-      GST_VIDEO_INFO_FPS_D (&base->input_state->info),
+-      GST_VIDEO_INFO_FPS_N (&base->input_state->info));
++      GST_VIDEO_INFO_FPS_D (&base->in_info),
++      GST_VIDEO_INFO_FPS_N (&base->in_info));
+ 
+-  in_format = GST_VIDEO_INFO_FORMAT (&base->input_state->info);
++  in_format = GST_VIDEO_INFO_FORMAT (&base->in_info);
+   base->rt_format =
+       _vp9_get_rtformat (self, in_format, &self->depth, &self->chrome);
+   if (!base->rt_format) {
+@@ -2087,7 +2087,7 @@ gst_va_vp9_enc_reconfig (GstVaBaseEnc * base)
+ 
+   max_ref_frames = GST_VP9_REF_FRAMES + 3 /* scratch frames */ ;
+   if (!gst_va_encoder_open (base->encoder, base->profile,
+-          GST_VIDEO_INFO_FORMAT (&base->input_state->info), base->rt_format,
++          GST_VIDEO_INFO_FORMAT (&base->in_info), base->rt_format,
+           base->width, base->height, base->codedbuf_size, max_ref_frames,
+           self->rc.rc_ctrl_mode, self->packed_headers, NULL)) {
+     GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
+-- 
+2.34.1
+
