@@ -4,6 +4,17 @@ Intel developer staging area for upstream patch contributions to [gstreamer](htt
 
 The upstream project is tracked as a submodule in this repo.
 
+## upstream process
+To improve upstream patch quality and reduce patchset rebase efforts, we use the following process
+1. Send PR1 to https://github.com/intel-media-ci/gstreamer, add module maintainers to Reviewers
+1. Got approval from one maintainer
+1. Wait for 1 more workday to see any objections. If it's an urgent issue, please ask another reviewer + 1 for you.
+1. Close PR1, and send it to the community, ping the community with some frequency if it's no response.
+1. If the community has no response in 4 weeks or it’s an urgent issue, send PR2 to https://github.com/intel/cartwheel-gstreamer
+1. Provide upstream patch link, ping maintainers for merging
+1. Ping community until the patch merged in upstream
+1. Send new PR to cartwheel to remove patches once they've merged in upstream
+
 ## clone
 ```shell
 $ git clone https://github.com/intel/cartwheel-gstreamer --recursive
