@@ -1,19 +1,19 @@
-From 5a1570f86e3eabdb6fbb556b47b151c762500e7a Mon Sep 17 00:00:00 2001
+From 1bfd9f9a890a4ac649f364307a567ecf590480cf Mon Sep 17 00:00:00 2001
 From: Yinhang Liu <yinhang.liu@intel.com>
 Date: Thu, 18 May 2023 14:36:23 +0800
-Subject: [PATCH 130/138] msdk: Add a helper function to get supported
+Subject: [PATCH 130/139] msdk: Add a helper function to get supported
  modifiers
 
 The modifiers will be used when creating caps for dma feature.
 
 co-authored-by: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 ---
- .../sys/msdk/gstmsdkallocator_libva.c         | 77 +++++++++++++++++++
+ .../sys/msdk/gstmsdkallocator_libva.c         | 74 +++++++++++++++++++
  .../sys/msdk/gstmsdkallocator_libva.h         |  4 +
- 2 files changed, 81 insertions(+)
+ 2 files changed, 78 insertions(+)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index b2ab8bf6d1..caa0a1b5f4 100644
+index b2ab8bf6d1..34c05d18de 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 @@ -32,6 +32,7 @@
@@ -24,7 +24,7 @@ index b2ab8bf6d1..caa0a1b5f4 100644
  #include <unistd.h>
  #include "gstmsdkallocator.h"
  #include "gstmsdkallocator_libva.h"
-@@ -776,3 +777,79 @@ error_destroy_va_surface:
+@@ -776,3 +777,76 @@ error_destroy_va_surface:
      return FALSE;
    }
  }
@@ -95,9 +95,6 @@ index b2ab8bf6d1..caa0a1b5f4 100644
 +  if (mod == DRM_FORMAT_MOD_INVALID && mod_gen == DRM_FORMAT_MOD_INVALID) {
 +    GST_WARNING ("Failed to get modifier %s:0x%016llx",
 +        gst_video_format_to_string (format), DRM_FORMAT_MOD_INVALID);
-+
-+    g_value_set_uint64 (&gmod, DRM_FORMAT_MOD_INVALID);
-+    gst_value_list_append_value (modifiers, &gmod);
 +  }
 +
 +  g_value_unset (&gmod);

@@ -1,21 +1,24 @@
-From 2fa8ace4c4f6b557390be1c6ca680cd96ebab060 Mon Sep 17 00:00:00 2001
+From 2d7f5dfdabed5ce879ed1893b84b7377ae7282c5 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Fri, 2 Jun 2023 17:30:31 +0800
-Subject: [PATCH 137/138] msdk: Add a help func to fix the map
+Subject: [PATCH 138/139] msdk: Add a help func to fix the map
 
 ---
- .../gst-plugins-bad/sys/msdk/gstmsdkcaps.c    | 29 +++++++++++++++++++
- 1 file changed, 29 insertions(+)
+ .../gst-plugins-bad/sys/msdk/gstmsdkcaps.c    | 32 +++++++++++++++++++
+ 1 file changed, 32 insertions(+)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c
-index 5b036bf849..1ad4a00591 100644
+index 9fe31fb1a9..d324939e5b 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c
-@@ -224,6 +224,34 @@ _get_media_type (guint codec)
+@@ -224,6 +224,37 @@ _get_media_type (guint codec)
  }
  
  #ifndef _WIN32
-+/* In RGB case, we need to fix the map */
++/* For RGB cases, the byte orders are different between vaImageFormat (LSB) and
++ * GStreamer video format (MSB). This function corrects the mapping between
++ * different order manners.
++ */
 +static void
 +_fix_map (GstMsdkContext * context)
 +{
@@ -46,7 +49,7 @@ index 5b036bf849..1ad4a00591 100644
  static gboolean
  _dma_fmt_to_dma_drm_fmts (GstMsdkContext * context,
      GstMsdkContextJobType job_type,
-@@ -252,6 +280,7 @@ _dma_fmt_to_dma_drm_fmts (GstMsdkContext * context,
+@@ -252,6 +283,7 @@ _dma_fmt_to_dma_drm_fmts (GstMsdkContext * context,
    for (gint m = 0; m < gst_value_list_get_size (&mods); m++) {
      const GValue *gmod = gst_value_list_get_value (&mods, m);
      modifier = g_value_get_uint64 (gmod);
