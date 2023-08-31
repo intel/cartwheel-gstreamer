@@ -1,18 +1,18 @@
-From 14812bd91f938dd6dd8bf69b767cf92168dc71ab Mon Sep 17 00:00:00 2001
+From 5673037e12df2817aec59609c60e25d1e7355bca Mon Sep 17 00:00:00 2001
 From: Yinhang Liu <yinhang.liu@intel.com>
 Date: Tue, 30 May 2023 18:01:49 +0800
-Subject: [PATCH 134/138] msdkvpp: Add modifier support
+Subject: [PATCH 135/139] msdkvpp: Add modifier support
 
 Co-authored-by: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 ---
  .../sys/msdk/gstmsdkallocator_libva.c         | 12 ++-
- .../gst-plugins-bad/sys/msdk/gstmsdkvpp.c     | 87 ++++++++++++-------
+ .../gst-plugins-bad/sys/msdk/gstmsdkvpp.c     | 86 ++++++++++++-------
  .../gst-plugins-bad/sys/msdk/gstmsdkvpp.h     |  2 +
  .../gst-plugins-bad/sys/msdk/gstmsdkvpputil.c | 16 +++-
- 4 files changed, 77 insertions(+), 40 deletions(-)
+ 4 files changed, 76 insertions(+), 40 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index f8cdbd0cb3..ed2ad783f9 100644
+index a07e558e70..a520ecc13a 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 @@ -639,13 +639,19 @@ _get_va_surface (GstBuffer * buf, GstVideoInfo * info,
@@ -39,7 +39,7 @@ index f8cdbd0cb3..ed2ad783f9 100644
        for (i = 0; i < GST_VIDEO_INFO_N_PLANES (info); ++i) {
          GST_VIDEO_INFO_PLANE_OFFSET (info, i) = vmeta->offset[i];
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
-index 6022d3aa1b..86b3bd4673 100644
+index 6022d3aa1b..72e7ff9e9e 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
 @@ -60,6 +60,7 @@
@@ -237,16 +237,15 @@ index 6022d3aa1b..86b3bd4673 100644
  
    /* We let msdkvpp srcpad first query if downstream has va memory type caps,
     * if not, will check the type of dma memory.
-@@ -1392,7 +1406,7 @@ gst_msdkvpp_fixate_caps (GstBaseTransform * trans,
+@@ -1392,7 +1406,6 @@ gst_msdkvpp_fixate_caps (GstBaseTransform * trans,
            direction == GST_PAD_SRC ? GST_PAD_SINK : GST_PAD_SRC, result)) {
      gst_caps_set_features (result, 0,
          gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_DMABUF, NULL));
 -    *use_dmabuf = TRUE;
-+    result = gst_msdkcaps_intersect (result, othercaps);
    }
  #else
    if (pad_accept_memory (thiz, GST_CAPS_FEATURE_MEMORY_D3D11_MEMORY,
-@@ -1411,20 +1425,24 @@ static GstCaps *
+@@ -1411,20 +1424,24 @@ static GstCaps *
  gst_msdkvpp_transform_caps (GstBaseTransform * trans,
      GstPadDirection direction, GstCaps * caps, GstCaps * filter)
  {
@@ -274,7 +273,7 @@ index 6022d3aa1b..86b3bd4673 100644
    if (out_caps && filter) {
      GstCaps *intersection;
  
-@@ -1892,7 +1910,10 @@ gst_msdkvpp_init (GTypeInstance * instance, gpointer g_class)
+@@ -1892,7 +1909,10 @@ gst_msdkvpp_init (GTypeInstance * instance, gpointer g_class)
    thiz->crop_right = PROP_CROP_RIGHT_DEFAULT;
    thiz->crop_top = PROP_CROP_TOP_DEFAULT;
    thiz->crop_bottom = PROP_CROP_BOTTOM_DEFAULT;

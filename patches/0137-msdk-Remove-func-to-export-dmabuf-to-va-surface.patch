@@ -1,20 +1,20 @@
-From ab0a89fb04756b458066fd433eb82d89f1442ffc Mon Sep 17 00:00:00 2001
+From 1f61b9acea40c33f1823190fdbc5c4a839cb1362 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Thu, 1 Jun 2023 17:45:36 +0800
-Subject: [PATCH 136/138] msdk: Remove func to export dmabuf to va surface
+Subject: [PATCH 137/139] msdk: Remove func to export dmabuf to va surface
 
 Since we use va allocator and va dma allocator to create surface, the
 surface is already exported in the case of dma allocator. So remove
-redundant export function n msdk allocator.
+redundant export function in msdk allocator.
 ---
  .../sys/msdk/gstmsdkallocator_libva.c         | 59 +------------------
  1 file changed, 1 insertion(+), 58 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index ed2ad783f9..ea33c44f0a 100644
+index 224290b909..4e23b257a6 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-@@ -622,57 +622,6 @@ error_create_surface:
+@@ -623,57 +623,6 @@ error_create_surface:
    }
  }
  
@@ -72,7 +72,7 @@ index ed2ad783f9..ea33c44f0a 100644
  /* Currently parameter map_flag is not useful on Linux */
  GstMsdkSurface *
  gst_msdk_import_to_msdk_surface (GstBuffer * buf, GstMsdkContext * msdk_context,
-@@ -696,13 +645,7 @@ gst_msdk_import_to_msdk_surface (GstBuffer * buf, GstMsdkContext * msdk_context,
+@@ -697,13 +646,7 @@ gst_msdk_import_to_msdk_surface (GstBuffer * buf, GstMsdkContext * msdk_context,
      return msdk_surface;
    }
  

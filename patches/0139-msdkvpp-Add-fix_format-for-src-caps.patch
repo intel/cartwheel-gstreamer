@@ -1,14 +1,14 @@
-From d3e7ddb515c5541ec77f40c0f6c8f9fc8a8c76e1 Mon Sep 17 00:00:00 2001
+From a723f7494ee371a038c9884f65d3d408f3ef84c1 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 26 Jun 2023 18:29:01 +0800
-Subject: [PATCH 138/138] msdkvpp: Add fix_format for src caps
+Subject: [PATCH 139/139] msdkvpp: Add fix_format for src caps
 
 ---
- .../gst-plugins-bad/sys/msdk/gstmsdkvpputil.c | 142 ++++++++++++++++--
- 1 file changed, 129 insertions(+), 13 deletions(-)
+ .../gst-plugins-bad/sys/msdk/gstmsdkvpputil.c | 148 ++++++++++++++++--
+ 1 file changed, 135 insertions(+), 13 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
-index 938324d51e..e4c81f9fb8 100644
+index 938324d51e..1af48dddb1 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
 @@ -29,6 +29,11 @@
@@ -23,10 +23,16 @@ index 938324d51e..e4c81f9fb8 100644
  #define SWAP_GINT(a, b) do {      \
          const gint t = a; a = b; b = t; \
      } while (0)
-@@ -52,6 +57,121 @@ gst_msdkvpp_is_deinterlace_enabled (GstMsdkVPP * msdkvpp, GstVideoInfo * vip)
+@@ -52,6 +57,127 @@ gst_msdkvpp_is_deinterlace_enabled (GstMsdkVPP * msdkvpp, GstVideoInfo * vip)
    return deinterlace;
  }
  
++/* This help function is to fixate output format for vpp src caps,
++ * when downstream element does not set a specific format, i.e. queried
++ * caps contains a list of formats, vpp src caps will loop the format
++ * list and find one format that matches the vpp sink caps format (in vinfo);
++ * if downstream has set a specific format, we use this format for vpp src caps.
++ */
 +static GstCaps *
 +fixate_output_format (GstMsdkVPP * thiz, GstVideoInfo * vinfo, GstCaps * caps)
 +{
@@ -145,7 +151,7 @@ index 938324d51e..e4c81f9fb8 100644
  static gboolean
  fixate_output_frame_size (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
      GstStructure * outs)
-@@ -529,11 +649,15 @@ static GstCaps *
+@@ -529,11 +655,15 @@ static GstCaps *
  _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
      GstCaps * srccaps)
  {
@@ -164,7 +170,7 @@ index 938324d51e..e4c81f9fb8 100644
    /* make a copy */
    structure = gst_structure_copy (structure);
  
-@@ -541,15 +665,6 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
+@@ -541,15 +671,6 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
      gst_structure_set (structure, "pixel-aspect-ratio", GST_TYPE_FRACTION, 1,
          1, NULL);
  
@@ -180,7 +186,7 @@ index 938324d51e..e4c81f9fb8 100644
    /* Fixate the frame size */
    if (!fixate_output_frame_size (thiz, vinfo, structure))
      goto fixate_failed;
-@@ -577,7 +692,8 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
+@@ -577,7 +698,8 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
  fixate_failed:
    {
      GST_WARNING_OBJECT (thiz, "Could not fixate src caps");
