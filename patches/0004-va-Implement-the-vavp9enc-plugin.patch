@@ -1,23 +1,23 @@
-From 5567b7494b3aca191c8fe3b0661c204efc196e76 Mon Sep 17 00:00:00 2001
+From 6001d823f048036e919da246d592b4559298df2c Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
-Subject: [PATCH 04/14] va: Implement the vavp9enc plugin.
+Subject: [PATCH 04/13] va: Implement the vavp9enc plugin.
 
 ---
- .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3184 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3183 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvavp9enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +-
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
- 4 files changed, 3228 insertions(+), 1 deletion(-)
+ 4 files changed, 3227 insertions(+), 1 deletion(-)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 new file mode 100644
-index 0000000000..80da43a9d5
+index 0000000000..ac44baab0f
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -0,0 +1,3184 @@
+@@ -0,0 +1,3183 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -1636,10 +1636,9 @@ index 0000000000..80da43a9d5
 +
 +  /* If not set, generate a key frame every 2 second */
 +  if (self->gop.keyframe_interval == 0) {
-+    self->gop.keyframe_interval =
-+        (2 * GST_VIDEO_INFO_FPS_N (&base->input_state->info)
-+        + GST_VIDEO_INFO_FPS_D (&base->input_state->info) - 1) /
-+        GST_VIDEO_INFO_FPS_D (&base->input_state->info);
++    self->gop.keyframe_interval = (2 * GST_VIDEO_INFO_FPS_N (&base->in_info)
++        + GST_VIDEO_INFO_FPS_D (&base->in_info) - 1) /
++        GST_VIDEO_INFO_FPS_D (&base->in_info);
 +  }
 +
 +  if (self->gop.keyframe_interval > MAX_KEY_FRAME_INTERVAL)
@@ -1941,7 +1940,7 @@ index 0000000000..80da43a9d5
 +    guint bits_per_pix;
 +
 +    if (!_vp9_get_rtformat (self,
-+            GST_VIDEO_INFO_FORMAT (&base->input_state->info), &depth, &chrome))
++            GST_VIDEO_INFO_FORMAT (&base->in_info), &depth, &chrome))
 +      g_assert_not_reached ();
 +
 +    if (chrome == 3) {
@@ -1955,8 +1954,8 @@ index 0000000000..80da43a9d5
 +
 +    factor = (guint64) base->width * base->height * bits_per_pix / 16;
 +    bitrate = gst_util_uint64_scale (factor,
-+        GST_VIDEO_INFO_FPS_N (&base->input_state->info),
-+        GST_VIDEO_INFO_FPS_D (&base->input_state->info)) / 1000;
++        GST_VIDEO_INFO_FPS_N (&base->in_info),
++        GST_VIDEO_INFO_FPS_D (&base->in_info)) / 1000;
 +
 +    GST_INFO_OBJECT (self, "target bitrate computed to %u kbps", bitrate);
 +
@@ -2069,21 +2068,21 @@ index 0000000000..80da43a9d5
 +
 +  gst_va_base_enc_reset_state (base);
 +
-+  base->width = GST_VIDEO_INFO_WIDTH (&base->input_state->info);
-+  base->height = GST_VIDEO_INFO_HEIGHT (&base->input_state->info);
++  base->width = GST_VIDEO_INFO_WIDTH (&base->in_info);
++  base->height = GST_VIDEO_INFO_HEIGHT (&base->in_info);
 +
 +  /* Frame rate is needed for rate control and PTS setting. */
-+  if (GST_VIDEO_INFO_FPS_N (&base->input_state->info) == 0
-+      || GST_VIDEO_INFO_FPS_D (&base->input_state->info) == 0) {
++  if (GST_VIDEO_INFO_FPS_N (&base->in_info) == 0
++      || GST_VIDEO_INFO_FPS_D (&base->in_info) == 0) {
 +    GST_INFO_OBJECT (self, "Unknown framerate, just set to 30 fps");
-+    GST_VIDEO_INFO_FPS_N (&base->input_state->info) = 30;
-+    GST_VIDEO_INFO_FPS_D (&base->input_state->info) = 1;
++    GST_VIDEO_INFO_FPS_N (&base->in_info) = 30;
++    GST_VIDEO_INFO_FPS_D (&base->in_info) = 1;
 +  }
 +  base->frame_duration = gst_util_uint64_scale (GST_SECOND,
-+      GST_VIDEO_INFO_FPS_D (&base->input_state->info),
-+      GST_VIDEO_INFO_FPS_N (&base->input_state->info));
++      GST_VIDEO_INFO_FPS_D (&base->in_info),
++      GST_VIDEO_INFO_FPS_N (&base->in_info));
 +
-+  in_format = GST_VIDEO_INFO_FORMAT (&base->input_state->info);
++  in_format = GST_VIDEO_INFO_FORMAT (&base->in_info);
 +  base->rt_format =
 +      _vp9_get_rtformat (self, in_format, &self->depth, &self->chrome);
 +  if (!base->rt_format) {
@@ -2107,7 +2106,7 @@ index 0000000000..80da43a9d5
 +
 +  max_ref_frames = GST_VP9_REF_FRAMES + 3 /* scratch frames */ ;
 +  if (!gst_va_encoder_open (base->encoder, base->profile,
-+          GST_VIDEO_INFO_FORMAT (&base->input_state->info), base->rt_format,
++          GST_VIDEO_INFO_FORMAT (&base->in_info), base->rt_format,
 +          base->width, base->height, base->codedbuf_size, max_ref_frames,
 +          self->rc.rc_ctrl_mode, self->packed_headers)) {
 +    GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
@@ -3243,10 +3242,10 @@ index 0000000000..94db2e8e3b
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index 3e0a3f7060..2dcd9985d9 100644
+index 3dbcfa60d1..70f40758e4 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
-@@ -21,6 +21,7 @@ va_sources = [
+@@ -22,6 +22,7 @@ va_sources = [
    'gstvaprofile.c',
    'gstvavp8dec.c',
    'gstvavp9dec.c',
@@ -3254,7 +3253,7 @@ index 3e0a3f7060..2dcd9985d9 100644
    'gstvavpp.c',
  ]
  
-@@ -78,7 +79,7 @@ gstva = library('gstva',
+@@ -79,7 +80,7 @@ gstva = library('gstva',
    c_args : gst_plugins_bad_args + extra_args,
    cpp_args : gst_plugins_bad_args + extra_args,
    include_directories : [configinc],
@@ -3264,7 +3263,7 @@ index 3e0a3f7060..2dcd9985d9 100644
    install : true,
    install_dir : plugins_install_dir,
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index 0b186377d1..43e83b02de 100644
+index 52924dcaa5..06edecf0fc 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -42,6 +42,7 @@
@@ -3275,7 +3274,7 @@ index 0b186377d1..43e83b02de 100644
  #include "gstvavpp.h"
  
  #define GST_CAT_DEFAULT gstva_debug
-@@ -203,6 +204,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -206,6 +207,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
                device->render_device_path);
          }
          break;
@@ -3290,5 +3289,5 @@ index 0b186377d1..43e83b02de 100644
          GST_DEBUG ("No encoder implementation for %" GST_FOURCC_FORMAT,
              GST_FOURCC_ARGS (codec));
 -- 
-2.34.1
+2.25.1
 
