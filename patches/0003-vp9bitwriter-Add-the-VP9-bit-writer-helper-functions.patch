@@ -1,7 +1,7 @@
-From 70f206280f520423efeb829d313573305d9502a0 Mon Sep 17 00:00:00 2001
+From 53dbc168ec1893117760888b4ee684097c768e46 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Wed, 1 Feb 2023 21:45:42 +0800
-Subject: [PATCH 03/14] vp9bitwriter: Add the VP9 bit writer helper functions.
+Subject: [PATCH 03/13] vp9bitwriter: Add the VP9 bit writer helper functions.
 
 As the first version, we only implement the "show existing frame"
 and super frame writting. Other frame header types writting should
@@ -269,5 +269,5 @@ index c06c2992f5..b462628604 100644
  codecparser_headers = [
    'codecparsers-prelude.h',
 -- 
-2.34.1
+2.25.1
 

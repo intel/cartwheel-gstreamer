@@ -1,7 +1,7 @@
-From ac6924fc693eaa4f755755457c6699aa4b5ce4f1 Mon Sep 17 00:00:00 2001
+From 4ad8d0c236285b6759688ca0917490e7d97b70d7 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 10 Nov 2022 20:36:05 +0800
-Subject: [PATCH 02/14] va: encoder: Add copy_output_data() helper function.
+Subject: [PATCH 02/13] va: encoder: Add copy_output_data() helper function.
 
 ---
  .../gst-plugins-bad/sys/va/gstvabaseenc.c     | 47 +++++++++++++++++++
@@ -9,10 +9,10 @@ Subject: [PATCH 02/14] va: encoder: Add copy_output_data() helper function.
  2 files changed, 51 insertions(+), 1 deletion(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index aebfaf86b3..1008d117cc 100644
+index 8ffa542c63..8ffe404648 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-@@ -379,6 +379,53 @@ error:
+@@ -332,6 +332,53 @@ error:
    return NULL;
  }
  
@@ -67,10 +67,10 @@ index aebfaf86b3..1008d117cc 100644
  _allocator_from_caps (GstVaBaseEnc * base, GstCaps * caps)
  {
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
-index eca2b72415..0007a13e29 100644
+index e16bd54c98..f94d553b31 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.h
-@@ -135,7 +135,10 @@ void                  gst_va_base_enc_add_codec_tag       (GstVaBaseEnc * base,
+@@ -136,7 +136,10 @@ void                  gst_va_base_enc_add_codec_tag       (GstVaBaseEnc * base,
  void                  gst_va_base_enc_reset_state         (GstVaBaseEnc * base);
  GstBuffer *           gst_va_base_enc_create_output_buffer (GstVaBaseEnc * base,
                                                              GstVaEncodePicture * picture);
@@ -83,5 +83,5 @@ index eca2b72415..0007a13e29 100644
                                                              guint32 * old_val,
                                                              guint32 new_val,
 -- 
-2.34.1
+2.25.1
 
