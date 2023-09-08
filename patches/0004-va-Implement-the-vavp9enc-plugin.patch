@@ -1,23 +1,23 @@
-From 6001d823f048036e919da246d592b4559298df2c Mon Sep 17 00:00:00 2001
+From 15ad5261cb02789eb3b09d6b2b743a33e7dd2ff3 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
 Subject: [PATCH 04/13] va: Implement the vavp9enc plugin.
 
 ---
- .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3183 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3165 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvavp9enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +-
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
- 4 files changed, 3227 insertions(+), 1 deletion(-)
+ 4 files changed, 3209 insertions(+), 1 deletion(-)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 new file mode 100644
-index 0000000000..ac44baab0f
+index 0000000000..11fbb06f55
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -0,0 +1,3183 @@
+@@ -0,0 +1,3165 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -3164,31 +3164,13 @@ index 0000000000..ac44baab0f
 +
 +  type_info.class_data = cdata;
 +  if (entrypoint == VAEntrypointEncSlice) {
-+    type_name = g_strdup ("GstVaVp9Enc");
-+    feature_name = g_strdup ("vavp9enc");
++    gst_va_create_feature_name (device, "GstVaVP9Enc", "GstVa%sVP9Enc",
++        &type_name, "vavp9enc", "va%svp9enc", &feature_name,
++        &cdata->description, &rank);
 +  } else {
-+    type_name = g_strdup ("GstVaVp9LPEnc");
-+    feature_name = g_strdup ("vavp9lpenc");
-+  }
-+
-+  /* The first encoder to be registered should use a constant name,
-+   * like vavp9enc, for any additional encoders, we create unique
-+   * names, using inserting the render device name. */
-+  if (g_type_from_name (type_name)) {
-+    gchar *basename = g_path_get_basename (device->render_device_path);
-+    g_free (type_name);
-+    g_free (feature_name);
-+    if (entrypoint == VAEntrypointEncSlice) {
-+      type_name = g_strdup_printf ("GstVa%sVp9Enc", basename);
-+      feature_name = g_strdup_printf ("va%svp9enc", basename);
-+    } else {
-+      type_name = g_strdup_printf ("GstVa%sVp9LPEnc", basename);
-+      feature_name = g_strdup_printf ("va%svp9lpenc", basename);
-+    }
-+    cdata->description = basename;
-+    /* lower rank for non-first device */
-+    if (rank > 0)
-+      rank--;
++    gst_va_create_feature_name (device, "GstVaVP9LPEnc", "GstVa%sVP9LPEnc",
++        &type_name, "vavp9lpenc", "va%svp9lpenc", &feature_name,
++        &cdata->description, &rank);
 +  }
 +
 +  g_once (&debug_once, _register_debug_category, NULL);
