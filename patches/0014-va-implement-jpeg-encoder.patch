@@ -1,4 +1,4 @@
-From dd98d085078a9ee96f733674cd90c8865807e8a0 Mon Sep 17 00:00:00 2001
+From 4ffb0f9a5780667877ac5ea4bcf0b728197883b5 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 3 Nov 2022 20:17:23 +0800
 Subject: [PATCH 13/13] va: implement jpeg encoder.
@@ -14,14 +14,14 @@ And also implement the jpeg bitwriter.
  .../gst-plugins-bad/sys/va/gstvaencoder.h     |    3 +-
  .../gst-plugins-bad/sys/va/gstvah264enc.c     |    2 +-
  .../gst-plugins-bad/sys/va/gstvah265enc.c     |    2 +-
- .../gst-plugins-bad/sys/va/gstvajpegenc.c     | 1113 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvajpegenc.c     | 1100 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvajpegenc.h     |   34 +
  .../gst-plugins-bad/sys/va/gstvavp9enc.c      |    2 +-
  .../gst-plugins-bad/sys/va/meson.build        |    1 +
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
  .../tests/check/libs/jpegbitwriter.c          |  263 ++++
  .../gst-plugins-bad/tests/check/meson.build   |    1 +
- 16 files changed, 2016 insertions(+), 8 deletions(-)
+ 16 files changed, 2003 insertions(+), 8 deletions(-)
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.c
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.h
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
@@ -632,7 +632,7 @@ index 94c1a53aa4..b863cfdbb2 100644
  codecparser_headers = [
    'codecparsers-prelude.h',
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-index 176e287563..82b5aa1b88 100644
+index d0d3fd32c8..c9798e8761 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 @@ -2753,7 +2753,7 @@ gst_va_av1_enc_reconfig (GstVaBaseEnc * base)
@@ -730,10 +730,10 @@ index 53495187ec..1c02baaa7e 100644
    }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c b/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
 new file mode 100644
-index 0000000000..897b1c121a
+index 0000000000..ec13298e00
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
-@@ -0,0 +1,1113 @@
+@@ -0,0 +1,1100 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -792,6 +792,7 @@ index 0000000000..897b1c121a
 +#include "gstvacaps.h"
 +#include "gstvaprofile.h"
 +#include "gstvadisplay_priv.h"
++#include "gstvapluginutils.h"
 +
 +GST_DEBUG_CATEGORY_STATIC (gst_va_jpegenc_debug);
 +#define GST_CAT_DEFAULT gst_va_jpegenc_debug
@@ -1819,23 +1820,9 @@ index 0000000000..897b1c121a
 +      GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
 +
 +  type_info.class_data = cdata;
-+  type_name = g_strdup ("GstVaJpegEnc");
-+  feature_name = g_strdup ("vajpegenc");
-+
-+  /* The first encoder to be registered should use a constant name,
-+   * like vajpegenc, for any additional encoders, we create unique
-+   * names, using inserting the render device name. */
-+  if (g_type_from_name (type_name)) {
-+    gchar *basename = g_path_get_basename (device->render_device_path);
-+    g_free (type_name);
-+    g_free (feature_name);
-+    type_name = g_strdup_printf ("GstVa%sJpegEnc", basename);
-+    feature_name = g_strdup_printf ("va%sjpegenc", basename);
-+    cdata->description = basename;
-+    /* lower rank for non-first device */
-+    if (rank > 0)
-+      rank--;
-+  }
++  gst_va_create_feature_name (device, "GstVaJpegEnc", "GstVa%sJpegEnc",
++      &type_name, "vajpegenc", "va%sjpegenc", &feature_name,
++      &cdata->description, &rank);
 +
 +  g_once (&debug_once, _register_debug_category, NULL);
 +  type = g_type_register_static (GST_TYPE_VA_BASE_ENC,
@@ -1888,7 +1875,7 @@ index 0000000000..7ffd375441
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-index 6f9b62d38a..1f9c6e31ae 100644
+index 3c04e184c2..da8407fb4d 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 @@ -2088,7 +2088,7 @@ gst_va_vp9_enc_reconfig (GstVaBaseEnc * base)
