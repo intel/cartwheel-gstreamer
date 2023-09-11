@@ -1,4 +1,4 @@
-From 578d955fe63a88cc654c132478df38e212000461 Mon Sep 17 00:00:00 2001
+From 492bf426be97bfe352e30c9ab6dd832890b2de4c Mon Sep 17 00:00:00 2001
 From: Yinhang Liu <yinhang.liu@intel.com>
 Date: Tue, 30 May 2023 16:24:46 +0800
 Subject: [PATCH 132/139] msdk: Add help functions to handle drm caps
