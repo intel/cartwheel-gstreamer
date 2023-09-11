@@ -1,4 +1,4 @@
-From cf87df9f8f5f2cf05f08a813668a3d8a43c79a41 Mon Sep 17 00:00:00 2001
+From 7d1df607827ddb9da05c2fb3ca52f1e13bbaaceb Mon Sep 17 00:00:00 2001
 From: Yinhang Liu <yinhang.liu@intel.com>
 Date: Tue, 30 May 2023 17:25:45 +0800
 Subject: [PATCH 134/139] msdkdec: Add modifier support
@@ -35,7 +35,7 @@ index d8dec486cf..9fe31fb1a9 100644
    } else if (!gst_video_info_from_caps (info, caps)) {
      goto failed;
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index ba671b8080..26283afe4c 100644
+index ba671b8080..6e4b0c3da8 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -38,9 +38,12 @@
@@ -128,7 +128,7 @@ index ba671b8080..26283afe4c 100644
 -  GValue v_format = G_VALUE_INIT;
    GValue v_width = G_VALUE_INIT;
    GValue v_height = G_VALUE_INIT;
-+  gboolean has_drm_format;
++  gboolean has_drm_format = FALSE;
  
    /* use display width and display height in output state, which
     * will be used for caps negotiation */
