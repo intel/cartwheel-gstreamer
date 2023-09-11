@@ -1,4 +1,4 @@
-From 2d7f5dfdabed5ce879ed1893b84b7377ae7282c5 Mon Sep 17 00:00:00 2001
+From bd3781078484308546cdc503f3d0781b0bb65314 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Fri, 2 Jun 2023 17:30:31 +0800
 Subject: [PATCH 138/139] msdk: Add a help func to fix the map

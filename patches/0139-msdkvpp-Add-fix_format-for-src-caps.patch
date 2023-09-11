@@ -1,4 +1,4 @@
-From a723f7494ee371a038c9884f65d3d408f3ef84c1 Mon Sep 17 00:00:00 2001
+From b600e33e8fe9e1c7bc866fb242ff0a2d9ac762e1 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 26 Jun 2023 18:29:01 +0800
 Subject: [PATCH 139/139] msdkvpp: Add fix_format for src caps

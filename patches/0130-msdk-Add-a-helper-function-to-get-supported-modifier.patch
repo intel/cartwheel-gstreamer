@@ -1,4 +1,4 @@
-From 1bfd9f9a890a4ac649f364307a567ecf590480cf Mon Sep 17 00:00:00 2001
+From 0f626a17565efbfc0b0215d6c6a34c0373debb6d Mon Sep 17 00:00:00 2001
 From: Yinhang Liu <yinhang.liu@intel.com>
 Date: Thu, 18 May 2023 14:36:23 +0800
 Subject: [PATCH 130/139] msdk: Add a helper function to get supported
