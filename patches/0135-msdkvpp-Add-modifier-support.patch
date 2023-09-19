@@ -1,4 +1,4 @@
-From 833dcd3ab7d8731e8bf6a7a293367621bb4c3048 Mon Sep 17 00:00:00 2001
+From 9c6edd1d165b79f683e8c5d8f532eff26a599ae2 Mon Sep 17 00:00:00 2001
 From: Yinhang Liu <yinhang.liu@intel.com>
 Date: Tue, 30 May 2023 18:01:49 +0800
 Subject: [PATCH 135/139] msdkvpp: Add modifier support
@@ -39,7 +39,7 @@ index a07e558e70..a520ecc13a 100644
        for (i = 0; i < GST_VIDEO_INFO_N_PLANES (info); ++i) {
          GST_VIDEO_INFO_PLANE_OFFSET (info, i) = vmeta->offset[i];
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
-index 6022d3aa1b..72e7ff9e9e 100644
+index d8fb773974..bb862fe542 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.c
 @@ -60,6 +60,7 @@
@@ -50,7 +50,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
  #include "gstmsdkallocator_libva.h"
  #include <gst/va/gstvaallocator.h>
  #else
-@@ -376,8 +377,8 @@ gst_msdkvpp_prepare_output_buffer (GstBaseTransform * trans,
+@@ -378,8 +379,8 @@ gst_msdkvpp_prepare_output_buffer (GstBaseTransform * trans,
  
  #ifndef _WIN32
  static GstBufferPool *
@@ -61,7 +61,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
  {
    GstBufferPool *pool = NULL;
    GstAllocator *allocator;
-@@ -385,9 +386,20 @@ gst_msdk_create_va_pool (GstVideoInfo * info, GstMsdkContext * msdk_context,
+@@ -387,9 +388,20 @@ gst_msdk_create_va_pool (GstVideoInfo * info, GstMsdkContext * msdk_context,
    GstAllocationParams alloc_params = { 0, 31, 0, 0 };
    GstVaDisplay *display = NULL;
    GstCaps *aligned_caps = NULL;
@@ -82,7 +82,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
    if (use_dmabuf)
      allocator = gst_va_dmabuf_allocator_new (display);
    else {
-@@ -405,12 +417,20 @@ gst_msdk_create_va_pool (GstVideoInfo * info, GstMsdkContext * msdk_context,
+@@ -407,12 +419,20 @@ gst_msdk_create_va_pool (GstVideoInfo * info, GstMsdkContext * msdk_context,
        g_array_unref (formats);
      return NULL;
    }
@@ -106,7 +106,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
  
    gst_object_unref (allocator);
    gst_caps_unref (aligned_caps);
-@@ -480,17 +500,14 @@ gst_msdkvpp_create_buffer_pool (GstMsdkVPP * thiz, GstPadDirection direction,
+@@ -482,17 +502,14 @@ gst_msdkvpp_create_buffer_pool (GstMsdkVPP * thiz, GstPadDirection direction,
    GstVideoInfo info;
    GstVideoInfo *pool_info = NULL;
    GstVideoAlignment align;
@@ -125,7 +125,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
      goto error_no_video_info;
    }
  
-@@ -498,8 +515,8 @@ gst_msdkvpp_create_buffer_pool (GstMsdkVPP * thiz, GstPadDirection direction,
+@@ -500,8 +517,8 @@ gst_msdkvpp_create_buffer_pool (GstMsdkVPP * thiz, GstPadDirection direction,
    gst_video_info_align (&info, &align);
  
  #ifndef _WIN32
@@ -136,7 +136,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
  #else
    pool = gst_msdk_create_d3d11_pool (thiz, &info, min_num_buffers, propose);
  #endif
-@@ -534,7 +551,6 @@ error_no_pool:
+@@ -536,7 +553,6 @@ error_no_pool:
  error_no_video_info:
    {
      GST_INFO_OBJECT (thiz, "Failed to get Video info from caps");
@@ -144,7 +144,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
      return NULL;
    }
  error_pool_config:
-@@ -605,7 +621,6 @@ static gboolean
+@@ -607,7 +623,6 @@ static gboolean
  gst_msdkvpp_decide_allocation (GstBaseTransform * trans, GstQuery * query)
  {
    GstMsdkVPP *thiz = GST_MSDKVPP (trans);
@@ -152,7 +152,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
    GstCaps *caps;
  
    gst_query_parse_allocation (query, &caps, NULL);
-@@ -613,10 +628,7 @@ gst_msdkvpp_decide_allocation (GstBaseTransform * trans, GstQuery * query)
+@@ -615,10 +630,7 @@ gst_msdkvpp_decide_allocation (GstBaseTransform * trans, GstQuery * query)
      GST_ERROR_OBJECT (thiz, "Failed to parse the decide_allocation caps");
      return FALSE;
    }
@@ -164,7 +164,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
    /* We allocate the memory of type that downstream allocation requests */
  #ifndef _WIN32
    if (gst_msdkcaps_has_feature (caps, GST_CAPS_FEATURE_MEMORY_DMABUF)) {
-@@ -658,13 +670,16 @@ gst_msdkvpp_propose_allocation (GstBaseTransform * trans,
+@@ -660,13 +672,16 @@ gst_msdkvpp_propose_allocation (GstBaseTransform * trans,
    guint size;
    guint min_buffers = thiz->async_depth + 1;
  
@@ -182,7 +182,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
      GST_ERROR_OBJECT (thiz, "Failed to get video info");
      return FALSE;
    }
-@@ -1264,9 +1279,15 @@ gst_msdkvpp_set_caps (GstBaseTransform * trans, GstCaps * caps,
+@@ -1394,9 +1409,15 @@ gst_msdkvpp_set_caps (GstBaseTransform * trans, GstCaps * caps,
            gst_caps_get_features (out_caps, 0)))
      thiz->need_vpp = 1;
  
@@ -200,7 +200,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
      goto error_no_video_info;
  
    if (!gst_video_info_is_equal (&in_info, &thiz->sinkpad_info))
-@@ -1336,11 +1357,8 @@ pad_accept_memory (GstMsdkVPP * thiz, const gchar * mem_type,
+@@ -1487,11 +1508,8 @@ pad_accept_memory (GstMsdkVPP * thiz, const gchar * mem_type,
    gst_caps_set_features (caps, 0, gst_caps_features_from_string (mem_type));
  
    out_caps = gst_pad_peer_query_caps (pad, caps);
@@ -213,7 +213,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
      goto done;
  
    if (gst_msdkcaps_has_feature (out_caps, mem_type))
-@@ -1359,11 +1377,9 @@ gst_msdkvpp_fixate_caps (GstBaseTransform * trans,
+@@ -1510,11 +1528,9 @@ gst_msdkvpp_fixate_caps (GstBaseTransform * trans,
  {
    GstMsdkVPP *thiz = GST_MSDKVPP (trans);
    GstCaps *result = NULL;
@@ -225,7 +225,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
    } else {
      /*
       * Override mirroring & rotation properties once video-direction
-@@ -1374,11 +1390,9 @@ gst_msdkvpp_fixate_caps (GstBaseTransform * trans,
+@@ -1525,11 +1541,9 @@ gst_msdkvpp_fixate_caps (GstBaseTransform * trans,
            (thiz->video_direction, &thiz->mirroring, &thiz->rotation);
  
      result = gst_msdkvpp_fixate_srccaps (thiz, caps, othercaps);
@@ -237,7 +237,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
  
    /* We let msdkvpp srcpad first query if downstream has va memory type caps,
     * if not, will check the type of dma memory.
-@@ -1392,7 +1406,6 @@ gst_msdkvpp_fixate_caps (GstBaseTransform * trans,
+@@ -1543,7 +1557,6 @@ gst_msdkvpp_fixate_caps (GstBaseTransform * trans,
            direction == GST_PAD_SRC ? GST_PAD_SINK : GST_PAD_SRC, result)) {
      gst_caps_set_features (result, 0,
          gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_DMABUF, NULL));
@@ -245,7 +245,7 @@ index 6022d3aa1b..72e7ff9e9e 100644
    }
  #else
    if (pad_accept_memory (thiz, GST_CAPS_FEATURE_MEMORY_D3D11_MEMORY,
-@@ -1411,20 +1424,24 @@ static GstCaps *
+@@ -1562,20 +1575,24 @@ static GstCaps *
  gst_msdkvpp_transform_caps (GstBaseTransform * trans,
      GstPadDirection direction, GstCaps * caps, GstCaps * filter)
  {
@@ -273,10 +273,10 @@ index 6022d3aa1b..72e7ff9e9e 100644
    if (out_caps && filter) {
      GstCaps *intersection;
  
-@@ -1892,7 +1909,10 @@ gst_msdkvpp_init (GTypeInstance * instance, gpointer g_class)
-   thiz->crop_right = PROP_CROP_RIGHT_DEFAULT;
+@@ -2060,7 +2077,10 @@ gst_msdkvpp_init (GTypeInstance * instance, gpointer g_class)
    thiz->crop_top = PROP_CROP_TOP_DEFAULT;
    thiz->crop_bottom = PROP_CROP_BOTTOM_DEFAULT;
+   thiz->hdr_tone_mapping = PROP_HDR_TONE_MAPPING_DEFAULT;
 -
 +#ifndef _WIN32
 +  thiz->sink_modifier = DRM_FORMAT_MOD_INVALID;
@@ -286,13 +286,13 @@ index 6022d3aa1b..72e7ff9e9e 100644
    gst_video_info_init (&thiz->srcpad_info);
  }
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.h
-index a71321a0a5..aefec0b207 100644
+index 0046644d05..03eb3870e3 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.h
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpp.h
-@@ -88,6 +88,8 @@ struct _GstMsdkVPP
-   gboolean add_video_meta;
-   gboolean need_vpp;
-   guint flags;
+@@ -91,6 +91,8 @@ struct _GstMsdkVPP
+   /* To check if sinkcaps have HDR SEIs*/
+   gboolean have_mdcv;
+   gboolean have_cll;
 +  guint64 sink_modifier;
 +  guint64 src_modifier;
  
