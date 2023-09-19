@@ -1,4 +1,4 @@
-From 6b3acb034bd6117484aab6f975ad99183f747bb4 Mon Sep 17 00:00:00 2001
+From 7029674eddc8a783a108165a44edbd992b621ded Mon Sep 17 00:00:00 2001
 From: Yinhang Liu <yinhang.liu@intel.com>
 Date: Tue, 30 May 2023 17:25:45 +0800
 Subject: [PATCH 134/139] msdkdec: Add modifier support
@@ -35,7 +35,7 @@ index d8dec486cf..9fe31fb1a9 100644
    } else if (!gst_video_info_from_caps (info, caps)) {
      goto failed;
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index ba671b8080..d631d77a6c 100644
+index 36779c9fa4..37afa2ee61 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -38,9 +38,12 @@

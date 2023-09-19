@@ -1,4 +1,4 @@
-From 054f8677998ed539f7dc552f7a8630e53388ae02 Mon Sep 17 00:00:00 2001
+From 4e16a6f94cbf083f9689605efbdffc1ce4295164 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 22 Aug 2023 14:15:39 +0800
 Subject: [PATCH 133/139] msdk: Config pool with max/min number of buffers
