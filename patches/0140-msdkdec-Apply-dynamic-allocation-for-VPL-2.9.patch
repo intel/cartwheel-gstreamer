@@ -1,0 +1,884 @@
+From cdb8a7cfa07a0197c3eef0870be8aba197796d37 Mon Sep 17 00:00:00 2001
+From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
+Date: Thu, 21 Sep 2023 17:51:35 +0800
+Subject: [PATCH] msdkdec: Apply dynamic allocation for VPL>=2.9
+
+---
+ .../sys/msdk/gstmsdkallocator_d3d.c           | 243 +++++++------
+ .../sys/msdk/gstmsdkallocator_libva.c         | 318 +++++++++---------
+ .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 136 +++++---
+ .../gst-plugins-bad/sys/msdk/gstmsdkdec.h     |   3 +
+ 4 files changed, 397 insertions(+), 303 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c
+index 4dcf154f48..c9ae865e7c 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c
+@@ -32,6 +32,7 @@
+ 
+ #include <gst/d3d11/gstd3d11.h>
+ #include "gstmsdkallocator.h"
++#include "msdk.h"
+ 
+ #define GST_MSDK_FRAME_SURFACE gst_msdk_frame_surface_quark_get ()
+ static GQuark
+@@ -51,141 +52,159 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
+     mfxFrameAllocResponse * resp)
+ {
+   mfxStatus status = MFX_ERR_NONE;
+-  gint i;
+-  GstMsdkSurface *msdk_surface = NULL;
+-  mfxMemId *mids = NULL;
+   GstMsdkContext *context = (GstMsdkContext *) pthis;
+-  GstMsdkAllocResponse *msdk_resp = NULL;
+-  mfxU32 fourcc = req->Info.FourCC;
+-  mfxU16 surfaces_num = req->NumFrameSuggested;
+-  GList *tmp_list = NULL;
+-  GList *l;
+-  GstMsdkSurface *tmp_surface = NULL;
+-
+-  /* MFX_MAKEFOURCC('V','P','8','S') is used for MFX_FOURCC_VP9_SEGMAP surface
+-   * in MSDK and this surface is an internal surface. The external allocator
+-   * shouldn't be used for this surface allocation
+-   *
+-   * See https://github.com/Intel-Media-SDK/MediaSDK/issues/762
+-   */
+-  if (req->Type & MFX_MEMTYPE_INTERNAL_FRAME
+-      && fourcc == MFX_MAKEFOURCC ('V', 'P', '8', 'S'))
+-    return MFX_ERR_UNSUPPORTED;
+-
+-  if (req->Type & MFX_MEMTYPE_EXTERNAL_FRAME) {
+-    GstMsdkAllocResponse *cached =
+-        gst_msdk_context_get_cached_alloc_responses_by_request (context, req);
+-    if (cached) {
+-      /* check if enough frames were allocated */
+-      if (req->NumFrameSuggested > cached->response.NumFrameActual)
+-        return MFX_ERR_MEMORY_ALLOC;
+-
+-      *resp = cached->response;
+-      g_atomic_int_inc (&cached->refcount);
+-      return MFX_ERR_NONE;
+-    }
+-  }
++  mfxSession session;
++  mfxVersion version;
+ 
+-  if (!(req->Type & (MFX_MEMTYPE_VIDEO_MEMORY_DECODER_TARGET |
+-              MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET)))
+-    return MFX_ERR_UNSUPPORTED;
++  session = gst_msdk_context_get_session (context);
++  status = MFXQueryVersion (session, &version);
+ 
+-  mids = (mfxMemId *) g_slice_alloc0 (surfaces_num * sizeof (mfxMemId));
+-  msdk_resp =
+-      (GstMsdkAllocResponse *) g_slice_alloc0 (sizeof (GstMsdkAllocResponse));
++  if (status != MFX_ERR_NONE) {
++    GST_ERROR ("Failed to query MFX version");
++    return MFX_ERR_MEMORY_ALLOC;
++  }
+ 
+-  if (fourcc != MFX_FOURCC_P8) {
+-    GstBufferPool *pool;
+-    GstVideoFormat format;
+-    GstStructure *config;
+-    GstVideoInfo info;
+-    GstCaps *caps;
+-    GstVideoAlignment align;
+-    GstD3D11Device *device;
+-    GstD3D11AllocationParams *params;
++  if (MFX_RUNTIME_VERSION_ATLEAST (version, 2, 9)) {
++    return status;
++  } else {
++    gint i;
++    GstMsdkSurface *msdk_surface = NULL;
++    mfxMemId *mids = NULL;
++    GstMsdkContext *context = (GstMsdkContext *) pthis;
++    GstMsdkAllocResponse *msdk_resp = NULL;
++    mfxU32 fourcc = req->Info.FourCC;
++    mfxU16 surfaces_num = req->NumFrameSuggested;
++    GList *tmp_list = NULL;
++    GList *l;
++    GstMsdkSurface *tmp_surface = NULL;
++
++    /* MFX_MAKEFOURCC('V','P','8','S') is used for MFX_FOURCC_VP9_SEGMAP surface
++     * in MSDK and this surface is an internal surface. The external allocator
++     * shouldn't be used for this surface allocation
++     *
++     * See https://github.com/Intel-Media-SDK/MediaSDK/issues/762
++     */
++    if (req->Type & MFX_MEMTYPE_INTERNAL_FRAME
++        && fourcc == MFX_MAKEFOURCC ('V', 'P', '8', 'S'))
++      return MFX_ERR_UNSUPPORTED;
++
++    if (req->Type & MFX_MEMTYPE_EXTERNAL_FRAME) {
++      GstMsdkAllocResponse *cached =
++          gst_msdk_context_get_cached_alloc_responses_by_request (context, req);
++      if (cached) {
++        /* check if enough frames were allocated */
++        if (req->NumFrameSuggested > cached->response.NumFrameActual)
++          return MFX_ERR_MEMORY_ALLOC;
++
++        *resp = cached->response;
++        g_atomic_int_inc (&cached->refcount);
++        return MFX_ERR_NONE;
++      }
++    }
+ 
+-    device = gst_msdk_context_get_d3d11_device (context);
++    if (!(req->Type & (MFX_MEMTYPE_VIDEO_MEMORY_DECODER_TARGET |
++                MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET)))
++      return MFX_ERR_UNSUPPORTED;
+ 
+-    format = gst_msdk_get_video_format_from_mfx_fourcc (fourcc);
+-    gst_video_info_set_format (&info, format, req->Info.CropW, req->Info.CropH);
++    mids = (mfxMemId *) g_slice_alloc0 (surfaces_num * sizeof (mfxMemId));
++    msdk_resp =
++        (GstMsdkAllocResponse *) g_slice_alloc0 (sizeof (GstMsdkAllocResponse));
+ 
+-    gst_video_alignment_reset (&align);
+-    gst_msdk_set_video_alignment
+-        (&info, req->Info.Width, req->Info.Height, &align);
+-    gst_video_info_align (&info, &align);
++    if (fourcc != MFX_FOURCC_P8) {
++      GstBufferPool *pool;
++      GstVideoFormat format;
++      GstStructure *config;
++      GstVideoInfo info;
++      GstCaps *caps;
++      GstVideoAlignment align;
++      GstD3D11Device *device;
++      GstD3D11AllocationParams *params;
+ 
+-    caps = gst_video_info_to_caps (&info);
++      device = gst_msdk_context_get_d3d11_device (context);
+ 
+-    pool = gst_msdk_context_get_alloc_pool (context);
+-    if (!pool) {
+-      goto error_alloc;
+-    }
++      format = gst_msdk_get_video_format_from_mfx_fourcc (fourcc);
++      gst_video_info_set_format (&info, format, req->Info.CropW,
++          req->Info.CropH);
+ 
+-    config = gst_buffer_pool_get_config (GST_BUFFER_POOL_CAST (pool));
+-    params = gst_d3d11_allocation_params_new (device, &info,
+-        GST_D3D11_ALLOCATION_FLAG_DEFAULT,
+-        D3D11_BIND_DECODER | D3D11_BIND_SHADER_RESOURCE, 0);
+-    gst_d3d11_allocation_params_alignment (params, &align);
+-    gst_buffer_pool_config_set_d3d11_allocation_params (config, params);
+-    gst_d3d11_allocation_params_free (params);
+-    gst_buffer_pool_config_set_params (config, caps,
+-        GST_VIDEO_INFO_SIZE (&info), surfaces_num, surfaces_num);
+-    gst_buffer_pool_config_add_option (config,
+-        GST_BUFFER_POOL_OPTION_VIDEO_META);
+-    gst_buffer_pool_config_add_option (config,
+-        GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
+-
+-    if (!gst_buffer_pool_set_config (pool, config)) {
+-      GST_ERROR ("Failed to set pool config");
+-      gst_object_unref (pool);
+-      goto error_alloc;
+-    }
++      gst_video_alignment_reset (&align);
++      gst_msdk_set_video_alignment
++          (&info, req->Info.Width, req->Info.Height, &align);
++      gst_video_info_align (&info, &align);
+ 
+-    if (!gst_buffer_pool_set_active (pool, TRUE)) {
+-      GST_ERROR ("Failed to activate pool");
+-      gst_object_unref (pool);
+-      goto error_alloc;
+-    }
++      caps = gst_video_info_to_caps (&info);
+ 
+-    for (i = 0; i < surfaces_num; i++) {
+-      GstBuffer *buf;
++      pool = gst_msdk_context_get_alloc_pool (context);
++      if (!pool) {
++        goto error_alloc;
++      }
++
++      config = gst_buffer_pool_get_config (GST_BUFFER_POOL_CAST (pool));
++      params = gst_d3d11_allocation_params_new (device, &info,
++          GST_D3D11_ALLOCATION_FLAG_DEFAULT,
++          D3D11_BIND_DECODER | D3D11_BIND_SHADER_RESOURCE, 0);
++      gst_d3d11_allocation_params_alignment (params, &align);
++      gst_buffer_pool_config_set_d3d11_allocation_params (config, params);
++      gst_d3d11_allocation_params_free (params);
++      gst_buffer_pool_config_set_params (config, caps,
++          GST_VIDEO_INFO_SIZE (&info), surfaces_num, surfaces_num);
++      gst_buffer_pool_config_add_option (config,
++          GST_BUFFER_POOL_OPTION_VIDEO_META);
++      gst_buffer_pool_config_add_option (config,
++          GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
++
++      if (!gst_buffer_pool_set_config (pool, config)) {
++        GST_ERROR ("Failed to set pool config");
++        gst_object_unref (pool);
++        goto error_alloc;
++      }
+ 
+-      if (gst_buffer_pool_acquire_buffer (pool, &buf, NULL) != GST_FLOW_OK) {
+-        GST_ERROR ("Failed to allocate buffer");
+-        gst_buffer_pool_set_active (pool, FALSE);
++      if (!gst_buffer_pool_set_active (pool, TRUE)) {
++        GST_ERROR ("Failed to activate pool");
+         gst_object_unref (pool);
+         goto error_alloc;
+       }
+ 
+-      msdk_surface =
+-          gst_msdk_import_to_msdk_surface (buf, context, &info, GST_MAP_WRITE);
+-      if (msdk_surface)
+-        msdk_surface->buf = buf;
+-      mids[i] = msdk_surface->surface->Data.MemId;
+-      tmp_list = g_list_prepend (tmp_list, msdk_surface);
++      for (i = 0; i < surfaces_num; i++) {
++        GstBuffer *buf;
++
++        if (gst_buffer_pool_acquire_buffer (pool, &buf, NULL) != GST_FLOW_OK) {
++          GST_ERROR ("Failed to allocate buffer");
++          gst_buffer_pool_set_active (pool, FALSE);
++          gst_object_unref (pool);
++          goto error_alloc;
++        }
++
++        msdk_surface =
++            gst_msdk_import_to_msdk_surface (buf, context, &info,
++            GST_MAP_WRITE);
++        if (msdk_surface)
++          msdk_surface->buf = buf;
++        mids[i] = msdk_surface->surface->Data.MemId;
++        tmp_list = g_list_prepend (tmp_list, msdk_surface);
++      }
+     }
+-  }
+-  resp->mids = mids;
+-  resp->NumFrameActual = surfaces_num;
++    resp->mids = mids;
++    resp->NumFrameActual = surfaces_num;
+ 
+-  msdk_resp->response = *resp;
+-  msdk_resp->request = *req;
+-  msdk_resp->refcount = 1;
++    msdk_resp->response = *resp;
++    msdk_resp->request = *req;
++    msdk_resp->refcount = 1;
+ 
+-  gst_msdk_context_add_alloc_response (context, msdk_resp);
++    gst_msdk_context_add_alloc_response (context, msdk_resp);
+ 
+-  /* We need to put all the buffers back to the pool */
+-  for (l = tmp_list; l; l = l->next) {
+-    tmp_surface = (GstMsdkSurface *) l->data;
+-    gst_buffer_unref (tmp_surface->buf);
+-  }
++    /* We need to put all the buffers back to the pool */
++    for (l = tmp_list; l; l = l->next) {
++      tmp_surface = (GstMsdkSurface *) l->data;
++      gst_buffer_unref (tmp_surface->buf);
++    }
+ 
+-  return status;
++    return status;
+ 
+-error_alloc:
+-  g_slice_free1 (surfaces_num * sizeof (mfxMemId), mids);
+-  g_slice_free1 (sizeof (GstMsdkAllocResponse), msdk_resp);
+-  return MFX_ERR_MEMORY_ALLOC;
++  error_alloc:
++    g_slice_free1 (surfaces_num * sizeof (mfxMemId), mids);
++    g_slice_free1 (sizeof (GstMsdkAllocResponse), msdk_resp);
++    return MFX_ERR_MEMORY_ALLOC;
++  }
+ }
+ 
+ mfxStatus
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
+index 4e23b257a6..fbbbb1ac6c 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
+@@ -47,181 +47,199 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
+     mfxFrameAllocResponse * resp)
+ {
+   mfxStatus status = MFX_ERR_NONE;
+-  gint i;
+-  GstMsdkSurface *msdk_surface = NULL;
+-  mfxMemId *mids = NULL;
+   GstMsdkContext *context = (GstMsdkContext *) pthis;
+-  GstMsdkAllocResponse *msdk_resp = NULL;
+-  mfxU32 fourcc = req->Info.FourCC;
+-  mfxU16 surfaces_num = req->NumFrameSuggested;
+-  GList *tmp_list = NULL;
+-  GList *l;
+-  GstMsdkSurface *tmp_surface = NULL;
+-  VAStatus va_status;
+-
+-  /* MFX_MAKEFOURCC('V','P','8','S') is used for MFX_FOURCC_VP9_SEGMAP surface
+-   * in MSDK and this surface is an internal surface. The external allocator
+-   * shouldn't be used for this surface allocation
+-   *
+-   * See https://github.com/Intel-Media-SDK/MediaSDK/issues/762
+-   */
+-  if (req->Type & MFX_MEMTYPE_INTERNAL_FRAME
+-      && fourcc == MFX_MAKEFOURCC ('V', 'P', '8', 'S'))
+-    return MFX_ERR_UNSUPPORTED;
+-
+-  if (req->Type & MFX_MEMTYPE_EXTERNAL_FRAME) {
+-    GstMsdkAllocResponse *cached =
+-        gst_msdk_context_get_cached_alloc_responses_by_request (context, req);
+-    if (cached) {
+-      /* check if enough frames were allocated */
+-      if (req->NumFrameSuggested > cached->response.NumFrameActual)
+-        return MFX_ERR_MEMORY_ALLOC;
+-
+-      *resp = cached->response;
+-      g_atomic_int_inc (&cached->refcount);
+-      return MFX_ERR_NONE;
+-    }
++  mfxSession session;
++  mfxVersion version;
++
++  session = gst_msdk_context_get_session (context);
++  status = MFXQueryVersion (session, &version);
++  if (status != MFX_ERR_NONE) {
++    GST_ERROR ("Failed to query MFX version");
++    return MFX_ERR_MEMORY_ALLOC;
+   }
+ 
+-  /* The VA API does not define any surface types and the application can use either
+-   * MFX_MEMTYPE_VIDEO_MEMORY_DECODER_TARGET or
+-   * MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET to indicate data in video memory.
+-   */
+-  if (!(req->Type & (MFX_MEMTYPE_VIDEO_MEMORY_DECODER_TARGET |
+-              MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET)))
+-    return MFX_ERR_UNSUPPORTED;
+-
+-  mids = (mfxMemId *) g_slice_alloc0 (surfaces_num * sizeof (mfxMemId));
+-  msdk_resp = g_slice_new0 (GstMsdkAllocResponse);
+-
+-  if (fourcc != MFX_FOURCC_P8) {
+-    GstBufferPool *pool;
+-    GstVideoFormat format;
+-    GstStructure *config;
+-    GstVideoInfo info;
+-    GstCaps *caps;
+-    GstVideoAlignment align;
+-    guint min_buffers, max_buffers;
+-
+-    format = gst_msdk_get_video_format_from_mfx_fourcc (fourcc);
+-    gst_video_info_set_format (&info, format, req->Info.CropW, req->Info.CropH);
+-
+-    gst_video_alignment_reset (&align);
+-    gst_msdk_set_video_alignment
+-        (&info, req->Info.Width, req->Info.Height, &align);
+-    gst_video_info_align (&info, &align);
+-
+-    pool = gst_msdk_context_get_alloc_pool (context);
+-    if (!pool) {
+-      goto error_alloc;
+-    }
+-
+-    config = gst_buffer_pool_get_config (GST_BUFFER_POOL_CAST (pool));
+-    if (!gst_buffer_pool_config_get_params (config, &caps, NULL, &min_buffers,
+-            &max_buffers))
+-      goto error_alloc;
+-
+-    max_buffers = MAX (max_buffers, surfaces_num);
+-    gst_buffer_pool_config_set_params (config, caps,
+-        GST_VIDEO_INFO_SIZE (&info), min_buffers, max_buffers);
+-    gst_buffer_pool_config_add_option (config,
+-        GST_BUFFER_POOL_OPTION_VIDEO_META);
+-    gst_buffer_pool_config_add_option (config,
+-        GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
+-    gst_buffer_pool_config_set_va_alignment (config, &align);
+-
+-    if (!gst_buffer_pool_set_config (pool, config)) {
+-      GST_ERROR ("Failed to set pool config");
+-      gst_object_unref (pool);
+-      goto error_alloc;
++/* From VPL 2.9, it starts to support dynamic frame allocation, so we don't need
++ * to do anything here */
++  if (MFX_RUNTIME_VERSION_ATLEAST (version, 2, 9)) {
++    return status;
++  } else {
++    gint i;
++    GstMsdkSurface *msdk_surface = NULL;
++    mfxMemId *mids = NULL;
++    GstMsdkAllocResponse *msdk_resp = NULL;
++    mfxU32 fourcc = req->Info.FourCC;
++    mfxU16 surfaces_num = req->NumFrameSuggested;
++    GList *tmp_list = NULL;
++    GList *l;
++    GstMsdkSurface *tmp_surface = NULL;
++    VAStatus va_status;
++
++    /* MFX_MAKEFOURCC('V','P','8','S') is used for MFX_FOURCC_VP9_SEGMAP surface
++     * in MSDK and this surface is an internal surface. The external allocator
++     * shouldn't be used for this surface allocation
++     *
++     * See https://github.com/Intel-Media-SDK/MediaSDK/issues/762
++     */
++    if (req->Type & MFX_MEMTYPE_INTERNAL_FRAME
++        && fourcc == MFX_MAKEFOURCC ('V', 'P', '8', 'S'))
++      return MFX_ERR_UNSUPPORTED;
++
++    if (req->Type & MFX_MEMTYPE_EXTERNAL_FRAME) {
++      GstMsdkAllocResponse *cached =
++          gst_msdk_context_get_cached_alloc_responses_by_request (context, req);
++      if (cached) {
++        /* check if enough frames were allocated */
++        if (req->NumFrameSuggested > cached->response.NumFrameActual)
++          return MFX_ERR_MEMORY_ALLOC;
++
++        *resp = cached->response;
++        g_atomic_int_inc (&cached->refcount);
++        return MFX_ERR_NONE;
++      }
+     }
+ 
+-    if (!gst_buffer_pool_set_active (pool, TRUE)) {
+-      GST_ERROR ("Failed to activate pool");
+-      gst_object_unref (pool);
+-      goto error_alloc;
+-    }
++    /* The VA API does not define any surface types and the application can use either
++     * MFX_MEMTYPE_VIDEO_MEMORY_DECODER_TARGET or
++     * MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET to indicate data in video memory.
++     */
++    if (!(req->Type & (MFX_MEMTYPE_VIDEO_MEMORY_DECODER_TARGET |
++                MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET)))
++      return MFX_ERR_UNSUPPORTED;
++
++    mids = (mfxMemId *) g_slice_alloc0 (surfaces_num * sizeof (mfxMemId));
++    msdk_resp = g_slice_new0 (GstMsdkAllocResponse);
++
++    if (fourcc != MFX_FOURCC_P8) {
++      GstBufferPool *pool;
++      GstVideoFormat format;
++      GstStructure *config;
++      GstVideoInfo info;
++      GstCaps *caps;
++      GstVideoAlignment align;
++      guint min_buffers, max_buffers;
++
++      format = gst_msdk_get_video_format_from_mfx_fourcc (fourcc);
++      gst_video_info_set_format (&info, format, req->Info.CropW,
++          req->Info.CropH);
++
++      gst_video_alignment_reset (&align);
++      gst_msdk_set_video_alignment
++          (&info, req->Info.Width, req->Info.Height, &align);
++      gst_video_info_align (&info, &align);
++
++      pool = gst_msdk_context_get_alloc_pool (context);
++      if (!pool) {
++        goto error_alloc;
++      }
+ 
+-    for (i = 0; i < surfaces_num; i++) {
+-      GstBuffer *buf;
++      config = gst_buffer_pool_get_config (GST_BUFFER_POOL_CAST (pool));
++      if (!gst_buffer_pool_config_get_params (config, &caps, NULL, &min_buffers,
++              &max_buffers))
++        goto error_alloc;
+ 
+-      if (gst_buffer_pool_acquire_buffer (pool, &buf, NULL) != GST_FLOW_OK) {
+-        GST_ERROR ("Failed to allocate buffer");
+-        gst_buffer_pool_set_active (pool, FALSE);
++      max_buffers = MAX (max_buffers, surfaces_num);
++      gst_buffer_pool_config_set_params (config, caps,
++          GST_VIDEO_INFO_SIZE (&info), min_buffers, max_buffers);
++      gst_buffer_pool_config_add_option (config,
++          GST_BUFFER_POOL_OPTION_VIDEO_META);
++      gst_buffer_pool_config_add_option (config,
++          GST_BUFFER_POOL_OPTION_VIDEO_ALIGNMENT);
++      gst_buffer_pool_config_set_va_alignment (config, &align);
++
++      if (!gst_buffer_pool_set_config (pool, config)) {
++        GST_ERROR ("Failed to set pool config");
+         gst_object_unref (pool);
+         goto error_alloc;
+       }
+ 
+-      msdk_surface = gst_msdk_import_to_msdk_surface (buf, context, &info, 0);
+-
+-      if (!msdk_surface) {
+-        GST_ERROR ("Failed to get GstMsdkSurface");
+-        gst_buffer_pool_set_active (pool, FALSE);
++      if (!gst_buffer_pool_set_active (pool, TRUE)) {
++        GST_ERROR ("Failed to activate pool");
+         gst_object_unref (pool);
+         goto error_alloc;
+       }
+ 
+-      msdk_surface->buf = buf;
+-      mids[i] = msdk_surface->surface->Data.MemId;
+-      tmp_list = g_list_prepend (tmp_list, msdk_surface);
+-    }
+-  } else {
+-    /* This path is to handle a special case when requesting MFX_FOURCC_P208, We keep
+-     * this to avoid failure when building gst-msdk plugins using old version of MediaSDK.
+-     * These buffers will be used inside the driver and released by
+-     * gst_msdk_frame_free functions. Application doesn't need to handle these buffers.
+-     * See https://github.com/Intel-Media-SDK/samples/issues/13 for more details.
+-     */
+-    VAContextID context_id = req->AllocId;
+-    gint width32 = 32 * ((req->Info.Width + 31) >> 5);
+-    gint height32 = 32 * ((req->Info.Height + 31) >> 5);
+-    guint64 codedbuf_size = (width32 * height32) * 400LL / (16 * 16);
+-
+-    for (i = 0; i < surfaces_num; i++) {
+-      VABufferID coded_buf;
+-      GstMsdkMemoryID msdk_mid;
+-
+-      va_status = vaCreateBuffer (gst_msdk_context_get_handle (context),
+-          context_id, VAEncCodedBufferType, codedbuf_size, 1, NULL, &coded_buf);
+-
+-      status = gst_msdk_get_mfx_status_from_va_status (va_status);
+-      if (status < MFX_ERR_NONE) {
+-        GST_ERROR ("failed to create buffer");
+-        return status;
+-      }
++      for (i = 0; i < surfaces_num; i++) {
++        GstBuffer *buf;
++
++        if (gst_buffer_pool_acquire_buffer (pool, &buf, NULL) != GST_FLOW_OK) {
++          GST_ERROR ("Failed to allocate buffer");
++          gst_buffer_pool_set_active (pool, FALSE);
++          gst_object_unref (pool);
++          goto error_alloc;
++        }
+ 
+-      msdk_mid.surface = coded_buf;
+-      msdk_mid.fourcc = fourcc;
++        msdk_surface = gst_msdk_import_to_msdk_surface (buf, context, &info, 0);
+ 
+-      /* Don't use image for P208 */
+-      msdk_mid.image.image_id = VA_INVALID_ID;
+-      msdk_mid.image.buf = VA_INVALID_ID;
++        if (!msdk_surface) {
++          GST_ERROR ("Failed to get GstMsdkSurface");
++          gst_buffer_pool_set_active (pool, FALSE);
++          gst_object_unref (pool);
++          goto error_alloc;
++        }
+ 
+-      mids[i] = (mfxMemId *) & msdk_mid;
++        msdk_surface->buf = buf;
++        mids[i] = msdk_surface->surface->Data.MemId;
++        tmp_list = g_list_prepend (tmp_list, msdk_surface);
++      }
++    } else {
++      /* This path is to handle a special case when requesting MFX_FOURCC_P208, We keep
++       * this to avoid failure when building gst-msdk plugins using old version of MediaSDK.
++       * These buffers will be used inside the driver and released by
++       * gst_msdk_frame_free functions. Application doesn't need to handle these buffers.
++       * See https://github.com/Intel-Media-SDK/samples/issues/13 for more details.
++       */
++      VAContextID context_id = req->AllocId;
++      gint width32 = 32 * ((req->Info.Width + 31) >> 5);
++      gint height32 = 32 * ((req->Info.Height + 31) >> 5);
++      guint64 codedbuf_size = (width32 * height32) * 400LL / (16 * 16);
++
++      for (i = 0; i < surfaces_num; i++) {
++        VABufferID coded_buf;
++        GstMsdkMemoryID msdk_mid;
++
++        va_status = vaCreateBuffer (gst_msdk_context_get_handle (context),
++            context_id, VAEncCodedBufferType, codedbuf_size, 1, NULL,
++            &coded_buf);
++
++        status = gst_msdk_get_mfx_status_from_va_status (va_status);
++        if (status < MFX_ERR_NONE) {
++          GST_ERROR ("failed to create buffer");
++          return status;
++        }
++
++        msdk_mid.surface = coded_buf;
++        msdk_mid.fourcc = fourcc;
++
++        /* Don't use image for P208 */
++        msdk_mid.image.image_id = VA_INVALID_ID;
++        msdk_mid.image.buf = VA_INVALID_ID;
++
++        mids[i] = (mfxMemId *) & msdk_mid;
++      }
+     }
+-  }
+ 
+-  resp->mids = mids;
+-  resp->NumFrameActual = surfaces_num;
++    resp->mids = mids;
++    resp->NumFrameActual = surfaces_num;
+ 
+-  msdk_resp->response = *resp;
+-  msdk_resp->request = *req;
+-  msdk_resp->refcount = 1;
++    msdk_resp->response = *resp;
++    msdk_resp->request = *req;
++    msdk_resp->refcount = 1;
+ 
+-  gst_msdk_context_add_alloc_response (context, msdk_resp);
++    gst_msdk_context_add_alloc_response (context, msdk_resp);
+ 
+-  /* We need to put all the buffers back to the pool */
+-  for (l = tmp_list; l; l = l->next) {
+-    tmp_surface = (GstMsdkSurface *) l->data;
+-    gst_buffer_unref (tmp_surface->buf);
+-  }
++    /* We need to put all the buffers back to the pool */
++    for (l = tmp_list; l; l = l->next) {
++      tmp_surface = (GstMsdkSurface *) l->data;
++      gst_buffer_unref (tmp_surface->buf);
++    }
+ 
+-  return status;
++    return status;
+ 
+-error_alloc:
+-  g_slice_free1 (surfaces_num * sizeof (mfxMemId), mids);
+-  g_slice_free (GstMsdkAllocResponse, msdk_resp);
+-  return MFX_ERR_MEMORY_ALLOC;
++  error_alloc:
++    g_slice_free1 (surfaces_num * sizeof (mfxMemId), mids);
++    g_slice_free (GstMsdkAllocResponse, msdk_resp);
++    return MFX_ERR_MEMORY_ALLOC;
++  }
+ }
+ 
+ mfxStatus
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
+index 37afa2ee61..28f1080eeb 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
+@@ -175,12 +175,35 @@ gst_msdkdec_free_unlocked_msdk_surfaces (GstMsdkDec * thiz,
+     }
+     l = next;
+   }
+-  /* We need to check if all surfaces are in used */
+-  if (g_list_length (thiz->locked_msdk_surfaces) ==
+-      thiz->alloc_resp.NumFrameActual)
+-    return FALSE;
+-  else
++
++  if (!(MFX_RUNTIME_VERSION_ATLEAST (thiz->version, 2, 9))) {
++    /* We need to check if all surfaces are in used */
++    if (g_list_length (thiz->locked_msdk_surfaces) ==
++        thiz->alloc_resp.NumFrameActual)
++      return FALSE;
++    else
++      return TRUE;
++  }
++
++  return TRUE;
++}
++
++static gboolean
++_get_surface_from_qdata (GstBuffer * buffer, GstMsdkSurface ** msdk_surface)
++{
++  mfxFrameSurface1 *mfx_surface = NULL;
++  GstMemory *mem = gst_buffer_peek_memory (buffer, 0);
++  GstMsdkSurface *tmp_surface = *msdk_surface;
++
++  if ((mfx_surface = gst_mini_object_get_qdata (GST_MINI_OBJECT_CAST (mem),
++              GST_MSDK_FRAME_SURFACE))) {
++    tmp_surface->surface = mfx_surface;
++    tmp_surface->from_qdata = TRUE;
++    *msdk_surface = tmp_surface;
+     return TRUE;
++  } else {
++    return FALSE;
++  }
+ }
+ 
+ static GstMsdkSurface *
+@@ -188,10 +211,9 @@ allocate_output_surface (GstMsdkDec * thiz)
+ {
+   GstMsdkSurface *msdk_surface = NULL;
+   GstBuffer *out_buffer = NULL;
+-  GstMemory *mem = NULL;
+-  mfxFrameSurface1 *mfx_surface = NULL;
+   gint n = 0;
+   guint retry_times = 1000;
++
+ #ifdef _WIN32
+   GstMapInfo map_info;
+ #endif
+@@ -200,8 +222,8 @@ allocate_output_surface (GstMsdkDec * thiz)
+    * surfaces will be moved from used list to available list */
+   if (!gst_msdkdec_free_unlocked_msdk_surfaces (thiz, FALSE)) {
+     for (n = 0; n < retry_times; n++) {
+-      /* It is MediaSDK/oneVPL's requirement that only the pre-allocated
+-       * surfaces can be used during the whole decoding process.
++      /* For VPL < 2.9, only the pre-allocated surfaces can be used
++       * during the whole decoding process.
+        * In the case of decoder plus multi-encoders, it is possible
+        * that all surfaces are used by downstreams and no more surfaces
+        * available for decoder. So here we need to wait until there is at
+@@ -231,20 +253,30 @@ allocate_output_surface (GstMsdkDec * thiz)
+     return NULL;
+   }
+ #endif
+-  mem = gst_buffer_peek_memory (out_buffer, 0);
++
+   msdk_surface = g_slice_new0 (GstMsdkSurface);
+ 
+-  if ((mfx_surface = gst_mini_object_get_qdata (GST_MINI_OBJECT_CAST (mem),
+-              GST_MSDK_FRAME_SURFACE))) {
+-    msdk_surface->surface = mfx_surface;
+-    msdk_surface->from_qdata = TRUE;
++  /* From oneVPL 2.9, we can dynamically allocate buffer from the pool */
++  if (MFX_RUNTIME_VERSION_ATLEAST (thiz->version, 2, 9)) {
++    if (_get_surface_from_qdata (out_buffer, &msdk_surface)) {
++    } else {
++      msdk_surface = gst_msdk_import_to_msdk_surface (out_buffer, thiz->context,
++          &thiz->alloc_info, GST_MAP_READ);
++      if (!msdk_surface) {
++        g_slice_free (GstMsdkSurface, msdk_surface);
++        return NULL;
++      }
++    }
++  } else {
++    if (_get_surface_from_qdata (out_buffer, &msdk_surface)) {
+ #ifdef _WIN32
+-    gst_buffer_unmap (out_buffer, &map_info);
++      gst_buffer_unmap (out_buffer, &map_info);
+ #endif
+-  } else {
+-    GST_ERROR ("No available surfaces");
+-    g_slice_free (GstMsdkSurface, msdk_surface);
+-    return NULL;
++    } else {
++      GST_ERROR ("No available surfaces");
++      g_slice_free (GstMsdkSurface, msdk_surface);
++      return NULL;
++    }
+   }
+ 
+   msdk_surface->buf = out_buffer;
+@@ -418,6 +450,13 @@ gst_msdkdec_init_decoder (GstMsdkDec * thiz)
+   }
+ 
+   session = gst_msdk_context_get_session (thiz->context);
++  status = MFXQueryVersion (session, &thiz->version);
++  if (status != MFX_ERR_NONE) {
++    GST_ERROR_OBJECT (thiz, "Video Decode Query Version failed (%s)",
++        msdk_status_to_string (status));
++    goto failed;
++  }
++
+   /* validate parameters and allow MFX to make adjustments */
+   status = MFXVideoDECODE_Query (session, &thiz->param, &thiz->param);
+   if (status < MFX_ERR_NONE) {
+@@ -1386,7 +1425,6 @@ gst_msdkdec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
+   GstMsdkDecClass *klass = GST_MSDKDEC_GET_CLASS (thiz);
+   GstFlowReturn flow;
+   GstBuffer *input_buffer = NULL;
+-  GstVideoInfo alloc_info;
+   MsdkDecTask *task = NULL;
+   mfxBitstream bitstream;
+   GstMsdkSurface *surface = NULL;
+@@ -1510,27 +1548,12 @@ gst_msdkdec_handle_frame (GstVideoDecoder * decoder, GstVideoCodecFrame * frame)
+     if (!thiz->initialized)
+       hard_reset = TRUE;
+     else {
+-      GstVideoCodecState *output_state =
+-          gst_video_decoder_get_output_state (GST_VIDEO_DECODER (thiz));
+-      if (output_state) {
+-        if (output_state->allocation_caps) {
+-          if (!gst_msdkcaps_video_info_from_caps (output_state->allocation_caps,
+-                  &alloc_info, NULL)) {
+-            GST_ERROR_OBJECT (thiz, "Failed to get video info from caps");
+-            flow = GST_FLOW_ERROR;
+-            goto error;
+-          }
+-
+-          /* Check whether we need complete reset for dynamic resolution change */
+-          if (thiz->param.mfx.FrameInfo.Width >
+-              GST_VIDEO_INFO_WIDTH (&alloc_info)
+-              || thiz->param.mfx.FrameInfo.Height >
+-              GST_VIDEO_INFO_HEIGHT (&alloc_info))
+-            hard_reset = TRUE;
+-        }
+-        gst_video_codec_state_unref (output_state);
+-      }
+-
++      /* Check whether we need complete reset for dynamic resolution change */
++      if (thiz->param.mfx.FrameInfo.Width >
++          GST_VIDEO_INFO_WIDTH (&thiz->alloc_info)
++          || thiz->param.mfx.FrameInfo.Height >
++          GST_VIDEO_INFO_HEIGHT (&thiz->alloc_info))
++        hard_reset = TRUE;
+     }
+ 
+     /* if subclass requested for the force reset */
+@@ -1884,6 +1907,9 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+   guint min_buffers = 0;
+   guint max_buffers = 0;
+   gboolean has_videometa, has_video_alignment;
++  GstVideoAlignment align;
++  GstStructure *tmp_config = NULL;
++  GstVideoFormat format;
+ 
+   GstAllocator *allocator = NULL;
+   GstAllocationParams params;
+@@ -2049,6 +2075,34 @@ gst_msdkdec_decide_allocation (GstVideoDecoder * decoder, GstQuery * query)
+     gst_video_codec_state_unref (output_state);
+   }
+ 
++  format =
++      gst_msdk_get_video_format_from_mfx_fourcc (thiz->param.mfx.
++      FrameInfo.FourCC);
++  gst_video_info_set_format (&thiz->alloc_info, format,
++      thiz->param.mfx.FrameInfo.CropW, thiz->param.mfx.FrameInfo.CropH);
++
++  tmp_config = gst_buffer_pool_get_config (GST_BUFFER_POOL_CAST (pool));
++  gst_msdk_set_video_alignment (&thiz->alloc_info,
++      thiz->param.mfx.FrameInfo.Width, thiz->param.mfx.FrameInfo.Height,
++      &align);
++  gst_video_info_align (&thiz->alloc_info, &align);
++#ifndef _WIN32
++  gst_buffer_pool_config_set_va_alignment (tmp_config, &align);
++#else
++  GstD3D11Device *device;
++  GstD3D11AllocationParams *tmp_params;
++
++  device = gst_msdk_context_get_d3d11_device (thiz->context);
++  tmp_params = gst_d3d11_allocation_params_new (device, &thiz->alloc_info,
++      GST_D3D11_ALLOCATION_FLAG_DEFAULT,
++      D3D11_BIND_DECODER | D3D11_BIND_SHADER_RESOURCE, 0);
++  gst_d3d11_allocation_params_alignment (tmp_params, &align);
++  gst_buffer_pool_config_set_d3d11_allocation_params (tmp_config, tmp_params);
++  gst_d3d11_allocation_params_free (tmp_params);
++#endif
++  if (!gst_buffer_pool_set_config (pool, tmp_config))
++    goto error_set_config;
++
+   gst_msdk_context_set_alloc_pool (thiz->context, pool);
+ 
+   /* Initialize MSDK decoder before new bufferpool tries to alloc each buffer,
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.h b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.h
+index 88eeaa1873..06afe6604d 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.h
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.h
+@@ -75,6 +75,7 @@ struct _GstMsdkDec
+   GstBufferPool *other_pool;
+   /* downstream pool info based on allocation query */
+   GstVideoInfo non_msdk_pool_info;
++  GstVideoInfo alloc_info;
+   mfxFrameAllocResponse alloc_resp;
+   gboolean use_dmabuf;
+   gboolean do_copy;
+@@ -119,6 +120,8 @@ struct _GstMsdkDec
+ #if (MFX_VERSION >= 1025)
+   mfxExtDecodeErrorReport error_report;
+ #endif
++
++  mfxVersion version;
+ };
+ 
+ struct _GstMsdkDecClass
+-- 
+2.34.1
+
