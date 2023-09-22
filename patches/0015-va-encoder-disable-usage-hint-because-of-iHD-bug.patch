@@ -1,0 +1,31 @@
+From e4658d865ff1708f0d2c364a53ee7a33c157af95 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Fri, 22 Sep 2023 13:50:00 +0800
+Subject: [PATCH] va: encoder: disable usage hint because of iHD bug
+
+Remove this after
+https://github.com/intel/media-driver/issues/1723
+fixed.
+---
+ subprojects/gst-plugins-bad/sys/va/gstvaencoder.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
+index abe5171a03..76b55c3c7d 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
+@@ -315,8 +315,9 @@ _create_reconstruct_pool (GstVaDisplay * display, GArray * surface_formats,
+ 
+   gst_video_info_set_format (&info, format, coded_width, coded_height);
+ 
+-  usage_hint = va_get_surface_usage_hint (display,
+-      VAEntrypointEncSlice, GST_PAD_SINK, FALSE);
++  usage_hint = VA_SURFACE_ATTRIB_USAGE_HINT_GENERIC;
++  /* va_get_surface_usage_hint (display,
++     VAEntrypointEncSlice, GST_PAD_SINK, FALSE); */
+ 
+   size = GST_VIDEO_INFO_SIZE (&info);
+ 
+-- 
+2.25.1
+
