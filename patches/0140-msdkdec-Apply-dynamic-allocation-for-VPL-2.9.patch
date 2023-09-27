@@ -1,4 +1,4 @@
-From cdb8a7cfa07a0197c3eef0870be8aba197796d37 Mon Sep 17 00:00:00 2001
+From eff7783ad8ffc8c82d907b35b0fd1483a3228397 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Thu, 21 Sep 2023 17:51:35 +0800
 Subject: [PATCH] msdkdec: Apply dynamic allocation for VPL>=2.9
@@ -6,9 +6,9 @@ Subject: [PATCH] msdkdec: Apply dynamic allocation for VPL>=2.9
 ---
  .../sys/msdk/gstmsdkallocator_d3d.c           | 243 +++++++------
  .../sys/msdk/gstmsdkallocator_libva.c         | 318 +++++++++---------
- .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 136 +++++---
+ .../gst-plugins-bad/sys/msdk/gstmsdkdec.c     | 144 +++++---
  .../gst-plugins-bad/sys/msdk/gstmsdkdec.h     |   3 +
- 4 files changed, 397 insertions(+), 303 deletions(-)
+ 4 files changed, 401 insertions(+), 307 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_d3d.c
 index 4dcf154f48..c9ae865e7c 100644
@@ -649,7 +649,7 @@ index 4e23b257a6..fbbbb1ac6c 100644
  
  mfxStatus
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
-index 37afa2ee61..28f1080eeb 100644
+index 37afa2ee61..4a1395b8aa 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
 @@ -175,12 +175,35 @@ gst_msdkdec_free_unlocked_msdk_surfaces (GstMsdkDec * thiz,
@@ -716,24 +716,19 @@ index 37afa2ee61..28f1080eeb 100644
         * In the case of decoder plus multi-encoders, it is possible
         * that all surfaces are used by downstreams and no more surfaces
         * available for decoder. So here we need to wait until there is at
-@@ -231,20 +253,30 @@ allocate_output_surface (GstMsdkDec * thiz)
+@@ -222,30 +244,40 @@ allocate_output_surface (GstMsdkDec * thiz)
+     GST_ERROR_OBJECT (thiz, "Failed to allocate output buffer");
      return NULL;
    }
- #endif
--  mem = gst_buffer_peek_memory (out_buffer, 0);
 +
-   msdk_surface = g_slice_new0 (GstMsdkSurface);
- 
--  if ((mfx_surface = gst_mini_object_get_qdata (GST_MINI_OBJECT_CAST (mem),
--              GST_MSDK_FRAME_SURFACE))) {
--    msdk_surface->surface = mfx_surface;
--    msdk_surface->from_qdata = TRUE;
++  msdk_surface = g_slice_new0 (GstMsdkSurface);
++
 +  /* From oneVPL 2.9, we can dynamically allocate buffer from the pool */
 +  if (MFX_RUNTIME_VERSION_ATLEAST (thiz->version, 2, 9)) {
 +    if (_get_surface_from_qdata (out_buffer, &msdk_surface)) {
 +    } else {
 +      msdk_surface = gst_msdk_import_to_msdk_surface (out_buffer, thiz->context,
-+          &thiz->alloc_info, GST_MAP_READ);
++          &thiz->alloc_info, GST_MAP_WRITE);
 +      if (!msdk_surface) {
 +        g_slice_free (GstMsdkSurface, msdk_surface);
 +        return NULL;
@@ -741,22 +736,41 @@ index 37afa2ee61..28f1080eeb 100644
 +    }
 +  } else {
 +    if (_get_surface_from_qdata (out_buffer, &msdk_surface)) {
- #ifdef _WIN32
--    gst_buffer_unmap (out_buffer, &map_info);
-+      gst_buffer_unmap (out_buffer, &map_info);
- #endif
--  } else {
--    GST_ERROR ("No available surfaces");
--    g_slice_free (GstMsdkSurface, msdk_surface);
--    return NULL;
 +    } else {
 +      GST_ERROR ("No available surfaces");
 +      g_slice_free (GstMsdkSurface, msdk_surface);
 +      return NULL;
 +    }
++  }
+ #ifdef _WIN32
+   /* For d3d11 we should call gst_buffer_map with GST_MAP_WRITE |
+    * GST_MAP_D3D11 flags to make sure the staging texture has been uploaded
+    */
+   if (!gst_buffer_map (out_buffer, &map_info, GST_MAP_WRITE | GST_MAP_D3D11)) {
+     GST_ERROR ("Failed to map buffer");
++    g_slice_free (GstMsdkSurface, msdk_surface);
+     return NULL;
    }
+-#endif
+-  mem = gst_buffer_peek_memory (out_buffer, 0);
+-  msdk_surface = g_slice_new0 (GstMsdkSurface);
+ 
+-  if ((mfx_surface = gst_mini_object_get_qdata (GST_MINI_OBJECT_CAST (mem),
+-              GST_MSDK_FRAME_SURFACE))) {
+-    msdk_surface->surface = mfx_surface;
+-    msdk_surface->from_qdata = TRUE;
+-#ifdef _WIN32
+-    gst_buffer_unmap (out_buffer, &map_info);
++  gst_buffer_unmap (out_buffer, &map_info);
+ #endif
+-  } else {
+-    GST_ERROR ("No available surfaces");
+-    g_slice_free (GstMsdkSurface, msdk_surface);
+-    return NULL;
+-  }
  
    msdk_surface->buf = out_buffer;
+ 
 @@ -418,6 +450,13 @@ gst_msdkdec_init_decoder (GstMsdkDec * thiz)
    }
  
@@ -880,5 +894,5 @@ index 88eeaa1873..06afe6604d 100644
  
  struct _GstMsdkDecClass
 -- 
-2.34.1
+2.41.0.windows.1
 
