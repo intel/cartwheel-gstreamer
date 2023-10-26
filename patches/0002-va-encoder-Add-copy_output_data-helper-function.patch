@@ -1,4 +1,4 @@
-From 4ad8d0c236285b6759688ca0917490e7d97b70d7 Mon Sep 17 00:00:00 2001
+From 1b51a1e4901ba64fcea80446a5029ac19948181f Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 10 Nov 2022 20:36:05 +0800
 Subject: [PATCH 02/13] va: encoder: Add copy_output_data() helper function.
@@ -9,7 +9,7 @@ Subject: [PATCH 02/13] va: encoder: Add copy_output_data() helper function.
  2 files changed, 51 insertions(+), 1 deletion(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index 8ffa542c63..8ffe404648 100644
+index b30916ecae..8d71ccb4a9 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 @@ -332,6 +332,53 @@ error:
@@ -33,7 +33,7 @@ index 8ffa542c63..8ffe404648 100644
 +
 +  seg_list = NULL;
 +  if (!va_map_buffer (base->display, picture->coded_buffer,
-+          (gpointer *) & seg_list))
++          GST_MAP_READ, (gpointer *) & seg_list))
 +    goto out;
 +
 +  if (!seg_list) {
@@ -83,5 +83,5 @@ index e16bd54c98..f94d553b31 100644
                                                              guint32 * old_val,
                                                              guint32 new_val,
 -- 
-2.25.1
+2.34.1
 
