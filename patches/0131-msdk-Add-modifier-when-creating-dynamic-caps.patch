@@ -1,4 +1,4 @@
-From 4f4f247547cf596163ac464eb47c940daa296daa Mon Sep 17 00:00:00 2001
+From 0da79827c2014b6d10d44ce79038db19ed13e945 Mon Sep 17 00:00:00 2001
 From: Yinhang Liu <yinhang.liu@intel.com>
 Date: Thu, 18 May 2023 15:00:37 +0800
 Subject: [PATCH 131/139] msdk: Add modifier when creating dynamic caps
@@ -7,11 +7,11 @@ Add modifier in gst-inspect for dma features.
 
 Co-authored-by: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 ---
- .../gst-plugins-bad/sys/msdk/gstmsdkcaps.c    | 182 +++++++++++++++---
- 1 file changed, 150 insertions(+), 32 deletions(-)
+ .../gst-plugins-bad/sys/msdk/gstmsdkcaps.c    | 184 +++++++++++++++---
+ 1 file changed, 152 insertions(+), 32 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c
-index 22357f5f65..f857bc3ada 100644
+index 22357f5f65..2c1ccf16f1 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkcaps.c
 @@ -30,6 +30,10 @@
@@ -25,7 +25,7 @@ index 22357f5f65..f857bc3ada 100644
  
  #define DEFAULT_DELIMITER ", "
  #define PROFILE_DELIMITER DEFAULT_DELIMITER
-@@ -216,6 +220,115 @@ _get_media_type (guint codec)
+@@ -216,6 +220,117 @@ _get_media_type (guint codec)
    return NULL;
  }
  
@@ -48,23 +48,24 @@ index 22357f5f65..f857bc3ada 100644
 +    const GValue * dma_fmts, GValue * dma_drm_fmts)
 +{
 +  const gchar *fmt_str;
-+  const gchar *drm_fmt_str;
++  gchar *drm_fmt_str;
 +  guint32 drm_fourcc;
 +  guint64 modifier;
 +  GstVideoFormat fmt;
 +  GValue gval = G_VALUE_INIT;
 +  GValue mods = G_VALUE_INIT;
 +
-+  if (!dma_fmts)
-+    return FALSE;
++  g_return_val_if_fail (dma_fmts != NULL, FALSE);
++  g_return_val_if_fail (context != NULL, FALSE);
 +
 +  fmt_str = g_value_get_string (dma_fmts);
 +  fmt = gst_video_format_from_string (fmt_str);
-+  if (fmt == GST_VIDEO_FORMAT_UNKNOWN)
-+    return FALSE;
 +
-+  g_value_init (&gval, G_TYPE_STRING);
++  g_return_val_if_fail (fmt != GST_VIDEO_FORMAT_UNKNOWN, FALSE);
++
 +  g_value_init (&mods, GST_TYPE_LIST);
++  g_value_init (&gval, G_TYPE_STRING);
++
 +  gst_msdk_get_supported_modifiers (context, job_type, fmt, &mods);
 +
 +  for (gint m = 0; m < gst_value_list_get_size (&mods); m++) {
@@ -72,7 +73,7 @@ index 22357f5f65..f857bc3ada 100644
 +    modifier = g_value_get_uint64 (gmod);
 +    drm_fourcc = gst_va_drm_fourcc_from_video_format (fmt);
 +
-+    if (modifier == DRM_FORMAT_MOD_INVALID || drm_fourcc == DRM_FORMAT_INVALID)
++    if (drm_fourcc == DRM_FORMAT_INVALID)
 +      continue;
 +
 +    drm_fmt_str = gst_video_dma_drm_fourcc_to_string (drm_fourcc, modifier);
@@ -81,6 +82,7 @@ index 22357f5f65..f857bc3ada 100644
 +
 +    g_value_set_string (&gval, drm_fmt_str);
 +    gst_value_list_append_value (dma_drm_fmts, &gval);
++    g_free (drm_fmt_str);
 +
 +    GST_DEBUG ("Got mofidier: %s", drm_fmt_str);
 +  }
@@ -141,7 +143,7 @@ index 22357f5f65..f857bc3ada 100644
  #if (MFX_VERSION >= 2000)
  
  static gboolean
-@@ -753,8 +866,8 @@ _enc_create_sink_caps (GstMsdkContext * context, guint codec_id,
+@@ -753,8 +868,8 @@ _enc_create_sink_caps (GstMsdkContext * context, guint codec_id,
    gst_caps_set_value (caps, "format", supported_formats);
  
  #ifndef _WIN32
@@ -152,7 +154,7 @@ index 22357f5f65..f857bc3ada 100644
    gst_caps_append (caps, dma_caps);
  
    gst_caps_append (caps,
-@@ -1077,8 +1190,8 @@ _dec_create_src_caps (GstMsdkContext * context,
+@@ -1077,8 +1192,8 @@ _dec_create_src_caps (GstMsdkContext * context,
    gst_caps_set_value (caps, "format", supported_formats);
  
  #ifndef _WIN32
@@ -163,7 +165,7 @@ index 22357f5f65..f857bc3ada 100644
    gst_caps_append (caps, dma_caps);
  
    gst_caps_append (caps,
-@@ -1326,8 +1439,7 @@ _vpp_create_caps (GstMsdkContext * context,
+@@ -1326,8 +1441,7 @@ _vpp_create_caps (GstMsdkContext * context,
    gst_caps_set_value (caps, "format", supported_fmts);
  
  #ifndef _WIN32
@@ -173,7 +175,7 @@ index 22357f5f65..f857bc3ada 100644
    gst_caps_append (caps, dma_caps);
  
    gst_caps_append (caps,
-@@ -1521,10 +1633,11 @@ gst_msdkcaps_enc_create_static_caps (GstMsdkContext * context,
+@@ -1521,10 +1635,11 @@ gst_msdkcaps_enc_create_static_caps (GstMsdkContext * context,
  {
    GstCaps *in_caps = NULL, *out_caps = NULL;
    GstCaps *dma_caps = NULL;
@@ -187,7 +189,7 @@ index 22357f5f65..f857bc3ada 100644
    GValue supported_profs = G_VALUE_INIT;
  
    raw_fmts = _enc_get_static_raw_formats (codec_id);
-@@ -1536,21 +1649,23 @@ gst_msdkcaps_enc_create_static_caps (GstMsdkContext * context,
+@@ -1536,21 +1651,23 @@ gst_msdkcaps_enc_create_static_caps (GstMsdkContext * context,
    g_free (raw_caps_str);
  
  #ifndef _WIN32
@@ -219,7 +221,7 @@ index 22357f5f65..f857bc3ada 100644
    VAR_UNUSED (dma_fmts);
    gst_caps_append (in_caps,
        gst_caps_from_string
-@@ -1669,10 +1784,11 @@ gst_msdkcaps_dec_create_static_caps (GstMsdkContext * context,
+@@ -1669,10 +1786,11 @@ gst_msdkcaps_dec_create_static_caps (GstMsdkContext * context,
  {
    GstCaps *in_caps = NULL, *out_caps = NULL;
    GstCaps *dma_caps = NULL;
@@ -233,7 +235,7 @@ index 22357f5f65..f857bc3ada 100644
  
    media_type = _get_media_type (codec_id);
    if (!media_type)
-@@ -1689,14 +1805,15 @@ gst_msdkcaps_dec_create_static_caps (GstMsdkContext * context,
+@@ -1689,14 +1807,15 @@ gst_msdkcaps_dec_create_static_caps (GstMsdkContext * context,
    g_free (raw_caps_str);
  
  #ifndef _WIN32
@@ -256,7 +258,7 @@ index 22357f5f65..f857bc3ada 100644
    gst_caps_append (out_caps, dma_caps);
  
    gst_caps_append (out_caps,
-@@ -1704,7 +1821,7 @@ gst_msdkcaps_dec_create_static_caps (GstMsdkContext * context,
+@@ -1704,7 +1823,7 @@ gst_msdkcaps_dec_create_static_caps (GstMsdkContext * context,
        ("video/x-raw(memory:VAMemory), format=(string){ NV12 }"));
  #else
    VAR_UNUSED (dma_caps);
@@ -265,7 +267,7 @@ index 22357f5f65..f857bc3ada 100644
    VAR_UNUSED (dma_fmts);
    gst_caps_append (out_caps,
        gst_caps_from_string
-@@ -1777,6 +1894,7 @@ _vpp_create_static_caps (GstMsdkContext * context, GstPadDirection direction)
+@@ -1777,6 +1896,7 @@ _vpp_create_static_caps (GstMsdkContext * context, GstPadDirection direction)
  {
    GstCaps *caps = NULL, *dma_caps = NULL;
    gchar *caps_str;
@@ -273,7 +275,7 @@ index 22357f5f65..f857bc3ada 100644
  
    caps_str = g_strdup_printf ("video/x-raw, format=(string){ %s }",
        _vpp_get_static_raw_formats (direction));
-@@ -1784,18 +1902,18 @@ _vpp_create_static_caps (GstMsdkContext * context, GstPadDirection direction)
+@@ -1784,18 +1904,18 @@ _vpp_create_static_caps (GstMsdkContext * context, GstPadDirection direction)
    g_free (caps_str);
  
  #ifndef _WIN32

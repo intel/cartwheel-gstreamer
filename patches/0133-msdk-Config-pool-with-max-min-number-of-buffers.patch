@@ -1,4 +1,4 @@
-From 4e16a6f94cbf083f9689605efbdffc1ce4295164 Mon Sep 17 00:00:00 2001
+From 63d04b065f73063cc584982b8b920ac06b92a3b1 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Tue, 22 Aug 2023 14:15:39 +0800
 Subject: [PATCH 133/139] msdk: Config pool with max/min number of buffers
@@ -8,7 +8,7 @@ Subject: [PATCH 133/139] msdk: Config pool with max/min number of buffers
  1 file changed, 7 insertions(+), 3 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
-index 34c05d18de..a07e558e70 100644
+index 404a7c2695..e671c8c43e 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkallocator_libva.c
 @@ -101,6 +101,7 @@ gst_msdk_frame_alloc (mfxHDL pthis, mfxFrameAllocRequest * req,
