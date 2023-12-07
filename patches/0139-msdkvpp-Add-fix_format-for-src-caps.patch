@@ -1,14 +1,14 @@
-From 00cfcf245112831842c2bdaf9acdcdc9699604c8 Mon Sep 17 00:00:00 2001
+From a5bc387a4f3fffda1feb3fecb73022e8e93253e7 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Mon, 26 Jun 2023 18:29:01 +0800
 Subject: [PATCH 139/139] msdkvpp: Add fix_format for src caps
 
 ---
- .../gst-plugins-bad/sys/msdk/gstmsdkvpputil.c | 148 ++++++++++++++++--
- 1 file changed, 135 insertions(+), 13 deletions(-)
+ .../gst-plugins-bad/sys/msdk/gstmsdkvpputil.c | 149 ++++++++++++++++--
+ 1 file changed, 136 insertions(+), 13 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
-index 938324d51e..1af48dddb1 100644
+index 938324d51e..07cc06fe05 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkvpputil.c
 @@ -29,6 +29,11 @@
@@ -151,7 +151,7 @@ index 938324d51e..1af48dddb1 100644
  static gboolean
  fixate_output_frame_size (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
      GstStructure * outs)
-@@ -529,11 +655,15 @@ static GstCaps *
+@@ -529,27 +655,23 @@ static GstCaps *
  _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
      GstCaps * srccaps)
  {
@@ -169,8 +169,9 @@ index 938324d51e..1af48dddb1 100644
 +  structure = gst_caps_get_structure (fixate_caps, 0);
    /* make a copy */
    structure = gst_structure_copy (structure);
++  gst_caps_unref (fixate_caps);
  
-@@ -541,15 +671,6 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
+   if (thiz->keep_aspect)
      gst_structure_set (structure, "pixel-aspect-ratio", GST_TYPE_FRACTION, 1,
          1, NULL);
  
@@ -186,7 +187,7 @@ index 938324d51e..1af48dddb1 100644
    /* Fixate the frame size */
    if (!fixate_output_frame_size (thiz, vinfo, structure))
      goto fixate_failed;
-@@ -577,7 +698,8 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
+@@ -577,7 +699,8 @@ _get_preferred_src_caps (GstMsdkVPP * thiz, GstVideoInfo * vinfo,
  fixate_failed:
    {
      GST_WARNING_OBJECT (thiz, "Could not fixate src caps");
