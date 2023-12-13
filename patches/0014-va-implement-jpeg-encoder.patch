@@ -1,4 +1,4 @@
-From 4ffb0f9a5780667877ac5ea4bcf0b728197883b5 Mon Sep 17 00:00:00 2001
+From c6ba40d589593beb9840929fad4dce5227060ccd Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Thu, 3 Nov 2022 20:17:23 +0800
 Subject: [PATCH 13/13] va: implement jpeg encoder.
@@ -14,14 +14,14 @@ And also implement the jpeg bitwriter.
  .../gst-plugins-bad/sys/va/gstvaencoder.h     |    3 +-
  .../gst-plugins-bad/sys/va/gstvah264enc.c     |    2 +-
  .../gst-plugins-bad/sys/va/gstvah265enc.c     |    2 +-
- .../gst-plugins-bad/sys/va/gstvajpegenc.c     | 1100 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvajpegenc.c     | 1101 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvajpegenc.h     |   34 +
  .../gst-plugins-bad/sys/va/gstvavp9enc.c      |    2 +-
  .../gst-plugins-bad/sys/va/meson.build        |    1 +
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
  .../tests/check/libs/jpegbitwriter.c          |  263 ++++
  .../gst-plugins-bad/tests/check/meson.build   |    1 +
- 16 files changed, 2003 insertions(+), 8 deletions(-)
+ 16 files changed, 2004 insertions(+), 8 deletions(-)
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.c
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.h
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
@@ -632,10 +632,10 @@ index 94c1a53aa4..b863cfdbb2 100644
  codecparser_headers = [
    'codecparsers-prelude.h',
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-index d0d3fd32c8..c9798e8761 100644
+index 8392354bcb..ed999ecded 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-@@ -2753,7 +2753,7 @@ gst_va_av1_enc_reconfig (GstVaBaseEnc * base)
+@@ -2754,7 +2754,7 @@ gst_va_av1_enc_reconfig (GstVaBaseEnc * base)
    if (!gst_va_encoder_open (base->encoder, base->profile,
            GST_VIDEO_INFO_FORMAT (&base->in_info), base->rt_format,
            base->width, base->height, base->codedbuf_size, max_ref_frames,
@@ -645,10 +645,10 @@ index d0d3fd32c8..c9798e8761 100644
      return FALSE;
    }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index a1142c7b87..ecfe8b39f6 100644
+index 58cd6f0560..b3db6a2146 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-@@ -1114,7 +1114,9 @@ gst_va_base_enc_add_codec_tag (GstVaBaseEnc * base, const gchar * codec_name)
+@@ -1124,7 +1124,9 @@ gst_va_base_enc_add_codec_tag (GstVaBaseEnc * base, const gchar * codec_name)
    const gchar *encoder_name;
    guint bitrate = 0;
  
@@ -703,10 +703,10 @@ index 8d2be78a3a..a3503bde5e 100644
  gboolean              gst_va_encoder_get_reconstruct_pool_config (GstVaEncoder * self,
                                                                    GstCaps ** caps,
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index 8f84f29ee5..f152617a35 100644
+index 81faec3d36..e441fc2681 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-@@ -1630,7 +1630,7 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
+@@ -1631,7 +1631,7 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
        && !gst_va_encoder_open (base->encoder, base->profile,
            format, base->rt_format, base->width, base->height,
            base->codedbuf_size, max_ref_frames, self->rc.rc_ctrl_mode,
@@ -716,10 +716,10 @@ index 8f84f29ee5..f152617a35 100644
      return FALSE;
    }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index 53495187ec..1c02baaa7e 100644
+index 8cb0f66e78..8ec58a74ca 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -4537,7 +4537,7 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+@@ -4538,7 +4538,7 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
        && !gst_va_encoder_open (base->encoder, base->profile,
            format, base->rt_format, self->luma_width, self->luma_height,
            base->codedbuf_size, max_ref_frames, self->rc.rc_ctrl_mode,
@@ -730,10 +730,10 @@ index 53495187ec..1c02baaa7e 100644
    }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c b/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
 new file mode 100644
-index 0000000000..ec13298e00
+index 0000000000..ff392ec26b
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
-@@ -0,0 +1,1100 @@
+@@ -0,0 +1,1101 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -1035,6 +1035,7 @@ index 0000000000..ec13298e00
 +static gboolean
 +gst_va_jpeg_enc_reconfig (GstVaBaseEnc * base)
 +{
++  GstVaBaseEncClass *klass = GST_VA_BASE_ENC_GET_CLASS (base);
 +  GstVideoEncoder *venc = GST_VIDEO_ENCODER (base);
 +  GstVaJpegEnc *self = GST_VA_JPEG_ENC (base);
 +  GstVideoCodecState *output_state = NULL;
@@ -1114,7 +1115,7 @@ index 0000000000..ec13298e00
 +  /* Add some tags */
 +  gst_va_base_enc_add_codec_tag (base, "JPEG");
 +
-+  out_caps = gst_va_profile_caps (base->profile);
++  out_caps = gst_va_profile_caps (base->profile, klass->entrypoint);
 +  g_assert (out_caps);
 +  out_caps = gst_caps_fixate (out_caps);
 +
@@ -1875,10 +1876,10 @@ index 0000000000..7ffd375441
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-index 3c04e184c2..da8407fb4d 100644
+index e03548a283..61e92c2e3e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -2088,7 +2088,7 @@ gst_va_vp9_enc_reconfig (GstVaBaseEnc * base)
+@@ -2089,7 +2089,7 @@ gst_va_vp9_enc_reconfig (GstVaBaseEnc * base)
    if (!gst_va_encoder_open (base->encoder, base->profile,
            GST_VIDEO_INFO_FORMAT (&base->in_info), base->rt_format,
            base->width, base->height, base->codedbuf_size, max_ref_frames,
@@ -1900,7 +1901,7 @@ index 68aa78807b..ddfde09bdb 100644
    'gstvapluginutils.c',
    'gstvaprofile.c',
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index 6e8f2b2e43..e084d93121 100644
+index 4c307f6e81..08d957aa6e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -44,6 +44,7 @@
@@ -1911,7 +1912,7 @@ index 6e8f2b2e43..e084d93121 100644
  #include "gstvavpp.h"
  
  #define GST_CAT_DEFAULT gstva_debug
-@@ -224,6 +225,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -225,6 +226,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
          }
          break;
  #endif
@@ -2195,10 +2196,10 @@ index 0000000000..ce22e65e7e
 +
 +GST_CHECK_MAIN (jpegbitwriter);
 diff --git a/subprojects/gst-plugins-bad/tests/check/meson.build b/subprojects/gst-plugins-bad/tests/check/meson.build
-index 2ab14109f6..2973a2bf52 100644
+index 705bef689a..5bf7bbee1c 100644
 --- a/subprojects/gst-plugins-bad/tests/check/meson.build
 +++ b/subprojects/gst-plugins-bad/tests/check/meson.build
-@@ -91,6 +91,7 @@ base_tests = [
+@@ -92,6 +92,7 @@ base_tests = [
    [['libs/vp8parser.c'], false, [gstcodecparsers_dep]],
    [['libs/vp9parser.c'], false, [gstcodecparsers_dep]],
    [['libs/av1parser.c'], false, [gstcodecparsers_dep]],
@@ -2207,5 +2208,5 @@ index 2ab14109f6..2973a2bf52 100644
    [['libs/h265bitwriter.c'], false, [gstcodecparsers_dep]],
    [['libs/vkformat.c'], not gstvulkan_dep.found(), [gstvulkan_dep]],
 -- 
-2.25.1
+2.34.1
 

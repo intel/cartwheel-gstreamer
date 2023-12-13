@@ -1,23 +1,23 @@
-From 15ad5261cb02789eb3b09d6b2b743a33e7dd2ff3 Mon Sep 17 00:00:00 2001
+From f2c94c9bcf7a8d5e6874e44091da6c5e037f6881 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 30 Sep 2022 10:19:45 +0800
 Subject: [PATCH 04/13] va: Implement the vavp9enc plugin.
 
 ---
- .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3165 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3166 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvavp9enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +-
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
- 4 files changed, 3209 insertions(+), 1 deletion(-)
+ 4 files changed, 3210 insertions(+), 1 deletion(-)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 new file mode 100644
-index 0000000000..11fbb06f55
+index 0000000000..a2af4af42f
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -0,0 +1,3165 @@
+@@ -0,0 +1,3166 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -2059,6 +2059,7 @@ index 0000000000..11fbb06f55
 +static gboolean
 +gst_va_vp9_enc_reconfig (GstVaBaseEnc * base)
 +{
++  GstVaBaseEncClass *klass = GST_VA_BASE_ENC_GET_CLASS (base);
 +  GstVideoEncoder *venc = GST_VIDEO_ENCODER (base);
 +  GstVaVp9Enc *self = GST_VA_VP9_ENC (base);
 +  GstCaps *out_caps;
@@ -2116,7 +2117,7 @@ index 0000000000..11fbb06f55
 +  /* Add some tags */
 +  gst_va_base_enc_add_codec_tag (base, "VP9");
 +
-+  out_caps = gst_va_profile_caps (base->profile);
++  out_caps = gst_va_profile_caps (base->profile, klass->entrypoint);
 +  g_assert (out_caps);
 +  out_caps = gst_caps_fixate (out_caps);
 +
@@ -3245,7 +3246,7 @@ index 3dbcfa60d1..70f40758e4 100644
    install : true,
    install_dir : plugins_install_dir,
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index 52924dcaa5..06edecf0fc 100644
+index eff0606d29..4240c1fea2 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -42,6 +42,7 @@
@@ -3256,7 +3257,7 @@ index 52924dcaa5..06edecf0fc 100644
  #include "gstvavpp.h"
  
  #define GST_CAT_DEFAULT gstva_debug
-@@ -206,6 +207,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -207,6 +208,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
                device->render_device_path);
          }
          break;
@@ -3271,5 +3272,5 @@ index 52924dcaa5..06edecf0fc 100644
          GST_DEBUG ("No encoder implementation for %" GST_FOURCC_FORMAT,
              GST_FOURCC_ARGS (codec));
 -- 
-2.25.1
+2.34.1
 
