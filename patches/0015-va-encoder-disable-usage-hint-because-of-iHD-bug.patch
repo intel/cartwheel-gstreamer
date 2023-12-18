@@ -1,4 +1,4 @@
-From c4b001d7c9f9b884f4afdab75a04799fb5ecc234 Mon Sep 17 00:00:00 2001
+From f3772aee6b89abc892f0a44e18309117a6d05784 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 26 Sep 2023 13:09:10 +0800
 Subject: [PATCH] va: encoder: disable usage hint because of iHD bug
@@ -12,10 +12,10 @@ fixed.
  2 files changed, 9 insertions(+), 6 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index 15f0d7655d..ac12a42ea2 100644
+index 336ad13a3b..1f71abc805 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-@@ -225,8 +225,9 @@ _get_sinkpad_pool (GstElement * element, gpointer data)
+@@ -223,8 +223,9 @@ _get_sinkpad_pool (GstElement * element, gpointer data)
  
    allocator = gst_va_allocator_new (base->display, surface_formats);
  
@@ -25,11 +25,11 @@ index 15f0d7655d..ac12a42ea2 100644
 +  /* va_get_surface_usage_hint (display,
 +     VAEntrypointEncSlice, GST_PAD_SINK, FALSE); */
  
-   base->priv->raw_pool = gst_va_pool_new_with_config (caps, size, 1, 0,
-       usage_hint, GST_VA_FEATURE_AUTO, allocator, &params);
-@@ -369,8 +370,9 @@ gst_va_base_enc_propose_allocation (GstVideoEncoder * venc, GstQuery * query)
+   base->priv->raw_pool = gst_va_pool_new_with_config (caps, 1, 0, usage_hint,
+       GST_VA_FEATURE_AUTO, allocator, &params);
+@@ -415,8 +416,9 @@ gst_va_base_enc_propose_allocation (GstVideoEncoder * venc, GstQuery * query)
+   if (!caps)
      return FALSE;
-   }
  
 -  usage_hint = va_get_surface_usage_hint (base->display,
 -      VAEntrypointEncSlice, GST_PAD_SINK, gst_video_is_dma_drm_caps (caps));
@@ -37,13 +37,13 @@ index 15f0d7655d..ac12a42ea2 100644
 +  /* va_get_surface_usage_hint (display,
 +     VAEntrypointEncSlice, GST_PAD_SINK, FALSE); */
  
-   size = GST_VIDEO_INFO_SIZE (&info);
+   gst_allocation_params_init (&params);
  
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index abe5171a03..76b55c3c7d 100644
+index 302a1d47cf..5aa39993f8 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-@@ -315,8 +315,9 @@ _create_reconstruct_pool (GstVaDisplay * display, GArray * surface_formats,
+@@ -314,8 +314,9 @@ _create_reconstruct_pool (GstVaDisplay * display, GArray * surface_formats,
  
    gst_video_info_set_format (&info, format, coded_width, coded_height);
  
@@ -53,8 +53,8 @@ index abe5171a03..76b55c3c7d 100644
 +  /* va_get_surface_usage_hint (display,
 +     VAEntrypointEncSlice, GST_PAD_SINK, FALSE); */
  
-   size = GST_VIDEO_INFO_SIZE (&info);
- 
+   caps = gst_video_info_to_caps (&info);
+   gst_caps_set_features_simple (caps,
 -- 
-2.25.1
+2.34.1
 
