@@ -1,10 +1,10 @@
-From 53dbc168ec1893117760888b4ee684097c768e46 Mon Sep 17 00:00:00 2001
+From 3ed1692eef5572b577898641d07da2b5b6d0d5bd Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
-Date: Wed, 1 Feb 2023 21:45:42 +0800
-Subject: [PATCH 03/13] vp9bitwriter: Add the VP9 bit writer helper functions.
+Date: Tue, 30 Jan 2024 18:10:12 +0800
+Subject: [PATCH 5/6] vp9bitwriter: Add the VP9 bit writer helper functions
 
-As the first version, we only implement the "show existing frame"
-and super frame writting. Other frame header types writting should
+In this first version, we only implement the "show existing frame"
+and super frame writting. Other frame header types writting can
 be added when needed.
 ---
  .../gst/codecparsers/gstvp9bitwriter.c        | 171 ++++++++++++++++++
@@ -257,13 +257,13 @@ index 0000000000..f86c80d6f6
 +G_END_DECLS
 +#endif /* __GST_VP9_BIT_WRITER_H__ */
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
-index c06c2992f5..b462628604 100644
+index 51c5646947..4142eaa62c 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
-@@ -18,6 +18,7 @@ codecparser_sources = files([
-   'gstav1parser.c',
-   'gsth264bitwriter.c',
+@@ -20,6 +20,7 @@ codecparser_sources = files([
    'gsth265bitwriter.c',
+   'gstav1bitwriter.c',
+   'gstjpegbitwriter.c',
 +  'gstvp9bitwriter.c',
  ])
  codecparser_headers = [

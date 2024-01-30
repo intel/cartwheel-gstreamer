@@ -1,23 +1,23 @@
-From f2c94c9bcf7a8d5e6874e44091da6c5e037f6881 Mon Sep 17 00:00:00 2001
+From c76df9842d1da2fe012d1a48deef759ab4db6e71 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
-Date: Fri, 30 Sep 2022 10:19:45 +0800
-Subject: [PATCH 04/13] va: Implement the vavp9enc plugin.
+Date: Tue, 30 Jan 2024 18:18:31 +0800
+Subject: [PATCH 6/6] va: Implement the vavp9enc plugin
 
 ---
- .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3166 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvavp9enc.c      | 3167 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvavp9enc.h      |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    3 +-
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
- 4 files changed, 3210 insertions(+), 1 deletion(-)
+ 4 files changed, 3211 insertions(+), 1 deletion(-)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvavp9enc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 new file mode 100644
-index 0000000000..a2af4af42f
+index 0000000000..61e92c2e3e
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -0,0 +1,3166 @@
+@@ -0,0 +1,3167 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -2109,7 +2109,7 @@ index 0000000000..a2af4af42f
 +  if (!gst_va_encoder_open (base->encoder, base->profile,
 +          GST_VIDEO_INFO_FORMAT (&base->in_info), base->rt_format,
 +          base->width, base->height, base->codedbuf_size, max_ref_frames,
-+          self->rc.rc_ctrl_mode, self->packed_headers)) {
++          self->rc.rc_ctrl_mode, self->packed_headers, NULL)) {
 +    GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
 +    return FALSE;
 +  }
@@ -2620,7 +2620,8 @@ index 0000000000..a2af4af42f
 +    if (self->frames_in_super_num > 0) {
 +      buf = _vp9_create_super_frame_output_buffer (self, frame);
 +    } else {
-+      buf = gst_va_base_enc_create_output_buffer (base, frame_enc->picture);
++      buf = gst_va_base_enc_create_output_buffer (base,
++          frame_enc->picture, NULL, 0);
 +    }
 +    if (!buf) {
 +      GST_ERROR_OBJECT (base, "Failed to create output buffer%s",
@@ -3225,10 +3226,10 @@ index 0000000000..94db2e8e3b
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index 3dbcfa60d1..70f40758e4 100644
+index dc388e2dff..e662105dd9 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
-@@ -22,6 +22,7 @@ va_sources = [
+@@ -24,6 +24,7 @@ va_sources = [
    'gstvaprofile.c',
    'gstvavp8dec.c',
    'gstvavp9dec.c',
@@ -3236,7 +3237,7 @@ index 3dbcfa60d1..70f40758e4 100644
    'gstvavpp.c',
  ]
  
-@@ -79,7 +80,7 @@ gstva = library('gstva',
+@@ -81,7 +82,7 @@ gstva = library('gstva',
    c_args : gst_plugins_bad_args + extra_args,
    cpp_args : gst_plugins_bad_args + extra_args,
    include_directories : [configinc],
@@ -3246,18 +3247,18 @@ index 3dbcfa60d1..70f40758e4 100644
    install : true,
    install_dir : plugins_install_dir,
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index eff0606d29..4240c1fea2 100644
+index f5098d599e..62c1532fde 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
-@@ -42,6 +42,7 @@
- #include "gstvaprofile.h"
+@@ -44,6 +44,7 @@
  #include "gstvavp8dec.h"
  #include "gstvavp9dec.h"
+ #include "gstvajpegenc.h"
 +#include "gstvavp9enc.h"
  #include "gstvavpp.h"
  
  #define GST_CAT_DEFAULT gstva_debug
-@@ -207,6 +208,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -216,6 +217,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
                device->render_device_path);
          }
          break;
@@ -3268,9 +3269,9 @@ index eff0606d29..4240c1fea2 100644
 +              device->render_device_path);
 +        }
 +        break;
-       default:
-         GST_DEBUG ("No encoder implementation for %" GST_FOURCC_FORMAT,
-             GST_FOURCC_ARGS (codec));
+ #if VA_CHECK_VERSION(1, 15, 0)
+       case AV1:
+         if (!gst_va_av1_enc_register (plugin, device, sinkcaps, srccaps,
 -- 
-2.34.1
+2.25.1
 
