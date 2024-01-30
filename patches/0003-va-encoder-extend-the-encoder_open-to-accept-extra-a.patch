@@ -1,0 +1,99 @@
+From 4c6f48daed9c1071d3f74ca251001b4f2ab56223 Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Tue, 30 Jan 2024 23:37:38 +0800
+Subject: [PATCH 3/6] va: encoder: extend the encoder_open() to accept extra
+ attribute
+
+---
+ subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c  | 2 +-
+ subprojects/gst-plugins-bad/sys/va/gstvaencoder.c | 9 +++++++--
+ subprojects/gst-plugins-bad/sys/va/gstvaencoder.h | 3 ++-
+ subprojects/gst-plugins-bad/sys/va/gstvah264enc.c | 2 +-
+ subprojects/gst-plugins-bad/sys/va/gstvah265enc.c | 2 +-
+ 5 files changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
+index 5050d8593c..20f1da20cc 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
+@@ -2754,7 +2754,7 @@ gst_va_av1_enc_reconfig (GstVaBaseEnc * base)
+   if (!gst_va_encoder_open (base->encoder, base->profile,
+           GST_VIDEO_INFO_FORMAT (&base->in_info), base->rt_format,
+           base->width, base->height, base->codedbuf_size, max_ref_frames,
+-          self->rc.rc_ctrl_mode, self->packed_headers)) {
++          self->rc.rc_ctrl_mode, self->packed_headers, NULL)) {
+     GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
+     return FALSE;
+   }
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
+index e9e9291391..302a1d47cf 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
+@@ -336,10 +336,10 @@ gboolean
+ gst_va_encoder_open (GstVaEncoder * self, VAProfile profile,
+     GstVideoFormat video_format, guint rt_format, gint coded_width,
+     gint coded_height, gint codedbuf_size, guint max_reconstruct_surfaces,
+-    guint rc_ctrl, guint32 packed_headers)
++    guint rc_ctrl, guint32 packed_headers, VAConfigAttrib * extra_attr)
+ {
+   /* *INDENT-OFF* */
+-  VAConfigAttrib attribs[3] = {
++  VAConfigAttrib attribs[4] = {
+     { .type = VAConfigAttribRTFormat, .value = rt_format, },
+   };
+   /* *INDENT-ON* */
+@@ -375,6 +375,11 @@ gst_va_encoder_open (GstVaEncoder * self, VAProfile profile,
+     attrib_idx++;
+   }
+ 
++  if (extra_attr) {
++    attribs[attrib_idx] = *extra_attr;
++    attrib_idx++;
++  }
++
+   dpy = gst_va_display_get_va_dpy (self->display);
+ 
+   status = vaCreateConfig (dpy, profile, self->entrypoint, attribs, attrib_idx,
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
+index 8d2be78a3a..a3503bde5e 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
++++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.h
+@@ -52,7 +52,8 @@ gboolean              gst_va_encoder_open                 (GstVaEncoder * self,
+                                                            gint codedbuf_size,
+                                                            guint max_reconstruct_surfaces,
+                                                            guint rc_ctrl,
+-                                                           guint32 packed_headers);
++                                                           guint32 packed_headers,
++                                                           VAConfigAttrib * extra_attr);
+ gboolean              gst_va_encoder_close                (GstVaEncoder * self);
+ gboolean              gst_va_encoder_get_reconstruct_pool_config (GstVaEncoder * self,
+                                                                   GstCaps ** caps,
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
+index 81faec3d36..e441fc2681 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
+@@ -1631,7 +1631,7 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
+       && !gst_va_encoder_open (base->encoder, base->profile,
+           format, base->rt_format, base->width, base->height,
+           base->codedbuf_size, max_ref_frames, self->rc.rc_ctrl_mode,
+-          self->packed_headers)) {
++          self->packed_headers, NULL)) {
+     GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
+     return FALSE;
+   }
+diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
+index 8cb0f66e78..8ec58a74ca 100644
+--- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
++++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
+@@ -4538,7 +4538,7 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+       && !gst_va_encoder_open (base->encoder, base->profile,
+           format, base->rt_format, self->luma_width, self->luma_height,
+           base->codedbuf_size, max_ref_frames, self->rc.rc_ctrl_mode,
+-          self->packed_headers)) {
++          self->packed_headers, NULL)) {
+     GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
+     return FALSE;
+   }
+-- 
+2.25.1
+
