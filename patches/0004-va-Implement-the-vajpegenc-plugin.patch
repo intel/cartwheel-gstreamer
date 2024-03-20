@@ -1,7 +1,7 @@
-From eab8f6330e6c420cc96add545e47c6fa8a9eb012 Mon Sep 17 00:00:00 2001
+From ba89e758a0789e80d056999eb1ea215cbf35816e Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 30 Jan 2024 23:46:36 +0800
-Subject: [PATCH 4/6] va: Implement the vajpegenc plugin
+Subject: [PATCH 4/4] va: Implement the vajpegenc plugin
 
 ---
  .../gst-plugins-bad/sys/va/gstvabaseenc.c     |    4 +-
@@ -14,7 +14,7 @@ Subject: [PATCH 4/6] va: Implement the vajpegenc plugin
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvajpegenc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index 4652caa0ea..b07b4bdfa2 100644
+index a0a99cc5e5..336ad13a3b 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 @@ -1117,7 +1117,9 @@ gst_va_base_enc_add_codec_tag (GstVaBaseEnc * base, const gchar * codec_name)
@@ -1176,7 +1176,7 @@ index 0000000000..7ffd375441
 +
 +G_END_DECLS
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index 250b961c8c..dc388e2dff 100644
+index d498a7b6d7..e662105dd9 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
 @@ -18,6 +18,7 @@ va_sources = [
@@ -1188,18 +1188,18 @@ index 250b961c8c..dc388e2dff 100644
    'gstvapluginutils.c',
    'gstvaprofile.c',
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index 2e699f4110..f5098d599e 100644
+index 4c307f6e81..f6d1e7159b 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
-@@ -43,6 +43,7 @@
+@@ -39,6 +39,7 @@
+ #include "gstvah265dec.h"
+ #include "gstvah265enc.h"
+ #include "gstvajpegdec.h"
++#include "gstvajpegenc.h"
+ #include "gstvampeg2dec.h"
  #include "gstvaprofile.h"
  #include "gstvavp8dec.h"
- #include "gstvavp9dec.h"
-+#include "gstvajpegenc.h"
- #include "gstvavpp.h"
- 
- #define GST_CAT_DEFAULT gstva_debug
-@@ -208,6 +209,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -216,6 +217,13 @@ plugin_register_encoders (GstPlugin * plugin, GstVaDevice * device,
                device->render_device_path);
          }
          break;

@@ -1,7 +1,7 @@
-From a6a36c796fcad5c81681a647a0051e57ce8e317a Mon Sep 17 00:00:00 2001
+From 12b5bac747ac21f64d768556aa59dd47179cb2ba Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 30 Jan 2024 23:14:39 +0800
-Subject: [PATCH 1/6] codecparsers: Implement the jpeg bit code writer
+Subject: [PATCH 1/4] codecparsers: Implement the jpeg bit code writer
 
 ---
  .../gst/codecparsers/gstjpegbitwriter.c       | 503 ++++++++++++++++++
@@ -13,7 +13,7 @@ Subject: [PATCH 1/6] codecparsers: Implement the jpeg bit code writer
 
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.c b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.c
 new file mode 100644
-index 0000000000..cf5eccabbc
+index 0000000000..d711458b5f
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.c
 @@ -0,0 +1,503 @@
@@ -63,7 +63,7 @@ index 0000000000..cf5eccabbc
 + *
 + * Returns: a #GstJpegBitWriterResult
 + *
-+ * Since: 1.22
++ * Since: 1.24
 + **/
 +GstJpegBitWriterResult
 +gst_jpeg_bit_writer_frame_header (const GstJpegFrameHdr * frame_hdr,
@@ -150,7 +150,7 @@ index 0000000000..cf5eccabbc
 + *
 + * Returns: a #GstJpegBitWriterResult
 + *
-+ * Since: 1.22
++ * Since: 1.24
 + **/
 +GstJpegBitWriterResult
 +gst_jpeg_bit_writer_scan_header (const GstJpegScanHdr * scan_hdr,
@@ -227,7 +227,7 @@ index 0000000000..cf5eccabbc
 + *
 + * Returns: a #GstJpegBitWriterResult
 + *
-+ * Since: 1.22
++ * Since: 1.24
 + **/
 +GstJpegBitWriterResult
 +gst_jpeg_bit_writer_huffman_table (const GstJpegHuffmanTables * huff_tables,
@@ -323,7 +323,7 @@ index 0000000000..cf5eccabbc
 + *
 + * Returns: a #GstJpegBitWriterResult
 + *
-+ * Since: 1.22
++ * Since: 1.24
 + **/
 +GstJpegBitWriterResult
 +gst_jpeg_bit_writer_quantization_table (const GstJpegQuantTables * quant_tables,
@@ -406,7 +406,7 @@ index 0000000000..cf5eccabbc
 + *
 + * Returns: a #GstJpegBitWriterResult
 + *
-+ * Since: 1.22
++ * Since: 1.24
 + **/
 +GstJpegBitWriterResult
 +gst_jpeg_bit_writer_restart_interval (guint16 interval, guint8 * data,
@@ -462,7 +462,7 @@ index 0000000000..cf5eccabbc
 + *
 + * Returns: a #GstJpegBitWriterResult
 + *
-+ * Since: 1.22
++ * Since: 1.24
 + **/
 +GstJpegBitWriterResult
 +gst_jpeg_bit_writer_segment_with_data (GstJpegMarker marker, guint8 * seg_data,
@@ -522,7 +522,7 @@ index 0000000000..cf5eccabbc
 +}
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.h b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.h
 new file mode 100644
-index 0000000000..160d165df3
+index 0000000000..53293a2621
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gstjpegbitwriter.h
 @@ -0,0 +1,76 @@
@@ -563,7 +563,7 @@ index 0000000000..160d165df3
 + *
 + * The result of writing JPEG data into bit stream.
 + *
-+ * Since: 1.22
++ * Since: 1.24
 + */
 +typedef enum
 +{
@@ -603,13 +603,13 @@ index 0000000000..160d165df3
 +                                                                  guint * size);
 +#endif /* __GST_JPEG_BIT_WRITER_H__ */
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
-index 7e968354a8..51c5646947 100644
+index 5865b373ef..76bae6ec46 100644
 --- a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/meson.build
-@@ -19,6 +19,7 @@ codecparser_sources = files([
-   'gsth264bitwriter.c',
+@@ -20,6 +20,7 @@ codecparser_sources = files([
    'gsth265bitwriter.c',
    'gstav1bitwriter.c',
+   'gstvp9bitwriter.c',
 +  'gstjpegbitwriter.c',
  ])
  codecparser_headers = [
