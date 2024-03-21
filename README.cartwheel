@@ -41,13 +41,37 @@ $ git pull --rebase --recurse-submodule
 
 To update the submodule reference commit id to the latest upstream:
 
+NOTE: please make sure your working tree is clean and the latest before updating and committing the submodule.
+
 ```shell
 # at top-level directory
+$ git pull --rebase
+$ git submodule update
+$ git status
+  On branch main
+  Your branch is up to date with 'origin/main'.
+
+  nothing to commit, working tree clean
+
 $ git submodule update --remote --recursive
 $ git commit -sam "$(git diff --submodule | head -1 | sed 's/:$//')"
 ```
 
-...verify the patches still apply successfully.  If they don't apply, fix them and include in new commit(s).
+If done correctly, the commit message should look something like:
+
+```shell
+$ git show --oneline
+  68ac31fcc5fb (HEAD -> main, origin/main) Submodule gstreamer 5280f0b..4790a44
+  diff --git a/gstreamer b/gstreamer
+  index 5280f0b73362..4790a44d1027 160000
+  --- a/gstreamer
+  +++ b/gstreamer
+  @@ -1 +1 @@
+  -Subproject commit 5280f0b733625d553fa935252fc4036640f780c0
+  +Subproject commit 4790a44d10273c5ebb87e5a41314a8aa8d6ffc4f
+```
+
+Finally, verify the patches still apply successfully.  If they don't apply, fix them and include in new commit(s).
 
 ## additional information
 
