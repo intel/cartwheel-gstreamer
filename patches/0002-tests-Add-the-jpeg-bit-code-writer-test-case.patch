@@ -1,4 +1,4 @@
-From 8893b6e0fad4fb843475a5fa56730c5621c26b96 Mon Sep 17 00:00:00 2001
+From a691a6d3426454e1d4741efee6d4e7f2e4060e02 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 30 Jan 2024 23:24:18 +0800
 Subject: [PATCH 2/4] tests: Add the jpeg bit code writer test case
@@ -279,7 +279,7 @@ index 0000000000..ce22e65e7e
 +
 +GST_CHECK_MAIN (jpegbitwriter);
 diff --git a/subprojects/gst-plugins-bad/tests/check/meson.build b/subprojects/gst-plugins-bad/tests/check/meson.build
-index 6991c3999c..f94ec3dd4a 100644
+index 21e6db6fd7..4cbed29e3f 100644
 --- a/subprojects/gst-plugins-bad/tests/check/meson.build
 +++ b/subprojects/gst-plugins-bad/tests/check/meson.build
 @@ -98,6 +98,7 @@ base_tests = [
@@ -291,5 +291,5 @@ index 6991c3999c..f94ec3dd4a 100644
    [['libs/analyticsmeta.c'], false, [gstanalytics_dep]],
    [['elements/vkcolorconvert.c'], not gstvulkan_dep.found(), [gstvulkan_dep]],
 -- 
-2.25.1
+2.34.1
 

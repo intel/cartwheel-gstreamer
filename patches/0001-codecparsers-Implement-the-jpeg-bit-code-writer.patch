@@ -1,4 +1,4 @@
-From 12b5bac747ac21f64d768556aa59dd47179cb2ba Mon Sep 17 00:00:00 2001
+From 746f1c06e13ebc0b05714e720d2ca1ab14b70fa2 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 30 Jan 2024 23:14:39 +0800
 Subject: [PATCH 1/4] codecparsers: Implement the jpeg bit code writer
@@ -615,5 +615,5 @@ index 5865b373ef..76bae6ec46 100644
  codecparser_headers = [
    'codecparsers-prelude.h',
 -- 
-2.25.1
+2.34.1
 

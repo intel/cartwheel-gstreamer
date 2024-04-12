@@ -1,4 +1,4 @@
-From 457184f8d8ee7d67535c770ef429bd5ecabbbef8 Mon Sep 17 00:00:00 2001
+From f151bb1a8dcffb73852def64b07ab0ad87fcbbf5 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 30 Jan 2024 23:37:38 +0800
 Subject: [PATCH 3/4] va: encoder: extend the encoder_open() to accept extra
@@ -14,11 +14,11 @@ Subject: [PATCH 3/4] va: encoder: extend the encoder_open() to accept extra
  6 files changed, 13 insertions(+), 7 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-index 85be833b53..4a1a8a455c 100644
+index 1cffee5d4b..631898f42c 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-@@ -2755,7 +2755,7 @@ gst_va_av1_enc_reconfig (GstVaBaseEnc * base)
-   if (!gst_va_encoder_open (base->encoder, base->profile,
+@@ -2841,7 +2841,7 @@ gst_va_av1_enc_reconfig (GstVaBaseEnc * base)
+       && !gst_va_encoder_open (base->encoder, base->profile,
            GST_VIDEO_INFO_FORMAT (&base->in_info), base->rt_format,
            base->width, base->height, base->codedbuf_size, max_ref_frames,
 -          self->rc.rc_ctrl_mode, self->packed_headers)) {
@@ -27,7 +27,7 @@ index 85be833b53..4a1a8a455c 100644
      return FALSE;
    }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
-index 54bee94998..3d37a81d32 100644
+index 09975f758e..d3695d7b34 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaencoder.c
 @@ -381,10 +381,10 @@ gboolean
@@ -70,10 +70,10 @@ index 087e05c99a..25435197b0 100644
  gboolean              gst_va_encoder_get_reconstruct_pool_config (GstVaEncoder * self,
                                                                    GstCaps ** caps,
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index 4fb4ae9d53..2973339786 100644
+index fac8d9f000..977d319893 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-@@ -1631,7 +1631,7 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
+@@ -1662,7 +1662,7 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
        && !gst_va_encoder_open (base->encoder, base->profile,
            format, base->rt_format, base->width, base->height,
            base->codedbuf_size, max_ref_frames, self->rc.rc_ctrl_mode,
@@ -83,10 +83,10 @@ index 4fb4ae9d53..2973339786 100644
      return FALSE;
    }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-index 45b5332a6b..da1da3f35e 100644
+index b918b7b75e..52796e3991 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah265enc.c
-@@ -4572,7 +4572,7 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
+@@ -4601,7 +4601,7 @@ gst_va_h265_enc_reconfig (GstVaBaseEnc * base)
        && !gst_va_encoder_open (base->encoder, base->profile,
            format, base->rt_format, self->luma_width, self->luma_height,
            base->codedbuf_size, max_ref_frames, self->rc.rc_ctrl_mode,
@@ -96,11 +96,11 @@ index 45b5332a6b..da1da3f35e 100644
      return FALSE;
    }
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-index a8e8808e97..48285111cb 100644
+index a542545bde..5cfc48b479 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvavp9enc.c
-@@ -2113,7 +2113,7 @@ gst_va_vp9_enc_reconfig (GstVaBaseEnc * base)
-   if (!gst_va_encoder_open (base->encoder, base->profile,
+@@ -2195,7 +2195,7 @@ gst_va_vp9_enc_reconfig (GstVaBaseEnc * base)
+       && !gst_va_encoder_open (base->encoder, base->profile,
            GST_VIDEO_INFO_FORMAT (&base->in_info), base->rt_format,
            base->width, base->height, base->codedbuf_size, max_ref_frames,
 -          self->rc.rc_ctrl_mode, self->packed_headers)) {
@@ -109,5 +109,5 @@ index a8e8808e97..48285111cb 100644
      return FALSE;
    }
 -- 
-2.25.1
+2.34.1
 
