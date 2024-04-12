@@ -1,4 +1,4 @@
-From ba89e758a0789e80d056999eb1ea215cbf35816e Mon Sep 17 00:00:00 2001
+From be2c0d8381d197a883f3e23cb2fa12cdf522683e Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 30 Jan 2024 23:46:36 +0800
 Subject: [PATCH 4/4] va: Implement the vajpegenc plugin
@@ -14,10 +14,10 @@ Subject: [PATCH 4/4] va: Implement the vajpegenc plugin
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvajpegenc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index a0a99cc5e5..336ad13a3b 100644
+index 823ba24524..792938203e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-@@ -1117,7 +1117,9 @@ gst_va_base_enc_add_codec_tag (GstVaBaseEnc * base, const gchar * codec_name)
+@@ -1126,7 +1126,9 @@ gst_va_base_enc_add_codec_tag (GstVaBaseEnc * base, const gchar * codec_name)
    const gchar *encoder_name;
    guint bitrate = 0;
  
@@ -1214,5 +1214,5 @@ index 4c307f6e81..f6d1e7159b 100644
        case AV1:
          if (!gst_va_av1_enc_register (plugin, device, sinkcaps, srccaps,
 -- 
-2.25.1
+2.34.1
 
