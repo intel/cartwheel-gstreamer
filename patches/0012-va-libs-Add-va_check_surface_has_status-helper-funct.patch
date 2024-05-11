@@ -1,0 +1,64 @@
+From 7e94bc5e4c57382768f8d029a778376a9a508e9a Mon Sep 17 00:00:00 2001
+From: He Junyan <junyan.he@intel.com>
+Date: Thu, 6 Apr 2023 19:39:04 +0800
+Subject: [PATCH 12/24] va: libs: Add va_check_surface_has_status() helper
+ function
+
+---
+ .../gst-libs/gst/va/vasurfaceimage.c          | 24 +++++++++++++++++++
+ .../gst-libs/gst/va/vasurfaceimage.h          |  4 ++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.c b/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.c
+index cb7dbaf1c7..c2498f88af 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.c
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.c
+@@ -383,6 +383,30 @@ va_check_surface (GstVaDisplay * display, VASurfaceID surface)
+   return (status == VA_STATUS_SUCCESS);
+ }
+ 
++gboolean
++va_check_surface_has_status (GstVaDisplay * display, VASurfaceID surface,
++    VASurfaceStatus surface_status)
++{
++  VADisplay dpy = gst_va_display_get_va_dpy (display);
++  VAStatus status;
++  VASurfaceStatus state;
++
++  status = vaQuerySurfaceStatus (dpy, surface, &state);
++
++  if (status != VA_STATUS_SUCCESS) {
++    GST_ERROR ("vaQuerySurfaceStatus: %s", vaErrorStr (status));
++    return FALSE;
++  }
++
++  GST_LOG ("surface %#x status %d", surface, state);
++
++  /* Just query the surface, no flag to compare, we succeed. */
++  if (!surface_status)
++    return TRUE;
++
++  return ((state & surface_status) == surface_status);
++}
++
+ gboolean
+ va_copy_surface (GstVaDisplay * display, VASurfaceID dst, VASurfaceID src)
+ {
+diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.h b/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.h
+index f75566a759..d54d69f63d 100644
+--- a/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.h
++++ b/subprojects/gst-plugins-bad/gst-libs/gst/va/vasurfaceimage.h
+@@ -51,6 +51,10 @@ gboolean              va_sync_surface                     (GstVaDisplay * displa
+ GST_VA_API
+ gboolean              va_check_surface                    (GstVaDisplay * display,
+                                                            VASurfaceID surface);
++GST_VA_API
++gboolean              va_check_surface_has_status         (GstVaDisplay * display,
++                                                           VASurfaceID surface,
++                                                           VASurfaceStatus surface_status);
+ 
+ gboolean              va_copy_surface                     (GstVaDisplay * display,
+                                                            VASurfaceID dst,
+-- 
+2.25.1
+
