@@ -1,7 +1,7 @@
-From b812c11319a71867274cd16bd435f8dd3e4049ab Mon Sep 17 00:00:00 2001
+From b1f863bf1da0c3accb68685ffe639b6928cf6672 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 8 Apr 2024 21:38:19 +0800
-Subject: [PATCH 03/24] vah264enc: Fix intra only stream bug
+Subject: [PATCH 12/12] vah264enc: Fix intra only stream bug
 
 When we set "ref-frames=0" to generate an intra only stream, the current
 encoder just generates an assert and exit with error.
@@ -10,10 +10,10 @@ encoder just generates an assert and exit with error.
  1 file changed, 24 insertions(+), 10 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index 67640095c4..9cb73e4358 100644
+index c07003e21b..7d8aeda9bd 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-@@ -1165,17 +1165,31 @@ create_poc:
+@@ -1155,17 +1155,31 @@ create_poc:
    self->gop.log2_max_frame_num = _get_log2_max_num (self->gop.idr_period);
    self->gop.max_frame_num = (1 << self->gop.log2_max_frame_num);
    self->gop.log2_max_pic_order_cnt = self->gop.log2_max_frame_num + 1;

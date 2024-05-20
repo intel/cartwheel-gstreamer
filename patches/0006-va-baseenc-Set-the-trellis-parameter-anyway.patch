@@ -1,7 +1,7 @@
-From d9ad849d34fa0e782cb7152b44c66328d7aea1c6 Mon Sep 17 00:00:00 2001
+From 4b6762509b7bf176fe8400abbaaba0134edeb07b Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 16 Apr 2024 18:13:06 +0800
-Subject: [PATCH 04/24] va: baseenc: Set the trellis parameter anyway
+Subject: [PATCH 06/12] va: baseenc: Set the trellis parameter anyway
 
 The driver may enable trellis by default. So we should also set the
 trellis info to driver even when the trellis option is turned off.
@@ -10,10 +10,10 @@ trellis info to driver even when the trellis option is turned off.
  1 file changed, 4 insertions(+), 7 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index 4df7bd2e01..c6d81d9163 100644
+index 565311c0b1..dfe78a247c 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-@@ -1102,17 +1102,14 @@ gst_va_base_enc_add_trellis_parameter (GstVaBaseEnc * base,
+@@ -1170,17 +1170,14 @@ gst_va_base_enc_add_trellis_parameter (GstVaBaseEnc * base,
    } trellis = {
      .type = VAEncMiscParameterTypeQuantization,
      .tr.quantization_flags.bits = {

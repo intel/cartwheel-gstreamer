@@ -1,14 +1,14 @@
-From e502e8ea1a7e4fd052887cf918ba599c49d53f06 Mon Sep 17 00:00:00 2001
+From 61eab7b0a186b95af312840373ad93647e98aba6 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 16 Apr 2024 23:50:58 +0800
-Subject: [PATCH 05/24] vah264enc: Set the trellis only when HW supports it
+Subject: [PATCH 07/12] vah264enc: Set the trellis only when HW supports it
 
 ---
  subprojects/gst-plugins-bad/sys/va/gstvah264enc.c | 12 +++++++-----
  1 file changed, 7 insertions(+), 5 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index 9cb73e4358..b457afc95c 100644
+index 8091df61b3..5f1b1fdcea 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 @@ -178,6 +178,7 @@ struct _GstVaH264Enc
@@ -19,7 +19,7 @@ index 9cb73e4358..b457afc95c 100644
    gboolean use_trellis;
    gboolean aud;
    gboolean cc;
-@@ -780,9 +781,9 @@ _validate_parameters (GstVaH264Enc * self)
+@@ -767,9 +768,9 @@ _validate_parameters (GstVaH264Enc * self)
        self->num_slices, PROP_NUM_SLICES);
  
    /* Ensure trellis. */
@@ -32,7 +32,7 @@ index 9cb73e4358..b457afc95c 100644
      GST_INFO_OBJECT (self, "The trellis is not supported");
      self->use_trellis = FALSE;
    }
-@@ -1547,6 +1548,7 @@ gst_va_h264_enc_reset_state (GstVaBaseEnc * base)
+@@ -1516,6 +1517,7 @@ gst_va_h264_enc_reset_state (GstVaBaseEnc * base)
    self->level_str = NULL;
    self->mb_width = 0;
    self->mb_height = 0;
@@ -40,14 +40,14 @@ index 9cb73e4358..b457afc95c 100644
  
    self->gop.i_period = 0;
    self->gop.total_idr_count = 0;
-@@ -2965,8 +2967,8 @@ _encode_one_frame (GstVaH264Enc * self, GstVideoCodecFrame * gst_frame)
+@@ -3009,8 +3011,8 @@ _encode_one_frame (GstVaH264Enc * self, GstVideoCodecFrame * gst_frame)
              self->rc.rc_ctrl_mode, self->rc.cpb_length_bits))
        return FALSE;
  
--    if (!gst_va_base_enc_add_trellis_parameter (base, frame->picture,
+-    if (!gst_va_base_enc_add_trellis_parameter (base, frame->base.picture,
 -            self->use_trellis))
 +    if (self->support_trellis && !gst_va_base_enc_add_trellis_parameter (base,
-+            frame->picture, self->use_trellis))
++            frame->base.picture, self->use_trellis))
        return FALSE;
  
      _fill_sequence_param (self, &sequence);

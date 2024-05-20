@@ -1,7 +1,7 @@
-From c6a06676e621e6e7affad6d6755f909e95cff383 Mon Sep 17 00:00:00 2001
+From a592daa5a27a803303f6c885d1d03a9fe7805bf3 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 30 Jan 2024 23:24:18 +0800
-Subject: [PATCH 22/24] tests: Add the jpeg bit code writer test case
+Subject: [PATCH 02/12] tests: Add the jpeg bit code writer test case
 
 ---
  .../tests/check/libs/jpegbitwriter.c          | 263 ++++++++++++++++++

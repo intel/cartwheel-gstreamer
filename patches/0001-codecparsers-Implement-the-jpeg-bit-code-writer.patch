@@ -1,7 +1,7 @@
-From 4784ced0898ebac7454cbf0da4f7113bec931aac Mon Sep 17 00:00:00 2001
+From e6fec2dcf3873e4fd87bd20309c461529849ae9b Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 30 Jan 2024 23:14:39 +0800
-Subject: [PATCH 21/24] codecparsers: Implement the jpeg bit code writer
+Subject: [PATCH 01/12] codecparsers: Implement the jpeg bit code writer
 
 ---
  .../gst/codecparsers/gstjpegbitwriter.c       | 503 ++++++++++++++++++

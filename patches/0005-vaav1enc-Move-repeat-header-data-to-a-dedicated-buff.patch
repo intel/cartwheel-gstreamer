@@ -1,7 +1,7 @@
-From 0dbfb8b6720a07a532c111e0c5e2d06fcbfa8a3d Mon Sep 17 00:00:00 2001
+From 34c49ff9ba47ef950cfcf40409f87010ca836f8b Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 13 May 2024 18:52:28 +0800
-Subject: [PATCH 25/25] vaav1enc: Move repeat header data to a dedicated buffer
+Subject: [PATCH 05/12] vaav1enc: Move repeat header data to a dedicated buffer
 
 When enable parallel encoding, it is possible that the unshown frame
 is not output but it is already be marked as a repeated frame header.
@@ -12,7 +12,7 @@ don't mix it with the orignal frame data.
  1 file changed, 29 insertions(+), 16 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
-index e881968cec..3f5eb0fb35 100644
+index 376db3ea68..9cdf1a13ed 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvaav1enc.c
 @@ -180,6 +180,9 @@ struct _GstVaAV1EncFrame
@@ -35,7 +35,7 @@ index e881968cec..3f5eb0fb35 100644
  
    return frame;
  }
-@@ -3824,26 +3830,37 @@ static void
+@@ -3815,26 +3821,37 @@ static void
  _av1_add_repeat_frame_header (GstVaAV1Enc * self, GstVaAV1EncFrame * va_frame)
  {
    GstAV1FrameHeaderOBU frame_hdr = { 0, };
@@ -81,7 +81,7 @@ index e881968cec..3f5eb0fb35 100644
  }
  
  static GstFlowReturn
-@@ -3862,10 +3879,6 @@ gst_va_av1_enc_encode_frame (GstVaBaseEnc * base,
+@@ -3853,10 +3870,6 @@ gst_va_av1_enc_encode_frame (GstVaBaseEnc * base,
      return GST_FLOW_ERROR;
    }
  
@@ -92,7 +92,7 @@ index e881968cec..3f5eb0fb35 100644
    if (va_frame->type & FRAME_TYPE_REPEAT) {
      g_assert (va_frame->flags & FRAME_FLAG_ALREADY_ENCODED);
      _av1_add_repeat_frame_header (self, va_frame);
-@@ -4067,16 +4080,16 @@ gst_va_av1_enc_prepare_output (GstVaBaseEnc * base,
+@@ -4058,16 +4071,16 @@ gst_va_av1_enc_prepare_output (GstVaBaseEnc * base,
      g_assert ((frame_enc->flags & FRAME_FLAG_FRAME_IN_TU_CACHE) == 0);
  
      buf = gst_video_encoder_allocate_output_buffer
