@@ -1,23 +1,23 @@
-From 0afeff2a9312b31be46e23d1a00da5d2b5e2091b Mon Sep 17 00:00:00 2001
+From 56e89cc68009d59de5fe7d8f244498ba788a56c3 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Tue, 30 Jan 2024 23:46:36 +0800
-Subject: [PATCH 24/24] va: Implement the vajpegenc plugin
+Subject: [PATCH 04/12] va: Implement the vajpegenc plugin
 
 ---
  .../gst-plugins-bad/sys/va/gstvabaseenc.c     |    4 +-
- .../gst-plugins-bad/sys/va/gstvajpegenc.c     | 1112 +++++++++++++++++
+ .../gst-plugins-bad/sys/va/gstvajpegenc.c     | 1113 +++++++++++++++++
  .../gst-plugins-bad/sys/va/gstvajpegenc.h     |   34 +
  .../gst-plugins-bad/sys/va/meson.build        |    1 +
  subprojects/gst-plugins-bad/sys/va/plugin.c   |    8 +
- 5 files changed, 1158 insertions(+), 1 deletion(-)
+ 5 files changed, 1159 insertions(+), 1 deletion(-)
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
  create mode 100644 subprojects/gst-plugins-bad/sys/va/gstvajpegenc.h
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-index 3f7463c5ff..9a3370f3e9 100644
+index d8e2667ca1..565311c0b1 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvabaseenc.c
-@@ -1195,7 +1195,9 @@ gst_va_base_enc_add_codec_tag (GstVaBaseEnc * base, const gchar * codec_name)
+@@ -1198,7 +1198,9 @@ gst_va_base_enc_add_codec_tag (GstVaBaseEnc * base, const gchar * codec_name)
    const gchar *encoder_name;
    guint bitrate = 0;
  
@@ -30,10 +30,10 @@ index 3f7463c5ff..9a3370f3e9 100644
          bitrate, NULL);
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c b/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
 new file mode 100644
-index 0000000000..86ce3c42a3
+index 0000000000..00867461b4
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvajpegenc.c
-@@ -0,0 +1,1112 @@
+@@ -0,0 +1,1113 @@
 +/* GStreamer
 + *  Copyright (C) 2022 Intel Corporation
 + *     Author: He Junyan <junyan.he@intel.com>
@@ -323,7 +323,7 @@ index 0000000000..86ce3c42a3
 +  gint width, height;
 +  GstVideoFormat format, reconf_format = GST_VIDEO_FORMAT_UNKNOWN;
 +  guint rt_format = 0, codedbuf_size, latency_num,
-+      max_surfaces = 0, max_ref_frames;
++      max_surfaces = 0, max_cached_frames;
 +  GstClockTime latency;
 +  VAConfigAttrib jpeg_attr;
 +
@@ -409,11 +409,13 @@ index 0000000000..86ce3c42a3
 +      GST_VIDEO_INFO_FPS_N (&base->input_state->info));
 +  gst_video_encoder_set_latency (venc, latency, latency);
 +
-+  max_ref_frames = base->preferred_output_delay + 3;
++  max_cached_frames = base->preferred_output_delay;
++  base->min_buffers = max_cached_frames;
++  max_cached_frames += 3 /* scratch frames */ ;
 +
 +  /* second check after calculations */
-+  do_reopen |=
-+      !(max_ref_frames == max_surfaces && codedbuf_size == base->codedbuf_size);
++  do_reopen |= !(max_cached_frames == max_surfaces &&
++      codedbuf_size == base->codedbuf_size);
 +  if (do_reopen && gst_va_encoder_is_open (base->encoder))
 +    gst_va_encoder_close (base->encoder);
 +
@@ -421,10 +423,9 @@ index 0000000000..86ce3c42a3
 +  jpeg_attr.value = _jpeg_get_capability_attribute (self);
 +
 +  if (!gst_va_encoder_is_open (base->encoder)
-+      && !gst_va_encoder_open (base->encoder, base->profile,
-+          format, base->rt_format, base->width, base->height,
-+          base->codedbuf_size, 1, VA_RC_NONE,
-+          self->packed_headers, &jpeg_attr)) {
++      && !gst_va_encoder_open (base->encoder, base->profile, format,
++          base->rt_format, base->width, base->height, base->codedbuf_size,
++          1, VA_RC_NONE, self->packed_headers, &jpeg_attr)) {
 +    GST_ERROR_OBJECT (self, "Failed to open the VA encoder.");
 +    return FALSE;
 +  }

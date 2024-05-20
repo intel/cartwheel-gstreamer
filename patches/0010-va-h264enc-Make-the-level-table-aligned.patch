@@ -1,17 +1,17 @@
-From f098d1a0208ba6c86ef19785b1d1ac0ad359867c Mon Sep 17 00:00:00 2001
+From a30deb6ba3aed299d34ec8c2b23edd5ef95d97d9 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 1 Apr 2024 23:54:04 +0800
-Subject: [PATCH 01/24] va: h264enc: Make the level table aligned
+Subject: [PATCH 10/12] va: h264enc: Make the level table aligned
 
 ---
  .../gst-plugins-bad/sys/va/gstvah264enc.c     | 30 +++++++++----------
  1 file changed, 15 insertions(+), 15 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index a0e5337ace..492ed39946 100644
+index 1abedba5cb..d407de599d 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-@@ -306,27 +306,27 @@ struct _GstVaH264LevelLimits
+@@ -309,27 +309,27 @@ struct _GstVaH264LevelLimits
  /* Table A-1 - Level limits */
  /* *INDENT-OFF* */
  static const GstVaH264LevelLimits _va_h264_level_limits[] = {

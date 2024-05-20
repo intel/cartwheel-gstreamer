@@ -1,7 +1,7 @@
-From ece21dfbff4f263616671aae68d72c830860a6d3 Mon Sep 17 00:00:00 2001
+From 986308495a9a821aef054820f09616c16d5da71d Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Mon, 1 Apr 2024 16:56:23 +0800
-Subject: [PATCH 02/24] vah264enc: Improve B pyramid mode in H264
+Subject: [PATCH 11/12] vah264enc: Improve B pyramid mode in H264
 
 If the reference frame number is bigger than 2, we can enable the
 pyramid B mode. We do not need to assign a reference frame to each
@@ -11,19 +11,19 @@ pyramid level.
  1 file changed, 63 insertions(+), 48 deletions(-)
 
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-index 492ed39946..67640095c4 100644
+index d407de599d..c07003e21b 100644
 --- a/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah264enc.c
-@@ -229,6 +229,8 @@ struct _GstVaH264Enc
+@@ -230,6 +230,8 @@ struct _GstVaH264Enc
      guint32 ref_num_list1;
  
      guint num_reorder_frames;
 +    guint max_dec_frame_buffering;
 +    guint max_num_ref_frames;
-   } gop;
  
-   struct
-@@ -729,7 +731,7 @@ _calculate_level (GstVaH264Enc * self)
+     GstVideoCodecFrame *last_keyframe;
+   } gop;
+@@ -719,7 +721,7 @@ _calculate_level (GstVaH264Enc * self)
    guint i, PicSizeMbs, MaxDpbMbs, MaxMBPS;
  
    PicSizeMbs = self->mb_width * self->mb_height;
@@ -32,7 +32,7 @@ index 492ed39946..67640095c4 100644
    MaxMBPS = gst_util_uint64_scale_int_ceil (PicSizeMbs,
        GST_VIDEO_INFO_FPS_N (&base->in_info),
        GST_VIDEO_INFO_FPS_D (&base->in_info));
-@@ -1047,7 +1049,7 @@ _generate_gop_structure (GstVaH264Enc * self)
+@@ -1037,7 +1039,7 @@ _generate_gop_structure (GstVaH264Enc * self)
    }
  
    /* b_pyramid needs at least 1 ref for B, besides the I/P */
@@ -41,7 +41,7 @@ index 492ed39946..67640095c4 100644
      GST_INFO_OBJECT (self, "The number of reference frames is only %d,"
          " not enough for b_pyramid", self->gop.num_ref_frames);
      self->gop.b_pyramid = FALSE;
-@@ -1094,20 +1096,21 @@ _generate_gop_structure (GstVaH264Enc * self)
+@@ -1084,20 +1086,21 @@ _generate_gop_structure (GstVaH264Enc * self)
      self->gop.ref_num_list1 = 0;
    } else if (self->gop.b_pyramid) {
      guint b_frames = self->gop.num_bframes;
@@ -68,7 +68,7 @@ index 492ed39946..67640095c4 100644
          break;
  
        self->gop.highest_pyramid_level++;
-@@ -1164,13 +1167,16 @@ create_poc:
+@@ -1154,13 +1157,16 @@ create_poc:
    self->gop.log2_max_pic_order_cnt = self->gop.log2_max_frame_num + 1;
    self->gop.max_pic_order_cnt = (1 << self->gop.log2_max_pic_order_cnt);
    self->gop.num_reorder_frames = self->gop.b_pyramid ?
@@ -89,16 +89,16 @@ index 492ed39946..67640095c4 100644
    _create_gop_frame_types (self);
    _print_gop_structure (self);
  
-@@ -1542,6 +1548,8 @@ gst_va_h264_enc_reset_state (GstVaBaseEnc * base)
+@@ -1535,6 +1541,8 @@ gst_va_h264_enc_reset_state (GstVaBaseEnc * base)
    self->gop.ref_num_list0 = 0;
    self->gop.ref_num_list1 = 0;
    self->gop.num_reorder_frames = 0;
 +  self->gop.max_dec_frame_buffering = 0;
 +  self->gop.max_num_ref_frames = 0;
+   self->gop.last_keyframe = NULL;
  
    self->rc.max_bitrate = 0;
-   self->rc.target_bitrate = 0;
-@@ -1623,11 +1631,11 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
+@@ -1627,11 +1635,11 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
    if (!_ensure_rate_control (self))
      return FALSE;
  
@@ -112,18 +112,18 @@ index 492ed39946..67640095c4 100644
    _calculate_coded_size (self);
  
    /* updates & notifications */
-@@ -1646,7 +1654,9 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
-   self->cc = self->cc && self->packed_headers & VA_ENC_PACKED_HEADER_RAW_DATA;
-   update_property_bool (base, &self->prop.cc, self->cc, PROP_CC);
+@@ -1662,7 +1670,9 @@ gst_va_h264_enc_reconfig (GstVaBaseEnc * base)
+       GST_VIDEO_INFO_FPS_N (&base->input_state->info));
+   gst_video_encoder_set_latency (venc, latency, latency);
  
--  max_ref_frames = self->gop.num_ref_frames + 3 /* scratch frames */ ;
+-  max_ref_frames = self->gop.num_ref_frames;
++
 +  max_ref_frames = self->gop.b_pyramid ?
 +      self->gop.highest_pyramid_level + 2 : self->gop.num_ref_frames;
-+  max_ref_frames += 3 /* scratch frames */ ;
- 
-   /* second check after calculations */
-   do_reopen |=
-@@ -1998,12 +2008,6 @@ _fill_sps (GstVaH264Enc * self, VAEncSequenceParameterBufferH264 * seq_param)
+   max_ref_frames += base->preferred_output_delay;
+   base->min_buffers = max_ref_frames;
+   max_ref_frames += 3 /* scratch frames */ ;
+@@ -2069,12 +2079,6 @@ _fill_sps (GstVaH264Enc * self, VAEncSequenceParameterBufferH264 * seq_param)
    GstH264Profile profile;
    guint32 constraint_set0_flag, constraint_set1_flag;
    guint32 constraint_set2_flag, constraint_set3_flag;
@@ -136,7 +136,7 @@ index 492ed39946..67640095c4 100644
  
    constraint_set0_flag = 0;
    constraint_set1_flag = 0;
-@@ -2109,7 +2113,7 @@ _fill_sps (GstVaH264Enc * self, VAEncSequenceParameterBufferH264 * seq_param)
+@@ -2180,7 +2184,7 @@ _fill_sps (GstVaH264Enc * self, VAEncSequenceParameterBufferH264 * seq_param)
        .log2_max_mv_length_vertical =
            seq_param->vui_fields.bits.log2_max_mv_length_vertical,
        .num_reorder_frames = self->gop.num_reorder_frames,
@@ -145,7 +145,7 @@ index 492ed39946..67640095c4 100644
      },
    };
    /* *INDENT-ON* */
-@@ -2177,7 +2181,7 @@ _fill_sequence_param (GstVaH264Enc * self,
+@@ -2248,7 +2252,7 @@ _fill_sequence_param (GstVaH264Enc * self,
      .intra_idr_period = self->gop.idr_period,
      .ip_period = self->gop.ip_period,
      .bits_per_second = self->rc.target_bitrate_bits,
@@ -154,7 +154,7 @@ index 492ed39946..67640095c4 100644
      .picture_width_in_mbs = self->mb_width,
      .picture_height_in_mbs = self->mb_height,
  
-@@ -2306,7 +2310,8 @@ _fill_picture_parameter (GstVaH264Enc * self, GstVaH264EncFrame * frame,
+@@ -2377,7 +2381,8 @@ _fill_picture_parameter (GstVaH264Enc * self, GstVaH264EncFrame * frame,
        return FALSE;
      }
  
@@ -164,7 +164,7 @@ index 492ed39946..67640095c4 100644
  
      /* ref frames in queue are already sorted by frame_num. */
      for (; i < g_queue_get_length (&base->ref_list); i++) {
-@@ -2563,20 +2568,21 @@ _ref_list_need_reorder (GstVaH264EncFrame * list[16], guint list_num,
+@@ -2636,20 +2641,21 @@ _ref_list_need_reorder (GstVaH264EncFrame * list[16], guint list_num,
  
  static void
  _insert_ref_pic_list_modification (GstH264SliceHdr * slice_hdr,
@@ -190,7 +190,7 @@ index 492ed39946..67640095c4 100644
          (GCompareDataFunc) _frame_num_des_compare, NULL);
    }
  
-@@ -2585,7 +2591,8 @@ _insert_ref_pic_list_modification (GstH264SliceHdr * slice_hdr,
+@@ -2658,7 +2664,8 @@ _insert_ref_pic_list_modification (GstH264SliceHdr * slice_hdr,
      if (list_by_pic_num[i]->poc != list[i]->poc)
        modification_num = i + 1;
    }
@@ -200,7 +200,7 @@ index 492ed39946..67640095c4 100644
  
    if (is_asc) {
      slice_hdr->ref_pic_list_modification_flag_l1 = 1;
-@@ -2645,8 +2652,8 @@ _insert_ref_pic_marking_for_unused_frame (GstH264SliceHdr * slice_hdr,
+@@ -2718,8 +2725,8 @@ _insert_ref_pic_marking_for_unused_frame (GstH264SliceHdr * slice_hdr,
  static gboolean
  _add_slice_header (GstVaH264Enc * self, GstVaH264EncFrame * frame,
      GstH264PPS * pps, VAEncSliceParameterBufferH264 * slice,
@@ -211,7 +211,7 @@ index 492ed39946..67640095c4 100644
  {
    GstVaBaseEnc *base = GST_VA_BASE_ENC (self);
    GstH264SliceHdr slice_hdr;
-@@ -2703,16 +2710,20 @@ _add_slice_header (GstVaH264Enc * self, GstVaH264EncFrame * frame,
+@@ -2776,16 +2783,20 @@ _add_slice_header (GstVaH264Enc * self, GstVaH264EncFrame * frame,
    /* *INDENT-ON* */
  
    /* Reorder the ref lists if needed. */
@@ -239,7 +239,7 @@ index 492ed39946..67640095c4 100644
      }
    }
  
-@@ -2905,9 +2916,9 @@ _encode_one_frame (GstVaH264Enc * self, GstVideoCodecFrame * gst_frame)
+@@ -2978,9 +2989,9 @@ _encode_one_frame (GstVaH264Enc * self, GstVideoCodecFrame * gst_frame)
    VAEncPictureParameterBufferH264 pic_param;
    GstH264PPS pps;
    GstVaH264EncFrame *list0[16] = { NULL, };
@@ -251,7 +251,7 @@ index 492ed39946..67640095c4 100644
    guint slice_of_mbs, slice_mod_mbs, slice_start_mb, slice_mbs;
    gint i;
    GstVaH264EncFrame *frame;
-@@ -2967,14 +2978,15 @@ _encode_one_frame (GstVaH264Enc * self, GstVideoCodecFrame * gst_frame)
+@@ -3040,14 +3051,15 @@ _encode_one_frame (GstVaH264Enc * self, GstVideoCodecFrame * gst_frame)
        if (vaf->poc > frame->poc)
          continue;
  
@@ -270,7 +270,7 @@ index 492ed39946..67640095c4 100644
      if (list0_num > self->gop.ref_num_list0)
        list0_num = self->gop.ref_num_list0;
    }
-@@ -2989,14 +3001,15 @@ _encode_one_frame (GstVaH264Enc * self, GstVideoCodecFrame * gst_frame)
+@@ -3062,14 +3074,15 @@ _encode_one_frame (GstVaH264Enc * self, GstVideoCodecFrame * gst_frame)
        if (vaf->poc < frame->poc)
          continue;
  
@@ -289,7 +289,7 @@ index 492ed39946..67640095c4 100644
      if (list1_num > self->gop.ref_num_list1)
        list1_num = self->gop.ref_num_list1;
    }
-@@ -3039,7 +3052,7 @@ _encode_one_frame (GstVaH264Enc * self, GstVideoCodecFrame * gst_frame)
+@@ -3112,7 +3125,7 @@ _encode_one_frame (GstVaH264Enc * self, GstVideoCodecFrame * gst_frame)
  
      if ((self->packed_headers & VA_ENC_PACKED_HEADER_SLICE) &&
          (!_add_slice_header (self, frame, &pps, &slice, list0, list0_num,
@@ -298,7 +298,7 @@ index 492ed39946..67640095c4 100644
        return FALSE;
  
      slice_start_mb += slice_mbs;
-@@ -3128,7 +3141,8 @@ _find_unused_reference_frame (GstVaH264Enc * self, GstVaH264EncFrame * frame)
+@@ -3202,7 +3215,8 @@ _find_unused_reference_frame (GstVaH264Enc * self, GstVaH264EncFrame * frame)
    guint i;
  
    /* We still have more space. */
@@ -308,7 +308,7 @@ index 492ed39946..67640095c4 100644
      return NULL;
  
    /* Not b_pyramid, sliding window is enough. */
-@@ -3223,7 +3237,8 @@ gst_va_h264_enc_encode_frame (GstVaBaseEnc * base,
+@@ -3297,7 +3311,8 @@ gst_va_h264_enc_encode_frame (GstVaBaseEnc * base,
      g_queue_push_tail (&base->ref_list, gst_video_codec_frame_ref (gst_frame));
      g_queue_sort (&base->ref_list, _sort_by_frame_num, NULL);
  
