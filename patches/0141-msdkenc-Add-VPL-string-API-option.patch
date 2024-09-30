@@ -1,4 +1,4 @@
-From c89740fcf27224cad914898c170f5170af99554e Mon Sep 17 00:00:00 2001
+From 9864c4c46c7e17945902bf14e58ff4fbdbac73e9 Mon Sep 17 00:00:00 2001
 From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
 Date: Thu, 16 May 2024 10:12:41 +0800
 Subject: [PATCH] msdkenc: Add VPL string API option
@@ -13,7 +13,7 @@ via a new property called string-params.
  2 files changed, 91 insertions(+)
 
 diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
-index 76b393d265..97f70f77fe 100644
+index c32f6f6e57..7f83544f5b 100644
 --- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
 +++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkenc.c
 @@ -104,6 +104,7 @@ GST_DEBUG_CATEGORY_EXTERN (gst_msdkenc_debug);
@@ -35,9 +35,9 @@ index 76b393d265..97f70f77fe 100644
 +  mfxExtBuffer ext_buf;
 +#endif
  
-   if (thiz->initialized) {
-     GST_DEBUG_OBJECT (thiz, "Already initialized");
-@@ -682,6 +689,52 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
+   if (!thiz->context) {
+     GST_WARNING_OBJECT (thiz, "No MSDK Context");
+@@ -683,6 +690,52 @@ gst_msdkenc_init_encoder (GstMsdkEnc * thiz)
      thiz->param.ExtParam = thiz->extra_params;
    }
  
@@ -90,7 +90,7 @@ index 76b393d265..97f70f77fe 100644
    /* validate parameters and allow MFX to make adjustments */
    status = MFXVideoENCODE_Query (session, &thiz->param, &thiz->param);
    if (status < MFX_ERR_NONE) {
-@@ -794,6 +847,13 @@ gst_msdkenc_close_encoder (GstMsdkEnc * thiz)
+@@ -795,6 +848,13 @@ gst_msdkenc_close_encoder (GstMsdkEnc * thiz)
    g_free (thiz->tasks);
    thiz->tasks = NULL;
  
@@ -104,7 +104,7 @@ index 76b393d265..97f70f77fe 100644
    memset (&thiz->param, 0, sizeof (thiz->param));
    thiz->num_extra_params = 0;
    thiz->initialized = FALSE;
-@@ -2185,6 +2245,9 @@ gst_msdkenc_set_common_property (GObject * object, guint prop_id,
+@@ -2188,6 +2248,9 @@ gst_msdkenc_set_common_property (GObject * object, guint prop_id,
      case GST_MSDKENC_PROP_ADAPTIVE_B:
        thiz->adaptive_b = g_value_get_enum (value);
        break;
@@ -114,7 +114,7 @@ index 76b393d265..97f70f77fe 100644
      case GST_MSDKENC_PROP_EXT_CODING_PROPS:
      {
        const GstStructure *s = gst_value_get_structure (value);
-@@ -2289,6 +2352,9 @@ gst_msdkenc_get_common_property (GObject * object, guint prop_id,
+@@ -2292,6 +2355,9 @@ gst_msdkenc_get_common_property (GObject * object, guint prop_id,
      case GST_MSDKENC_PROP_ADAPTIVE_B:
        g_value_set_enum (value, thiz->adaptive_b);
        break;
@@ -124,7 +124,7 @@ index 76b393d265..97f70f77fe 100644
      case GST_MSDKENC_PROP_EXT_CODING_PROPS:
        gst_value_set_structure (value, thiz->ext_coding_props);
        break;
-@@ -2457,6 +2523,26 @@ gst_msdkenc_install_common_properties (GstMsdkEncClass * klass)
+@@ -2460,6 +2526,26 @@ gst_msdkenc_install_common_properties (GstMsdkEncClass * klass)
        gst_msdkenc_adaptive_b_get_type (),
        PROP_ADAPTIVE_B_DEFAULT, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
  

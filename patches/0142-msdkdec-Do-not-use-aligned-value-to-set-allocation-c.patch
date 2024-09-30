@@ -1,0 +1,36 @@
+From 05524411681cdc9d50947e7f379dd48127e35252 Mon Sep 17 00:00:00 2001
+From: Mengkejiergeli Ba <mengkejiergeli.ba@intel.com>
+Date: Thu, 27 Jun 2024 17:44:08 +0800
+Subject: [PATCH] msdkdec: Do not use aligned value to set allocation caps's
+ width and height
+
+---
+ subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c | 12 +++---------
+ 1 file changed, 3 insertions(+), 9 deletions(-)
+
+diff --git a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
+index f167f4e715..a88faed2fa 100644
+--- a/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
++++ b/subprojects/gst-plugins-bad/sys/msdk/gstmsdkdec.c
+@@ -803,15 +803,9 @@ gst_msdkdec_set_src_caps (GstMsdkDec * thiz, gboolean need_allocation)
+ 
+   if (need_allocation) {
+     /* Find allocation width and height */
+-    width =
+-        GST_ROUND_UP_16 (thiz->param.mfx.FrameInfo.Width ? thiz->param.mfx.
+-        FrameInfo.Width : GST_VIDEO_INFO_WIDTH (&thiz->output_state->info));
+-    height =
+-        GST_ROUND_UP_32 (thiz->param.mfx.FrameInfo.Height ? thiz->param.mfx.
+-        FrameInfo.Height : GST_VIDEO_INFO_HEIGHT (&thiz->output_state->info));
+-
+-    /* set allocation width and height in allocation_caps,
+-     * which may or may not be similar to the output_state caps */
++    width = GST_VIDEO_INFO_WIDTH (&thiz->output_state->info);
++    height = GST_VIDEO_INFO_HEIGHT (&thiz->output_state->info);
++
+     allocation_caps = gst_caps_copy (thiz->output_state->caps);
+     gst_caps_set_simple (allocation_caps, "width", G_TYPE_INT, width, "height",
+         G_TYPE_INT, height, NULL);
+-- 
+2.34.1
+
