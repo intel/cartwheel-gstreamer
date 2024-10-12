@@ -1,4 +1,4 @@
-From b1f7fe79fcbece12807260dad4de633cd3f78f49 Mon Sep 17 00:00:00 2001
+From a182753167d0dc588708f628ecd71f6c4880b199 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Sat, 9 Sep 2023 01:10:18 +0800
 Subject: [PATCH 3/4] h266parse: Add the new h266parse element
@@ -6,21 +6,21 @@ Subject: [PATCH 3/4] h266parse: Add the new h266parse element
 TODO: Need to refer to the new ISO/IEC 14496-15 for vvc1 and vvi1's
 codec data
 ---
- .../gst/videoparsers/gsth266parse.c           | 2894 +++++++++++++++++
- .../gst/videoparsers/gsth266parse.h           |  141 +
+ .../gst/videoparsers/gsth266parse.c           | 2926 +++++++++++++++++
+ .../gst/videoparsers/gsth266parse.h           |  146 +
  .../videoparsers/gstvideoparserselements.h    |    1 +
  .../gst/videoparsers/meson.build              |    1 +
  .../gst-plugins-bad/gst/videoparsers/plugin.c |    1 +
- 5 files changed, 3038 insertions(+)
+ 5 files changed, 3075 insertions(+)
  create mode 100644 subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.c
  create mode 100644 subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.h
 
 diff --git a/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.c b/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.c
 new file mode 100644
-index 0000000000..1b68629b90
+index 0000000000..c5a2bbb76f
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.c
-@@ -0,0 +1,2894 @@
+@@ -0,0 +1,2926 @@
 +/* GStreamer H.266 Parse
 + *
 + * Copyright (C) 2023 Intel Corporation
@@ -107,6 +107,19 @@ index 0000000000..1b68629b90
 +  GST_H266_PARSE_FFI = 2,
 +};
 +
++/* *INDENT-OFF* */
++struct _GstH266ParsePrivate
++{
++  /* The H266 parameters are very big and may cause stack overflow.
++   * Just cache them to avoid frequently malloc and free. */
++  GstH266VPS *cached_vps;
++  GstH266SPS *cached_sps;
++  GstH266PPS *cached_pps;
++  GstH266APS *cached_aps;
++  GstH266PicHdr *cached_ph;
++};
++/* *INDENT-ON* */
++
 +#define GST_H266_PARSE_STATE_VALID(parse, expected_state) \
 +  (((parse)->state & (expected_state)) == (expected_state))
 +
@@ -123,7 +136,8 @@ index 0000000000..1b68629b90
 +        "alignment=(string) { au, nal }"));
 +
 +#define parent_class gst_h266_parse_parent_class
-+G_DEFINE_TYPE (GstH266Parse, gst_h266_parse, GST_TYPE_BASE_PARSE);
++G_DEFINE_TYPE_WITH_CODE (GstH266Parse, gst_h266_parse,
++    GST_TYPE_BASE_PARSE, G_ADD_PRIVATE (GstH266Parse));
 +GST_ELEMENT_REGISTER_DEFINE_WITH_CODE (h266parse, "h266parse",
 +    GST_RANK_SECONDARY, GST_TYPE_H266_PARSE,
 +    videoparsers_element_init (plugin));
@@ -189,6 +203,13 @@ index 0000000000..1b68629b90
 +static void
 +gst_h266_parse_init (GstH266Parse * h266parse)
 +{
++  h266parse->priv = gst_h266_parse_get_instance_private (h266parse);
++  h266parse->priv->cached_vps = g_malloc (sizeof (GstH266VPS));
++  h266parse->priv->cached_sps = g_malloc (sizeof (GstH266SPS));
++  h266parse->priv->cached_pps = g_malloc (sizeof (GstH266PPS));
++  h266parse->priv->cached_aps = g_malloc (sizeof (GstH266APS));
++  h266parse->priv->cached_ph = g_malloc (sizeof (GstH266PicHdr));
++
 +  h266parse->frame_out = gst_adapter_new ();
 +  gst_base_parse_set_pts_interpolation (GST_BASE_PARSE (h266parse), FALSE);
 +  gst_base_parse_set_infer_ts (GST_BASE_PARSE (h266parse), FALSE);
@@ -205,6 +226,11 @@ index 0000000000..1b68629b90
 +      TRUE);
 +
 +  g_object_unref (h266parse->frame_out);
++  g_free (h266parse->priv->cached_vps);
++  g_free (h266parse->priv->cached_sps);
++  g_free (h266parse->priv->cached_pps);
++  g_free (h266parse->priv->cached_aps);
++  g_free (h266parse->priv->cached_ph);
 +
 +  G_OBJECT_CLASS (parent_class)->finalize (object);
 +}
@@ -623,11 +649,11 @@ index 0000000000..1b68629b90
 +static gboolean
 +gst_h266_parse_process_nal (GstH266Parse * h266parse, GstH266NalUnit * nalu)
 +{
-+  GstH266PPS pps = { 0, };
-+  GstH266SPS sps = { 0, };
-+  GstH266VPS vps = { 0, };
-+  GstH266APS aps = { 0, };
-+  GstH266PicHdr ph = { 0, };
++  GstH266VPS *vps = h266parse->priv->cached_vps;
++  GstH266SPS *sps = h266parse->priv->cached_sps;
++  GstH266PPS *pps = h266parse->priv->cached_pps;
++  GstH266APS *aps = h266parse->priv->cached_aps;
++  GstH266PicHdr *ph = h266parse->priv->cached_ph;
 +  guint nal_type;
 +  GstH266Parser *nalparser = h266parse->nalparser;
 +  GstH266ParserResult pres = GST_H266_PARSER_ERROR;
@@ -638,6 +664,12 @@ index 0000000000..1b68629b90
 +    return TRUE;
 +  }
 +
++  memset (vps, 0, sizeof (GstH266VPS));
++  memset (sps, 0, sizeof (GstH266SPS));
++  memset (pps, 0, sizeof (GstH266PPS));
++  memset (aps, 0, sizeof (GstH266APS));
++  memset (ph, 0, sizeof (GstH266PicHdr));
++
 +  /* we have a peek as well */
 +  nal_type = nalu->type;
 +
@@ -646,7 +678,7 @@ index 0000000000..1b68629b90
 +
 +  switch (nal_type) {
 +    case GST_H266_NAL_VPS:
-+      pres = gst_h266_parser_parse_vps (nalparser, nalu, &vps);
++      pres = gst_h266_parser_parse_vps (nalparser, nalu, vps);
 +      if (pres != GST_H266_PARSER_OK) {
 +        GST_WARNING_OBJECT (h266parse, "failed to parse VPS");
 +        return FALSE;
@@ -666,19 +698,19 @@ index 0000000000..1b68629b90
 +        h266parse->have_pps = FALSE;
 +      }
 +
-+      gst_h266_parse_store_nal (h266parse, vps.vps_id, nal_type, nalu);
++      gst_h266_parse_store_nal (h266parse, vps->vps_id, nal_type, nalu);
 +      h266parse->header = TRUE;
 +      break;
 +    case GST_H266_NAL_SPS:
 +      /* reset state, everything else is obsolete */
 +      h266parse->state &= GST_H266_PARSE_STATE_GOT_PPS;
 +
-+      pres = gst_h266_parser_parse_sps (nalparser, nalu, &sps, TRUE);
++      pres = gst_h266_parser_parse_sps (nalparser, nalu, sps, TRUE);
 +
 +      /* arranged for a fallback sps.sps_id, so use that one and only warn */
 +      if (pres != GST_H266_PARSER_OK) {
 +        /* try to not parse VUI */
-+        pres = gst_h266_parser_parse_sps (nalparser, nalu, &sps, FALSE);
++        pres = gst_h266_parser_parse_sps (nalparser, nalu, sps, FALSE);
 +        if (pres != GST_H266_PARSER_OK) {
 +          GST_WARNING_OBJECT (h266parse, "failed to parse SPS:");
 +          h266parse->state |= GST_H266_PARSE_STATE_GOT_SPS;
@@ -702,7 +734,7 @@ index 0000000000..1b68629b90
 +        h266parse->have_pps = FALSE;
 +      }
 +
-+      gst_h266_parse_store_nal (h266parse, sps.sps_id, nal_type, nalu);
++      gst_h266_parse_store_nal (h266parse, sps->sps_id, nal_type, nalu);
 +      h266parse->header = TRUE;
 +      h266parse->state |= GST_H266_PARSE_STATE_GOT_SPS;
 +      break;
@@ -712,7 +744,7 @@ index 0000000000..1b68629b90
 +      if (!GST_H266_PARSE_STATE_VALID (h266parse, GST_H266_PARSE_STATE_GOT_SPS))
 +        return FALSE;
 +
-+      pres = gst_h266_parser_parse_pps (nalparser, nalu, &pps);
++      pres = gst_h266_parser_parse_pps (nalparser, nalu, pps);
 +
 +      /* arranged for a fallback pps.pps_id, so use that one and only warn */
 +      if (pres != GST_H266_PARSER_OK) {
@@ -737,7 +769,7 @@ index 0000000000..1b68629b90
 +        h266parse->have_pps = FALSE;
 +      }
 +
-+      gst_h266_parse_store_nal (h266parse, pps.pps_id, nal_type, nalu);
++      gst_h266_parse_store_nal (h266parse, pps->pps_id, nal_type, nalu);
 +      h266parse->header = TRUE;
 +      h266parse->state |= GST_H266_PARSE_STATE_GOT_PPS;
 +      break;
@@ -748,7 +780,7 @@ index 0000000000..1b68629b90
 +              GST_H266_PARSE_STATE_VALID_SPS_PPS))
 +        return FALSE;
 +
-+      pres = gst_h266_parser_parse_aps (nalparser, nalu, &aps);
++      pres = gst_h266_parser_parse_aps (nalparser, nalu, aps);
 +      if (pres != GST_H266_PARSER_OK) {
 +        GST_WARNING_OBJECT (h266parse, "failed to parse APS:");
 +        if (pres != GST_H266_PARSER_BROKEN_LINK)
@@ -782,14 +814,14 @@ index 0000000000..1b68629b90
 +              GST_H266_PARSE_STATE_VALID_SPS_PPS))
 +        return FALSE;
 +
-+      pres = gst_h266_parser_parse_picture_hdr (nalparser, nalu, &ph);
++      pres = gst_h266_parser_parse_picture_hdr (nalparser, nalu, ph);
 +      if (pres != GST_H266_PARSER_OK) {
 +        GST_WARNING_OBJECT (h266parse, "failed to parse PH:");
 +        if (pres != GST_H266_PARSER_BROKEN_LINK)
 +          return FALSE;
 +      }
 +
-+      if (ph.gdr_or_irap_pic_flag) {
++      if (ph->gdr_or_irap_pic_flag) {
 +        if (h266parse->mastering_display_info_state ==
 +            GST_H266_PARSE_SEI_PARSED)
 +          h266parse->mastering_display_info_state = GST_H266_PARSE_SEI_ACTIVE;
@@ -2917,10 +2949,10 @@ index 0000000000..1b68629b90
 +}
 diff --git a/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.h b/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.h
 new file mode 100644
-index 0000000000..426af6e0eb
+index 0000000000..cb98793334
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.h
-@@ -0,0 +1,141 @@
+@@ -0,0 +1,146 @@
 +/* GStreamer H.266 Parser
 + * Copyright (C) 2021 Intel Corporation
 + *
@@ -2966,6 +2998,7 @@ index 0000000000..426af6e0eb
 +
 +typedef struct _GstH266Parse GstH266Parse;
 +typedef struct _GstH266ParseClass GstH266ParseClass;
++typedef struct _GstH266ParsePrivate GstH266ParsePrivate;
 +
 +struct _GstH266Parse
 +{
@@ -3053,6 +3086,10 @@ index 0000000000..426af6e0eb
 +
 +  /* For forward predicted trickmode */
 +  gboolean discard_bidirectional;
++
++  /*< private >*/
++  GstH266ParsePrivate *priv;
++  gpointer padding[GST_PADDING_LARGE];
 +};
 +
 +struct _GstH266ParseClass

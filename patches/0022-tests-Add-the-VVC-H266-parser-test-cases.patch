@@ -1,4 +1,4 @@
-From 006ed8225f1853a5cab74d341e61b286d97c5703 Mon Sep 17 00:00:00 2001
+From 834cc8fd17fa176b29e7631452e101d49d7e5034 Mon Sep 17 00:00:00 2001
 From: Zhong Hongcheng <spartazhc@gmail.com>
 Date: Fri, 20 Oct 2023 23:05:01 +0800
 Subject: [PATCH 2/4] tests: Add the VVC(H266) parser test cases
@@ -369,7 +369,7 @@ index 0000000000..cc59165c5b
 +
 +GST_CHECK_MAIN (h266parser);
 diff --git a/subprojects/gst-plugins-bad/tests/check/meson.build b/subprojects/gst-plugins-bad/tests/check/meson.build
-index bf6f6d0ac2..13097cd4b6 100644
+index ce392fcb82..c0a5a00a12 100644
 --- a/subprojects/gst-plugins-bad/tests/check/meson.build
 +++ b/subprojects/gst-plugins-bad/tests/check/meson.build
 @@ -82,6 +82,7 @@ base_tests = [
