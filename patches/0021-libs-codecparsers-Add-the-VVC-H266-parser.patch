@@ -9370,6 +9370,7 @@ index 5865b373ef..5991ef8cd4 100644
    'gstvp9parser.h',
    'gstav1parser.h',
 +  'gsth266parser.h',
+   'gstlcevcmeta.h',
  ]
  install_headers(codecparser_headers, subdir : 'gstreamer-1.0/gst/codecparsers')
  
