@@ -1,7 +1,7 @@
-From d202317f58773508568b5a8690c78de157a4d85e Mon Sep 17 00:00:00 2001
+From e64d2a853e71ed650c498546cdd3f27482de46a5 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 28 Jun 2024 09:32:20 +0800
-Subject: [PATCH] Implement the VA h266 decoder
+Subject: [PATCH 4/4] Implement the VA h266 decoder
 
 ---
  .../gst-libs/gst/codecs/gsth266decoder.c      | 1652 +++++++++++++++++
@@ -2655,7 +2655,7 @@ index 8a1228cf22..3c83686c19 100644
      GstVp9DecoderClass vp9;
 diff --git a/subprojects/gst-plugins-bad/sys/va/gstvah266dec.c b/subprojects/gst-plugins-bad/sys/va/gstvah266dec.c
 new file mode 100644
-index 0000000000..d4b07005e2
+index 0000000000..1f2e14e8be
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/sys/va/gstvah266dec.c
 @@ -0,0 +1,1316 @@
@@ -3333,7 +3333,7 @@ index 0000000000..d4b07005e2
 +    F(sps, max_num_merge_cand_minus_max_num_gpm_cand),
 +    F(sps, log2_parallel_merge_level_minus2),
 +    F(sps, min_qp_prime_ts),
-+    .sps_six_minus_max_num_ibc_merge_cand = 6 - sps->six_minus_max_num_ibc_merge_cand,
++    .sps_six_minus_max_num_ibc_merge_cand = sps->six_minus_max_num_ibc_merge_cand,
 +    .sps_num_ladf_intervals_minus2 =
 +      sps->ladf_enabled_flag ? sps->num_ladf_intervals_minus2 : 0,
 +    F(sps, ladf_lowest_interval_qp_offset),
@@ -3688,8 +3688,8 @@ index 0000000000..d4b07005e2
 +    F(sh, alf_aps_id_chroma),
 +    F(sh, alf_cc_cb_aps_id),
 +    F(sh, alf_cc_cr_aps_id),
-+    .NumRefIdxActive[0] = sh->num_ref_idx_active[0] - 1,
-+    .NumRefIdxActive[1] = sh->num_ref_idx_active[1] - 1,
++    .NumRefIdxActive[0] = sh->num_ref_idx_active[0],
++    .NumRefIdxActive[1] = sh->num_ref_idx_active[1],
 +    F(sh, collocated_ref_idx),
 +    .SliceQpY = sh->slice_qp_y,
 +    F(sh, cb_qp_offset),
@@ -4042,7 +4042,7 @@ index 99a3e8119a..66e87bf122 100644
    MPEG2 = GST_MAKE_FOURCC ('M', 'P', 'E', 'G'),
    MPEG4 = GST_MAKE_FOURCC ('M', 'P', 'G', '4'),
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index e662105dd9..c2d5f341bf 100644
+index 0f2a262e92..0aee986eea 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
 @@ -17,6 +17,7 @@ va_sources = [
@@ -4054,7 +4054,7 @@ index e662105dd9..c2d5f341bf 100644
    'gstvajpegenc.c',
    'gstvampeg2dec.c',
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index f6d1e7159b..be1edd4d16 100644
+index 5eb65cbea5..5ec230751e 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -38,6 +38,7 @@
