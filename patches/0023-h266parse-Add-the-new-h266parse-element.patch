@@ -1,4 +1,4 @@
-From a182753167d0dc588708f628ecd71f6c4880b199 Mon Sep 17 00:00:00 2001
+From d76abaf5b5e31cedc732002ab56f17b59deeafea Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Sat, 9 Sep 2023 01:10:18 +0800
 Subject: [PATCH 3/4] h266parse: Add the new h266parse element
@@ -17,7 +17,7 @@ codec data
 
 diff --git a/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.c b/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.c
 new file mode 100644
-index 0000000000..c5a2bbb76f
+index 0000000000..e3b2785a20
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.c
 @@ -0,0 +1,2926 @@
@@ -950,7 +950,7 @@ index 0000000000..c5a2bbb76f
 +  complete = (nal_type == GST_H266_NAL_EOS || nal_type == GST_H266_NAL_EOB);
 +
 +  /* 7.4.2.4.3 */
-+  complete = h266parse->picture_start &&
++  complete |= h266parse->picture_start &&
 +      (nal_type == GST_H266_NAL_AUD || nal_type == GST_H266_NAL_OPI ||
 +      nal_type == GST_H266_NAL_DCI || nal_type == GST_H266_NAL_VPS ||
 +      nal_type == GST_H266_NAL_SPS || nal_type == GST_H266_NAL_PPS ||
@@ -2949,7 +2949,7 @@ index 0000000000..c5a2bbb76f
 +}
 diff --git a/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.h b/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.h
 new file mode 100644
-index 0000000000..cb98793334
+index 0000000000..9ba2894822
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.h
 @@ -0,0 +1,146 @@
