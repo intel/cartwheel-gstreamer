@@ -1,4 +1,4 @@
-From e64d2a853e71ed650c498546cdd3f27482de46a5 Mon Sep 17 00:00:00 2001
+From 92bc30e43b228b9202692b9b4512734e2e8683ee Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 28 Jun 2024 09:32:20 +0800
 Subject: [PATCH 4/4] Implement the VA h266 decoder
@@ -4042,7 +4042,7 @@ index 99a3e8119a..66e87bf122 100644
    MPEG2 = GST_MAKE_FOURCC ('M', 'P', 'E', 'G'),
    MPEG4 = GST_MAKE_FOURCC ('M', 'P', 'G', '4'),
 diff --git a/subprojects/gst-plugins-bad/sys/va/meson.build b/subprojects/gst-plugins-bad/sys/va/meson.build
-index 0f2a262e92..0aee986eea 100644
+index 86c61cd4a0..c95343b33b 100644
 --- a/subprojects/gst-plugins-bad/sys/va/meson.build
 +++ b/subprojects/gst-plugins-bad/sys/va/meson.build
 @@ -17,6 +17,7 @@ va_sources = [
@@ -4054,7 +4054,7 @@ index 0f2a262e92..0aee986eea 100644
    'gstvajpegenc.c',
    'gstvampeg2dec.c',
 diff --git a/subprojects/gst-plugins-bad/sys/va/plugin.c b/subprojects/gst-plugins-bad/sys/va/plugin.c
-index 5eb65cbea5..5ec230751e 100644
+index c8ac72d74e..fbaf6a6973 100644
 --- a/subprojects/gst-plugins-bad/sys/va/plugin.c
 +++ b/subprojects/gst-plugins-bad/sys/va/plugin.c
 @@ -38,6 +38,7 @@
@@ -4065,7 +4065,7 @@ index 5eb65cbea5..5ec230751e 100644
  #include "gstvajpegdec.h"
  #include "gstvajpegenc.h"
  #include "gstvampeg2dec.h"
-@@ -123,6 +124,13 @@ plugin_register_decoders (GstPlugin * plugin, GstVaDevice * device,
+@@ -124,6 +125,13 @@ plugin_register_decoders (GstPlugin * plugin, GstVaDevice * device,
                device->render_device_path);
          }
          break;

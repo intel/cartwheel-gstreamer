@@ -1,22 +1,22 @@
-From d84764faeff58d763421a1721a01f1e87191756b Mon Sep 17 00:00:00 2001
+From b987ffebf0477b8af120c41cb73b8772931ce8aa Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Sat, 12 Oct 2024 12:39:00 +0800
 Subject: [PATCH 1/4] libs: codecparsers: Add the VVC(H266) parser
 
 ---
- .../gst-libs/gst/codecparsers/gsth266parser.c | 5993 +++++++++++++++++
+ .../gst-libs/gst/codecparsers/gsth266parser.c | 5989 +++++++++++++++++
  .../gst-libs/gst/codecparsers/gsth266parser.h | 3336 +++++++++
  .../gst-libs/gst/codecparsers/meson.build     |    1 +
- 3 files changed, 9330 insertions(+)
+ 3 files changed, 9326 insertions(+)
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gsth266parser.c
  create mode 100644 subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gsth266parser.h
 
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gsth266parser.c b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gsth266parser.c
 new file mode 100644
-index 0000000000..b81bb21d76
+index 0000000000..e0e427c73c
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecparsers/gsth266parser.c
-@@ -0,0 +1,5993 @@
+@@ -0,0 +1,5989 @@
 +/* Gstreamer H.266 bitstream parser
 + *
 + * Copyright (C) 2023 Intel Corporation
@@ -1465,91 +1465,93 @@ index 0000000000..b81bb21d76
 +
 +static GstH266ParserResult
 +gst_h266_parser_parse_pic_timing (GstH266PicTiming * pt,
-+    NalReader * nr, const GstH266BufferingPeriod bp, guint8 TemporalId)
++    NalReader * nr, const GstH266BufferingPeriod * bp, guint8 TemporalId)
 +{
 +  guint i, j;
 +
 +  GST_DEBUG ("parsing \"Picture timing\"");
 +
-+  READ_UINT8 (nr, pt->cpb_removal_delay_minus1[bp.max_sublayers_minus1],
-+      bp.cpb_removal_delay_length_minus1 + 1);
-+  pt->sublayer_delays_present_flag[bp.max_sublayers_minus1] = 1;
++  READ_UINT8 (nr, pt->cpb_removal_delay_minus1[bp->max_sublayers_minus1],
++      bp->cpb_removal_delay_length_minus1 + 1);
++  pt->sublayer_delays_present_flag[bp->max_sublayers_minus1] = 1;
 +
-+  for (i = TemporalId; i < bp.max_sublayers_minus1; i++) {
++  for (i = TemporalId; i < bp->max_sublayers_minus1; i++) {
 +    READ_UINT8 (nr, pt->sublayer_delays_present_flag[i], 1);
 +    if (pt->sublayer_delays_present_flag[i]) {
-+      if (bp.cpb_removal_delay_deltas_present_flag)
++      if (bp->cpb_removal_delay_deltas_present_flag)
 +        READ_UINT8 (nr, pt->cpb_removal_delay_delta_enabled_flag[i], 1);
 +
 +      if (pt->cpb_removal_delay_delta_enabled_flag[i]) {
-+        if (bp.num_cpb_removal_delay_deltas_minus1 > 0)
++        if (bp->num_cpb_removal_delay_deltas_minus1 > 0)
 +          READ_UINT8 (nr, pt->cpb_removal_delay_delta_idx[i],
-+              gst_util_ceil_log2 (bp.num_cpb_removal_delay_deltas_minus1 + 1));
++              gst_util_ceil_log2 (bp->num_cpb_removal_delay_deltas_minus1 + 1));
 +      } else {
 +        READ_UINT8 (nr, pt->cpb_removal_delay_minus1[i],
-+            bp.cpb_removal_delay_length_minus1 + 1);
++            bp->cpb_removal_delay_length_minus1 + 1);
 +      }
 +    }
 +  }
 +
-+  READ_UINT8 (nr, pt->dpb_output_delay, bp.dpb_output_delay_length_minus1 + 1);
++  READ_UINT8 (nr, pt->dpb_output_delay, bp->dpb_output_delay_length_minus1 + 1);
 +
-+  if (bp.alt_cpb_params_present_flag) {
++  if (bp->alt_cpb_params_present_flag) {
 +    READ_UINT8 (nr, pt->cpb_alt_timing_info_present_flag, 1);
 +    if (pt->cpb_alt_timing_info_present_flag) {
-+      if (bp.nal_hrd_params_present_flag) {
-+        for (i = (bp.sublayer_initial_cpb_removal_delay_present_flag ? 0 :
-+                bp.max_sublayers_minus1); i <= bp.max_sublayers_minus1; i++) {
-+          for (j = 0; j < bp.cpb_cnt_minus1 + 1; j++) {
++      if (bp->nal_hrd_params_present_flag) {
++        for (i = (bp->sublayer_initial_cpb_removal_delay_present_flag ? 0 :
++                bp->max_sublayers_minus1); i <= bp->max_sublayers_minus1; i++) {
++          for (j = 0; j < bp->cpb_cnt_minus1 + 1; j++) {
 +            READ_UINT8 (nr, pt->nal_cpb_alt_initial_removal_delay_delta[i][j],
-+                bp.cpb_initial_removal_delay_length_minus1 + 1);
++                bp->cpb_initial_removal_delay_length_minus1 + 1);
 +            READ_UINT8 (nr, pt->nal_cpb_alt_initial_removal_offset_delta[i][j],
-+                bp.cpb_initial_removal_delay_length_minus1 + 1);
++                bp->cpb_initial_removal_delay_length_minus1 + 1);
 +          }
 +
 +          READ_UINT8 (nr, pt->nal_cpb_delay_offset[i],
-+              bp.cpb_removal_delay_length_minus1 + 1);
++              bp->cpb_removal_delay_length_minus1 + 1);
 +          READ_UINT8 (nr, pt->nal_dpb_delay_offset[i],
-+              bp.cpb_removal_delay_length_minus1 + 1);
++              bp->cpb_removal_delay_length_minus1 + 1);
 +        }
 +      }
 +
-+      if (bp.vcl_hrd_params_present_flag) {
-+        for (i = (bp.sublayer_initial_cpb_removal_delay_present_flag ? 0 :
-+                bp.max_sublayers_minus1); i <= bp.max_sublayers_minus1; i++) {
-+          for (j = 0; j < bp.cpb_cnt_minus1 + 1; j++) {
++      if (bp->vcl_hrd_params_present_flag) {
++        for (i = (bp->sublayer_initial_cpb_removal_delay_present_flag ? 0 :
++                bp->max_sublayers_minus1); i <= bp->max_sublayers_minus1; i++) {
++          for (j = 0; j < bp->cpb_cnt_minus1 + 1; j++) {
 +            READ_UINT8 (nr, pt->vcl_cpb_alt_initial_removal_delay_delta[i][j],
-+                bp.cpb_initial_removal_delay_length_minus1 + 1);
++                bp->cpb_initial_removal_delay_length_minus1 + 1);
 +            READ_UINT8 (nr, pt->vcl_cpb_alt_initial_removal_offset_delta[i][j],
-+                bp.cpb_initial_removal_delay_length_minus1 + 1);
++                bp->cpb_initial_removal_delay_length_minus1 + 1);
 +          }
 +
 +          READ_UINT8 (nr, pt->vcl_cpb_delay_offset[i],
-+              bp.cpb_removal_delay_length_minus1 + 1);
++              bp->cpb_removal_delay_length_minus1 + 1);
 +          READ_UINT8 (nr, pt->vcl_dpb_delay_offset[i],
-+              bp.cpb_removal_delay_length_minus1 + 1);
++              bp->cpb_removal_delay_length_minus1 + 1);
 +        }
 +      }
 +    }
 +  }
 +
-+  if (bp.du_hrd_params_present_flag && bp.du_dpb_params_in_pic_timing_sei_flag)
++  if (bp->du_hrd_params_present_flag &&
++      bp->du_dpb_params_in_pic_timing_sei_flag)
 +    READ_UINT8 (nr, pt->dpb_output_du_delay,
-+        bp.dpb_output_delay_du_length_minus1 + 1);
++        bp->dpb_output_delay_du_length_minus1 + 1);
 +
-+  if (bp.du_hrd_params_present_flag && bp.du_cpb_params_in_pic_timing_sei_flag) {
++  if (bp->du_hrd_params_present_flag &&
++      bp->du_cpb_params_in_pic_timing_sei_flag) {
 +    READ_UE (nr, pt->num_decoding_units_minus1);
 +    if (pt->num_decoding_units_minus1 > 0) {
 +      READ_UINT8 (nr, pt->du_common_cpb_removal_delay_flag, 1);
 +      if (pt->du_common_cpb_removal_delay_flag) {
-+        for (i = TemporalId; i <= bp.max_sublayers_minus1; i++) {
++        for (i = TemporalId; i <= bp->max_sublayers_minus1; i++) {
 +          if (pt->sublayer_delays_present_flag[i]) {
 +            READ_UINT8 (nr, pt->du_common_cpb_removal_delay_increment_minus1[i],
-+                bp.du_cpb_removal_delay_increment_length_minus1 + 1);
++                bp->du_cpb_removal_delay_increment_length_minus1 + 1);
 +          } else {
 +            pt->du_common_cpb_removal_delay_increment_minus1[i] =
 +                pt->du_common_cpb_removal_delay_increment_minus1
-+                [bp.max_sublayers_minus1];
++                [bp->max_sublayers_minus1];
 +          }
 +        }
 +      }
@@ -1559,25 +1561,25 @@ index 0000000000..b81bb21d76
 +
 +        if (!pt->du_common_cpb_removal_delay_flag &&
 +            i < pt->num_decoding_units_minus1)
-+          for (j = TemporalId; j <= bp.max_sublayers_minus1; j++) {
++          for (j = TemporalId; j <= bp->max_sublayers_minus1; j++) {
 +            if (pt->sublayer_delays_present_flag[j]) {
 +              READ_UINT8 (nr, pt->du_cpb_removal_delay_increment_minus1[i][j],
-+                  bp.du_cpb_removal_delay_increment_length_minus1 + 1);
++                  bp->du_cpb_removal_delay_increment_length_minus1 + 1);
 +            } else {
 +              pt->du_cpb_removal_delay_increment_minus1[i][j] =
 +                  pt->du_cpb_removal_delay_increment_minus1[i]
-+                  [bp.max_sublayers_minus1];
++                  [bp->max_sublayers_minus1];
 +            }
 +
 +            for (j = 0; j < TemporalId; j++)
 +              pt->du_cpb_removal_delay_increment_minus1[i][j] =
 +                  pt->du_cpb_removal_delay_increment_minus1[i]
-+                  [bp.max_sublayers_minus1];
++                  [bp->max_sublayers_minus1];
 +          }
 +      }
 +    }
 +
-+    if (bp.additional_concatenation_info_present_flag)
++    if (bp->additional_concatenation_info_present_flag)
 +      READ_UINT8 (nr, pt->delay_for_concatenation_ensured_flag, 1);
 +
 +    READ_UINT8 (nr, pt->display_elemental_periods_minus1, 8);
@@ -1592,7 +1594,7 @@ index 0000000000..b81bb21d76
 +
 +static GstH266ParserResult
 +gst_h266_parser_parse_du_info (GstH266DUInfo * dui, NalReader * nr,
-+    const GstH266BufferingPeriod bp, guint8 TemporalId)
++    const GstH266BufferingPeriod * bp, guint8 TemporalId)
 +{
 +  guint i;
 +
@@ -1600,31 +1602,31 @@ index 0000000000..b81bb21d76
 +
 +  READ_UE (nr, dui->decoding_unit_idx);
 +
-+  if (!bp.du_cpb_params_in_pic_timing_sei_flag) {
-+    for (i = TemporalId; i <= bp.max_sublayers_minus1; i++) {
-+      if (i < bp.max_sublayers_minus1)
++  if (!bp->du_cpb_params_in_pic_timing_sei_flag) {
++    for (i = TemporalId; i <= bp->max_sublayers_minus1; i++) {
++      if (i < bp->max_sublayers_minus1)
 +        READ_UINT8 (nr, dui->sublayer_delays_present_flag[i], 1);
 +
 +      if (dui->sublayer_delays_present_flag[i])
 +        READ_UINT8 (nr, dui->du_cpb_removal_delay_increment[i],
-+            bp.du_cpb_removal_delay_increment_length_minus1 + 1);
++            bp->du_cpb_removal_delay_increment_length_minus1 + 1);
 +    }
 +  }
 +
-+  if (!bp.du_cpb_params_in_pic_timing_sei_flag)
-+    dui->sublayer_delays_present_flag[bp.max_sublayers_minus1] = 1;
++  if (!bp->du_cpb_params_in_pic_timing_sei_flag)
++    dui->sublayer_delays_present_flag[bp->max_sublayers_minus1] = 1;
 +
-+  for (i = 0; i <= bp.max_sublayers_minus1; i++) {
-+    if (i < bp.max_sublayers_minus1)
++  for (i = 0; i <= bp->max_sublayers_minus1; i++) {
++    if (i < bp->max_sublayers_minus1)
 +      dui->du_cpb_removal_delay_increment[i] =
-+          dui->du_cpb_removal_delay_increment[bp.max_sublayers_minus1];
++          dui->du_cpb_removal_delay_increment[bp->max_sublayers_minus1];
 +  }
 +
-+  if (!bp.du_dpb_params_in_pic_timing_sei_flag)
++  if (!bp->du_dpb_params_in_pic_timing_sei_flag)
 +    READ_UINT8 (nr, dui->dpb_output_du_delay_present_flag, 1);
 +  if (dui->dpb_output_du_delay_present_flag)
 +    READ_UINT8 (nr, dui->dpb_output_du_delay,
-+        bp.dpb_output_delay_du_length_minus1 + 1);
++        bp->dpb_output_delay_du_length_minus1 + 1);
 +
 +  return GST_H266_PARSER_OK;
 +
@@ -2376,7 +2378,7 @@ index 0000000000..b81bb21d76
 +    if (!vps->each_layer_is_an_ols_flag) {
 +      if (!vps->all_independent_layers_flag) {
 +        READ_UINT8 (&nr, vps->ols_mode_idc, 2);
-+        CHECK_ALLOWED (vps->ols_mode_idc, 0, 2);
++        CHECK_ALLOWED_MAX (vps->ols_mode_idc, 2);
 +      } else
 +        vps->ols_mode_idc = 2;
 +
@@ -5039,19 +5041,13 @@ index 0000000000..b81bb21d76
 +      if (sps->bdof_control_present_in_ph_flag) {
 +        READ_UINT8 (nr, ph->bdof_disabled_flag, 1);
 +      } else {
-+        if (!sps->bdof_control_present_in_ph_flag)
-+          ph->bdof_disabled_flag = !sps->bdof_enabled_flag;
-+        else
-+          ph->bdof_disabled_flag = 1;
++        ph->bdof_disabled_flag = !sps->bdof_enabled_flag;
 +      }
 +
 +      if (sps->dmvr_control_present_in_ph_flag) {
 +        READ_UINT8 (nr, ph->dmvr_disabled_flag, 1);
 +      } else {
-+        if (!sps->dmvr_control_present_in_ph_flag)
-+          ph->dmvr_disabled_flag = !sps->dmvr_enabled_flag;
-+        else
-+          ph->dmvr_disabled_flag = 1;
++        ph->dmvr_disabled_flag = !sps->dmvr_enabled_flag;
 +      }
 +    } else {
 +      ph->mvd_l1_zero_flag = 1;
@@ -5835,7 +5831,7 @@ index 0000000000..b81bb21d76
 +        }
 +
 +        res = gst_h266_parser_parse_pic_timing (&sei->payload.pic_timing, nr,
-+            parser->buffering_period.payload.buffering_period, nal_tid);
++            &parser->buffering_period.payload.buffering_period, nal_tid);
 +        break;
 +      case GST_H266_SEI_DU_INFO:
 +        if (!parser->last_buffering_period) {
@@ -5844,7 +5840,7 @@ index 0000000000..b81bb21d76
 +        }
 +
 +        res = gst_h266_parser_parse_du_info (&sei->payload.du_info, nr,
-+            parser->buffering_period.payload.buffering_period, nal_tid);
++            &parser->buffering_period.payload.buffering_period, nal_tid);
 +        break;
 +      case GST_H266_SEI_FRAME_FIELD_INFO:
 +        res = gst_h266_parser_parse_frame_field_info
