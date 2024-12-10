@@ -1,8 +1,14 @@
-From 92bc30e43b228b9202692b9b4512734e2e8683ee Mon Sep 17 00:00:00 2001
+From d00f57cfc2bfe0806588e06bf11153e75eb21ae4 Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Fri, 28 Jun 2024 09:32:20 +0800
-Subject: [PATCH 4/4] Implement the VA h266 decoder
+Subject: [PATCH] Implement the VA h266 decoder
 
+Author:    He Junyan <junyan.he@intel.com>
+Date:      Fri Jun 28 09:32:20 2024 +0800
+
+update gst_h266_parser_parse_sps for upstream API without bool
+
+Signed-off-by: Wu, Bin1 <bin1.wu@intel.com>
 ---
  .../gst-libs/gst/codecs/gsth266decoder.c      | 1652 +++++++++++++++++
  .../gst-libs/gst/codecs/gsth266decoder.h      |  180 ++
@@ -26,7 +32,7 @@ Subject: [PATCH 4/4] Implement the VA h266 decoder
 
 diff --git a/subprojects/gst-plugins-bad/gst-libs/gst/codecs/gsth266decoder.c b/subprojects/gst-plugins-bad/gst-libs/gst/codecs/gsth266decoder.c
 new file mode 100644
-index 0000000000..efd9240fd5
+index 0000000000..5879558c1f
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst-libs/gst/codecs/gsth266decoder.c
 @@ -0,0 +1,1652 @@
@@ -566,7 +572,7 @@ index 0000000000..efd9240fd5
 +      ret = gst_h266_parser_parse_vps (priv->parser, nalu, &vps);
 +      break;
 +    case GST_H266_NAL_SPS:
-+      ret = gst_h266_parser_parse_sps (priv->parser, nalu, &sps, TRUE);
++      ret = gst_h266_parser_parse_sps (priv->parser, nalu, &sps);
 +      break;
 +    case GST_H266_NAL_PPS:
 +      ret = gst_h266_parser_parse_pps (priv->parser, nalu, &pps);
@@ -4080,5 +4086,5 @@ index c8ac72d74e..fbaf6a6973 100644
          if (!gst_va_vp8_dec_register (plugin, device, sinkcaps, srccaps,
                  GST_VA_RANK_PRIMARY)) {
 -- 
-2.25.1
+2.43.0
 

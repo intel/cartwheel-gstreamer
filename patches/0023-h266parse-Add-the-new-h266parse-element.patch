@@ -1,10 +1,17 @@
-From d76abaf5b5e31cedc732002ab56f17b59deeafea Mon Sep 17 00:00:00 2001
+From 487e89f25c9a3b70619971ccae57f2009966172c Mon Sep 17 00:00:00 2001
 From: He Junyan <junyan.he@intel.com>
 Date: Sat, 9 Sep 2023 01:10:18 +0800
-Subject: [PATCH 3/4] h266parse: Add the new h266parse element
+Subject: [PATCH] h266parse: Add the new h266parse element
 
 TODO: Need to refer to the new ISO/IEC 14496-15 for vvc1 and vvi1's
 codec data
+
+Author:    He Junyan <junyan.he@intel.com>
+Date:      Sat Sep 9 01:10:18 2023 +0800
+
+update gst_h266_parser_parse_sps for upstream API without bool
+
+Signed-off-by: Wu, Bin1 <bin1.wu@intel.com>
 ---
  .../gst/videoparsers/gsth266parse.c           | 2926 +++++++++++++++++
  .../gst/videoparsers/gsth266parse.h           |  146 +
@@ -17,7 +24,7 @@ codec data
 
 diff --git a/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.c b/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.c
 new file mode 100644
-index 0000000000..e3b2785a20
+index 0000000000..5eacb62823
 --- /dev/null
 +++ b/subprojects/gst-plugins-bad/gst/videoparsers/gsth266parse.c
 @@ -0,0 +1,2926 @@
@@ -705,12 +712,12 @@ index 0000000000..e3b2785a20
 +      /* reset state, everything else is obsolete */
 +      h266parse->state &= GST_H266_PARSE_STATE_GOT_PPS;
 +
-+      pres = gst_h266_parser_parse_sps (nalparser, nalu, sps, TRUE);
++      pres = gst_h266_parser_parse_sps (nalparser, nalu, sps);
 +
 +      /* arranged for a fallback sps.sps_id, so use that one and only warn */
 +      if (pres != GST_H266_PARSER_OK) {
 +        /* try to not parse VUI */
-+        pres = gst_h266_parser_parse_sps (nalparser, nalu, sps, FALSE);
++        pres = gst_h266_parser_parse_sps (nalparser, nalu, sps);
 +        if (pres != GST_H266_PARSER_OK) {
 +          GST_WARNING_OBJECT (h266parse, "failed to parse SPS:");
 +          h266parse->state |= GST_H266_PARSE_STATE_GOT_SPS;
@@ -3136,5 +3143,5 @@ index 069da70700..2ce22989c5 100644
    return ret;
  }
 -- 
-2.25.1
+2.43.0
 
