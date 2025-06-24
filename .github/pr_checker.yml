@@ -1,7 +1,7 @@
 name: Release Workflow
 on:
   pull_request:
-    inputs:
+    types: [opened, synchronize, reopened]
 
 jobs:
   pr-build:
