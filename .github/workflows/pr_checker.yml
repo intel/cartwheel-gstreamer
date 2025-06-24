@@ -1,0 +1,27 @@
+name: Release Workflow
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  pr-build:
+    runs-on: self-hosted
+    steps:
+    - name: Trigger repository dispatch in repo B
+      uses: peter-evans/repository-dispatch@v3
+      with:
+        token: ${{ secrets.GST_CARTWHEEL }}
+        repository: intel-sandbox/client-media-ci
+        event-type: pr-created
+        client-payload: |
+          {
+            "platform": "CFL",
+            "os": "Ubuntu Noble",
+            "run_tests": "false",
+            "test_type": "BAT",
+            "test_group_path": "",
+            "test_group": "GStreamer",
+            "test_env": "vpl--libmfx-msdk-rt",
+            "workflow_dispatcher": "Release"
+          }
