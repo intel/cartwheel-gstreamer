@@ -6,7 +6,7 @@ on:
 
 jobs:
   pr-build:
-    runs-on: self-hosted
+    runs-on: intel-ubuntu-latest
     steps:
     - name: Trigger repository dispatch in repo B
       uses: peter-evans/repository-dispatch@v3
